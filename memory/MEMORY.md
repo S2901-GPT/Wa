@@ -1,0 +1,1 @@
+- [Poster preview sizing](poster-preview-sizing.md) — check type at both export resolution and scaled canvas iframe size.
