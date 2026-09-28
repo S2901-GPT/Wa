@@ -1,0 +1,8 @@
+{
+  "name": "نموذج بيانات إعلان وفاة",
+  "description": "تطبيق عربي لتعبئة ومراجعة بيانات إعلان وفاة في قطر وحفظها ومتابعتها.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
