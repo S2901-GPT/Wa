@@ -3,11 +3,11 @@ import type { ObituaryRequest } from "@workspace/api-client-react";
 export const DATASET_STANDARD: ObituaryRequest = {
   id: 1,
   requestNumber: "QTR-20260927-1001",
-  deceasedName: "عبدالله بن ناصر بن خليفة الكواري",
+  deceasedName: "عبدالله بن ناصر",
   status: "ready",
   deceasedPeople: [
     {
-      fullName: "عبدالله بن ناصر بن خليفة الكواري",
+      fullName: "عبدالله بن ناصر",
       gender: "man",
       age: 78,
       nationality: "قطري",
@@ -90,7 +90,7 @@ export const DATASET_STANDARD: ObituaryRequest = {
 export const DATASET_SAME_LOCATION: ObituaryRequest = {
   ...DATASET_STANDARD,
   requestNumber: "QTR-20260927-1002",
-  deceasedName: "سعد بن راشد الهاجري",
+  deceasedName: "سعد بن راشد",
   prayer: {
     enabled: true,
     day: "الاثنين 29 سبتمبر 2026",
@@ -112,11 +112,11 @@ export const DATASET_SAME_LOCATION: ObituaryRequest = {
 export const DATASET_CROWDED: ObituaryRequest = {
   id: 3,
   requestNumber: "QTR-20260927-1003",
-  deceasedName: "الشيخ خالد بن حمد بن خليفة آل ثاني وسعادة الشيخ عبدالعزيز بن حمد آل ثاني",
+  deceasedName: "الشيخ خالد بن حمد وسعادة الشيخ عبدالعزيز بن حمد",
   status: "ready",
   deceasedPeople: [
     {
-      fullName: "خالد بن حمد بن خليفة آل ثاني",
+      fullName: "خالد بن حمد",
       gender: "man",
       age: 82,
       nationality: "قطري",
@@ -126,7 +126,7 @@ export const DATASET_CROWDED: ObituaryRequest = {
       note: "",
     },
     {
-      fullName: "عبدالعزيز بن حمد بن خليفة آل ثاني",
+      fullName: "عبدالعزيز بن حمد",
       gender: "man",
       age: 76,
       nationality: "قطري",
@@ -220,11 +220,11 @@ export const DATASET_CROWDED: ObituaryRequest = {
 export const DATASET_WOMAN: ObituaryRequest = {
   id: 4,
   requestNumber: "QTR-20260927-1004",
-  deceasedName: "فاطمة بنت مبارك بن سلطان العلي",
+  deceasedName: "فاطمة بنت مبارك",
   status: "ready",
   deceasedPeople: [
     {
-      fullName: "فاطمة بنت مبارك بن سلطان العلي",
+      fullName: "فاطمة بنت مبارك",
       gender: "woman",
       age: 71,
       nationality: "قطرية",

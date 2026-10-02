@@ -58,7 +58,7 @@ const cases: Array<[string, () => void]> = [
       draft.deceasedList[0] = {
         ...emptyDeceased(),
         gender: "أنثى",
-        femaleRelations: [{ relationType: "أرملة", relatedTitle: "الوالد", relatedName: "سيف سعيد ادغام النعيمي", isHusbandDeceased: true }],
+        femaleRelations: [{ relationType: "أرملة", relatedTitle: "الوالد", relatedName: "سيف سعيد", isHusbandDeceased: true }],
       };
       draft.relatives = [{
         relationType: "الأبناء", relationKey: "children", deceasedPlacement: "auto", deceasedTarget: "all",
@@ -67,30 +67,35 @@ const cases: Array<[string, () => void]> = [
     });
     assert.deepEqual(issues(values), []);
     serverAccepts(values);
-    assert.ok(text(values).startsWith("توفيت أرملة الوالد / سيف سعيد ادغام النعيمي رحمهم الله\nوالدة كل من\nغانم\nوناصر"), text(values));
+    assert.ok(text(values).startsWith("توفيت أرملة الوالد / سيف سعيد رحمهم الله\nوالدة كل من\nغانم\nوناصر"), text(values));
     assert.ok(text(values).endsWith("الله يرحمها ويغفر لها"));
   }],
-  ["الطفل يُعرف من اللقب: «انتقل إلى رحمة الله تعالى الطفل /» و«شفيعاً لوالديه يارب»", () => {
-    const values = form((draft) => {
-      draft.deceasedList[0] = { ...emptyDeceased(), gender: "ذكر", title: "الطفل", fullName: "يوسف", age: 8, ageUnit: "months" };
-    });
-    const result = text(values);
-    assert.ok(result.startsWith("انتقل إلى رحمة الله تعالى الطفل / يوسف\n8 أشهر"), result);
-    assert.ok(result.endsWith("شفيعاً لوالديه يارب"));
+  ["الطفل يُعرف من اللقب، ووحدة العمر من اللقب: الرضيع بالأشهر والطفل بالسنوات", () => {
+    const infant = text(form((draft) => {
+      draft.deceasedList[0] = { ...emptyDeceased(), gender: "ذكر", title: "الرضيع", fullName: "يوسف", age: 8 };
+    }));
+    assert.ok(infant.startsWith("انتقل إلى رحمة الله تعالى الرضيع / يوسف\n8 أشهر"), infant);
+    assert.ok(infant.endsWith("شفيعاً لوالديه يارب"));
+    const child = text(form((draft) => {
+      draft.deceasedList[0] = { ...emptyDeceased(), gender: "ذكر", title: "الطفل", fullName: "يوسف", age: 8 };
+    }));
+    assert.ok(child.startsWith("انتقل إلى رحمة الله تعالى الطفل / يوسف\n8 أعوام"), child);
   }],
-  ["الأقارب: العناوين القديمة («أبناؤه») والوظائف والترحّم المجمّع", () => {
+  ["الأقارب: «أبناؤه»، جهة العمل ثم (متقاعد)، و«رحمه الله» بجانب كل اسم", () => {
     const values = form((draft) => {
       draft.relatives = [{
         relationType: "أبناؤه", deceasedPlacement: "auto", deceasedTarget: "all",
         persons: [
           { name: "أحمد", isDeceased: false, workplace: "وزارة الداخلية", jobStatus: "retired" },
-          { name: "خالد", isDeceased: false, workplace: "قطر للطاقة", jobStatus: "former" },
+          { name: "خالد", isDeceased: false, workplace: "قطر للطاقة", jobStatus: "none" },
           { name: "سالم", isDeceased: true, workplace: "", jobStatus: "none" },
           { name: "حمد", isDeceased: true, workplace: "", jobStatus: "none" },
         ],
       }];
     });
-    assert.match(text(values), /والد كل من\nأحمد \(متقاعد من وزارة الداخلية\)\nوخالد \(قطر للطاقة سابقاً\)\nوسالم وحمد رحمهما الله/u);
+    assert.match(text(values), /والد كل من\nأحمد \(وزارة الداخلية\) \(متقاعد\)\nوخالد \(قطر للطاقة\)\nوسالم رحمه الله\nوحمد رحمه الله/u);
+    const back = mapPayloadToForm(asRequest(values));
+    assert.deepEqual(back.relatives[0].persons.slice(0, 2).map((p) => [p.workplace, p.jobStatus]), [["وزارة الداخلية", "retired"], ["قطر للطاقة", "none"]]);
   }],
   ["«تم الدفن» بملاحظة، و«مؤجل» حتى إشعار آخر", () => {
     const done = form((draft) => { draft.burial = { ...draft.burial!, status: "done", locationName: "", dateDescription: "", timeDescription: "", notes: "تم الدفن في مكة المكرمة" }; });
@@ -147,10 +152,10 @@ const cases: Array<[string, () => void]> = [
       draft.messageType = "amendment";
       draft.relatedRequestNumber = "QTR-1";
       draft.announcementMode = "siblings";
-      draft.sharedParent = { title: "", name: "فهد الشملان", isDeceased: true };
+      draft.sharedParent = { title: "", name: "فهد", isDeceased: true };
       draft.deceasedList = [
         { ...emptyDeceased(), gender: "ذكر", fullName: "سعود", age: 22 },
-        { ...emptyDeceased(), gender: "ذكر", title: "الطفل", fullName: "جاسم", age: 8, ageUnit: "months" },
+        { ...emptyDeceased(), gender: "ذكر", title: "الرضيع", fullName: "جاسم", age: 8 },
       ];
       draft.relatives = [{
         relationType: "الأعمام", relationKey: "paternal_uncles", deceasedPlacement: "grouped", deceasedTarget: "all",
@@ -173,9 +178,9 @@ const cases: Array<[string, () => void]> = [
     const back = mapPayloadToForm(asRequest(values));
     assert.equal(back.messageType, "amendment");
     assert.equal(back.announcementMode, "siblings");
-    assert.equal(back.sharedParent?.name, "فهد الشملان");
+    assert.equal(back.sharedParent?.name, "فهد");
     assert.equal(back.deceasedList[1].gender, "ذكر");
-    assert.equal(back.deceasedList[1].title, "الطفل");
+    assert.equal(back.deceasedList[1].title, "الرضيع");
     assert.equal(back.deceasedList[1].ageUnit, "months");
     assert.equal(back.relatives[0].relationKey, "paternal_uncles");
     assert.equal(back.relatives[0].deceasedPlacement, "grouped");
@@ -187,7 +192,7 @@ const cases: Array<[string, () => void]> = [
     assert.equal(back.condolences?.extraVenues?.[0]?.deceasedTarget, "1");
     assert.equal(back.condolenceStartDate, "2026-10-02");
     assert.equal(text(back), text(values));
-    assert.match(text(values), /^تعديل \/\nتوفي كل من\nسعود — 22 عاماً\nالطفل جاسم — 8 أشهر\nأبناء \/ فهد الشملان رحمه الله\nأعمامهم كل من\nخالد وحمد رحمهما الله/u);
+    assert.match(text(values), /^تعديل \/\nتوفي كل من\nسعود — 22 عاماً\nالرضيع جاسم — 8 أشهر\nأبناء \/ فهد رحمه الله\nأعمامهم كل من\nخالد وحمد رحمهما الله/u);
   }],
   ["طلب قديم: «other» لا يصبح «ذكر»، واللقب الحر لا يضيع", () => {
     const legacy = {

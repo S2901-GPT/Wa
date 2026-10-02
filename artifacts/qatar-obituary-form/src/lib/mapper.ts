@@ -62,6 +62,13 @@ function inferIdentifyBy(person: DeceasedFormValues): NonNullable<DeceasedPerson
   return "name";
 }
 
+/** وحدة العمر تُفهم من اللقب: الرضيع/الرضيعة بالأشهر، والمولودة بالأيام، وغيرهما بالسنوات. */
+const AGE_UNIT_BY_TITLE: Record<string, "months" | "days"> = { "الرضيع": "months", "الرضيعة": "months", "المولودة": "days" };
+
+function ageUnitFor(person: DeceasedFormValues): NonNullable<DeceasedPerson["ageUnit"]> {
+  return AGE_UNIT_BY_TITLE[person.title ?? ""] ?? person.ageUnit ?? "years";
+}
+
 function deceasedToApi(person: DeceasedFormValues): DeceasedPerson {
   const [spouse, ...otherRelations] = (person.femaleRelations ?? []).filter((relation) => clean(relation.relatedName));
   const age = person.age && person.age > 0 ? person.age : undefined;
@@ -77,7 +84,7 @@ function deceasedToApi(person: DeceasedFormValues): DeceasedPerson {
     ...(optional(person.fullName) ? { fullName: clean(person.fullName) } : {}),
     ...(optional(person.kunya) ? { kunya: clean(person.kunya) } : {}),
     ...(person.title && person.title !== "none" ? { title: clean(person.title) } : {}),
-    ...(age ? { age, ageUnit: person.ageUnit ?? "years" } : {}),
+    ...(age ? { age, ageUnit: ageUnitFor(person) } : {}),
     ...(optional(person.nationality) ? { nationality: clean(person.nationality) } : {}),
     ...(deathPlace ? { deathPlace } : {}),
     ...(note ? { note } : {}),
@@ -97,11 +104,23 @@ function deceasedToApi(person: DeceasedFormValues): DeceasedPerson {
 
 // ───────────────────────── الأقارب ─────────────────────────
 
+/** جهة العمل أولاً ثم «(متقاعد)»؛ جهة العمل وحدها تعني أنه على رأس عمله. */
+const RETIRED = "(متقاعد)";
+
 function occupationText(workplace?: string, jobStatus?: string): string {
   const place = clean(workplace);
-  if (jobStatus === "retired") return place ? `متقاعد من ${place}` : "متقاعد";
-  if (jobStatus === "former") return place ? `${place} سابقاً` : "";
+  if (jobStatus === "retired") return place ? `${place} ${RETIRED}` : RETIRED;
   return place;
+}
+
+/** عكس occupationText عند فتح الطلب للتعديل، مع الصيغة القديمة «متقاعد من X». */
+function occupationToForm(occupation?: string): { workplace: string; jobStatus: "retired" | "none" } {
+  const text = clean(occupation);
+  if (text === RETIRED || text === "متقاعد") return { workplace: "", jobStatus: "retired" };
+  if (text.endsWith(RETIRED)) return { workplace: clean(text.slice(0, -RETIRED.length)), jobStatus: "retired" };
+  const legacy = text.match(/^متقاعد من\s+(.+)$/u);
+  if (legacy) return { workplace: legacy[1], jobStatus: "retired" };
+  return { workplace: text, jobStatus: "none" };
 }
 
 function relationLabel(group: NonNullable<ObituaryFormValues["relatives"]>[number]): string {
@@ -437,8 +456,7 @@ export function mapPayloadToForm(request: ObituaryRequest): ObituaryFormValues {
       persons: group.people.map((person) => ({
         name: person.name,
         isDeceased: person.deceased,
-        workplace: person.occupation ?? "",
-        jobStatus: "none" as const,
+        ...occupationToForm(person.occupation),
       })),
     })),
     burial: {

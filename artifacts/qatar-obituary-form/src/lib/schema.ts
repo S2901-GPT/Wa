@@ -60,30 +60,14 @@ export const DeceasedPersonSchema = z.object({
   const hasFather = trimmed(data.father?.name).length > 0;
   const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
 
-  switch (data.identifyBy) {
-    case "name":
-      if (!hasName) issue(["fullName"], "اسم المتوفى مطلوب");
-      break;
-    case "kunya":
-      if (!hasKunya) issue(["kunya"], "اكتب الكنية");
-      break;
-    case "spouse":
-      if (!hasRelation) issue(["femaleRelations"], "أضف الزوج (أرملة فلان / حرم فلان)");
-      break;
-    case "father":
-      if (!hasFather) issue(["father", "name"], "اكتب اسم الأب");
-      break;
-    case "children":
-      // يُتحقق منه على مستوى النموذج لأنه يحتاج مجموعات الأقارب.
-      break;
-    default:
-      if (data.gender === "أنثى") {
-        if (!hasName && !hasRelation && !hasKunya && !hasFather) {
-          issue(["fullName"], "يجب إدخال اسم المتوفاة أو التعريف بها (أرملة فلان، الكنية، أو الأب)");
-        }
-      } else if (!hasName && !hasKunya && !hasFather) {
-        issue(["fullName"], "اسم المتوفى مطلوب");
-      }
+  // الاسم مطلوب، إلا للمتوفاة المعرّفة بزوجها (أرملة فلان / حرم فلان).
+  // الكنية والأب لا خانات لهما في النموذج، ويُقبلان فقط حتى لا تتعطل الطلبات القديمة.
+  if (data.gender === "أنثى") {
+    if (!hasName && !hasRelation && !hasKunya && !hasFather) {
+      issue(["fullName"], "يجب إدخال اسم المتوفاة أو التعريف بها (أرملة فلان / حرم فلان)");
+    }
+  } else if (!hasName && !hasKunya && !hasFather) {
+    issue(["fullName"], "اسم المتوفى مطلوب");
   }
 });
 
@@ -224,20 +208,6 @@ export const ObituaryPayloadSchema = z.object({
       }
     });
   }
-  data.deceasedList.forEach((person, index) => {
-    if (person.identifyBy !== "children") return;
-    const hasChildren = (data.relatives ?? []).some((group) =>
-      group.relationKey === "children"
-      && (group.deceasedTarget === "all" || group.deceasedTarget === String(index))
-      && (group.persons ?? []).some((relative) => trimmed(relative.name)));
-    if (!hasChildren) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["relatives"],
-        message: "اخترت التعريف بالمتوفى عبر أبنائه: أضف مجموعة «الأبناء» بأسمائهم.",
-      });
-    }
-  });
 });
 
 export type ObituaryPayload = z.infer<typeof ObituaryPayloadSchema>;

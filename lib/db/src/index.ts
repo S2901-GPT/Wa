@@ -28,12 +28,12 @@ const inMemoryRequests: ObituaryRequestRow[] = [
   {
     id: 1,
     requestNumber: "QTR-20260927-1001",
-    deceasedName: "عبدالله بن ناصر بن خليفة الكواري",
+    deceasedName: "عبدالله بن ناصر",
     status: "new",
     payload: {
       deceasedPeople: [
         {
-          fullName: "عبدالله بن ناصر بن خليفة الكواري",
+          fullName: "عبدالله بن ناصر",
           gender: "man",
           age: 78,
           nationality: "قطري",

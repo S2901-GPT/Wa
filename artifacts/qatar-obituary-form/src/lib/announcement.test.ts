@@ -36,11 +36,11 @@ const cases: Array<[string, () => void]> = [
       deceasedPeople: [{
         gender: "woman",
         identifyBy: "spouse",
-        spouse: { kind: "widow", title: "الوالد", name: "سيف سعيد ادغام النعيمي", deceased: true },
+        spouse: { kind: "widow", title: "الوالد", name: "سيف سعيد", deceased: true },
       }],
       relatives: [{ relation: "", relationKey: "children", people: [{ name: "غانم", deceased: false }, { name: "ناصر", deceased: false }] }],
     }));
-    assert.ok(result.text.startsWith("توفيت أرملة الوالد / سيف سعيد ادغام النعيمي رحمهم الله\nوالدة كل من\nغانم\nوناصر"), result.text);
+    assert.ok(result.text.startsWith("توفيت أرملة الوالد / سيف سعيد رحمهم الله\nوالدة كل من\nغانم\nوناصر"), result.text);
     assert.ok(result.text.endsWith("الله يرحمها ويغفر لها"));
     // لا يُسجَّل الزوج كأنه المتوفى.
     assert.match(describeDeceased(request({}).deceasedPeople[0]), /محمد علي/u);
@@ -54,7 +54,7 @@ const cases: Array<[string, () => void]> = [
       deceasedPeople: [{
         gender: "woman",
         identifyBy: "children",
-        spouse: { kind: "widow", title: "الوالد", name: "عبدالله يوسف المناعي", deceased: true },
+        spouse: { kind: "widow", title: "الوالد", name: "عبدالله يوسف", deceased: true },
       }],
       relatives: [{
         relation: "",
@@ -62,7 +62,7 @@ const cases: Array<[string, () => void]> = [
         people: [{ name: "أحمد", occupation: "جامعة قطر", deceased: false }, { name: "داوود", occupation: "كهرماء", deceased: false }],
       }],
     });
-    assert.ok(result.startsWith("توفيت والدة كل من\nأحمد (جامعة قطر)\nوداوود (كهرماء)\nأبناء الوالد / عبدالله يوسف المناعي رحمه الله"), result);
+    assert.ok(result.startsWith("توفيت والدة كل من\nأحمد (جامعة قطر)\nوداوود (كهرماء)\nأبناء الوالد / عبدالله يوسف رحمه الله"), result);
     assert.doesNotMatch(result, /أرملة/u);
   }],
   ["3 الأب يُعرف عبر الإخوة: «شقيقة كل من / أبناء الوالد /»", () => {
@@ -81,52 +81,52 @@ const cases: Array<[string, () => void]> = [
     const result = text({
       deceasedPeople: [{
         title: "الشيخة",
-        fullName: "مريم بنت عبدالله بن خليفة العطية",
+        fullName: "مريم بنت عبدالله",
         gender: "woman",
-        spouse: { kind: "harem", title: "الشيخ", name: "خليفة بن حمد آل ثاني", deceased: true },
+        spouse: { kind: "harem", title: "الشيخ", name: "خليفة بن حمد", deceased: true },
       }],
     });
-    assert.ok(result.startsWith("توفيت الشيخة / مريم بنت عبدالله بن خليفة العطية\nحرم الشيخ / خليفة بن حمد آل ثاني رحمه الله"), result);
+    assert.ok(result.startsWith("توفيت الشيخة / مريم بنت عبدالله\nحرم الشيخ / خليفة بن حمد رحمه الله"), result);
   }],
   ["5 «حرم» وزوجها متوفى", () => {
     const people = [{
       gender: "woman" as const,
       identifyBy: "spouse" as const,
-      spouse: { kind: "harem" as const, title: "الوالد", name: "فضل سعيد الربيعة الكعبي", deceased: true },
+      spouse: { kind: "harem" as const, title: "الوالد", name: "فضل سعيد", deceased: true },
     }];
     const result = buildAnnouncement(request({ deceasedPeople: people }));
-    assert.ok(result.text.startsWith("توفيت حرم الوالد / فضل سعيد الربيعة الكعبي رحمه الله\n"), result.text);
-    assert.equal(result.posterNames, "حرم الوالد فضل سعيد الربيعة الكعبي رحمه الله");
+    assert.ok(result.text.startsWith("توفيت حرم الوالد / فضل سعيد رحمه الله\n"), result.text);
+    assert.equal(result.posterNames, "حرم الوالد فضل سعيد رحمه الله");
     assert.doesNotMatch(result.text, /،\s*فضل/u, "لا فاصلة تجعل اسم الزوج يُقرأ اسماً لها");
   }],
   ["6 متوفاة تُعرف بكنيتها فقط", () => {
-    const result = text({ deceasedPeople: [{ gender: "woman", identifyBy: "kunya", title: "الوالدة", kunya: "أم باسل المومني" }] });
-    assert.ok(result.startsWith("توفيت الوالدة / أم باسل المومني\n"), result);
+    const result = text({ deceasedPeople: [{ gender: "woman", identifyBy: "kunya", title: "الوالدة", kunya: "أم باسل" }] });
+    assert.ok(result.startsWith("توفيت الوالدة / أم باسل\n"), result);
   }],
   ["7 شقيقان بنسب مشترك وعزاء نساء منفصل لكل منهما", () => {
     const result = text({
       announcementMode: "siblings",
-      sharedParent: { name: "فهد محمد جاسم الشملان", deceased: false },
+      sharedParent: { name: "فهد محمد جاسم", deceased: false },
       deceasedPeople: [
         { fullName: "سعود", gender: "man", age: 22 },
         { fullName: "جاسم", gender: "man", age: 21 },
       ],
       relatives: [
         { relation: "", relationKey: "siblings", deceasedIndex: null, people: [{ name: "ناصر", deceased: false }, { name: "علي", deceased: false }] },
-        { relation: "", relationKey: "grandfather", deceasedIndex: null, people: [{ name: "محمد جاسم الشملان", deceased: true }] },
+        { relation: "", relationKey: "grandfather", deceasedIndex: null, people: [{ name: "محمد جاسم", deceased: true }] },
         { relation: "", relationKey: "paternal_uncles", deceasedIndex: null, people: [{ name: "خالد", deceased: false }, { name: "حمد", deceased: false }] },
       ],
       condolenceOptions: ["men", "women"],
       condolences: [
-        { audience: "men", location: "مجلس الشملان", area: "الدفنة" },
+        { audience: "men", location: "مجلس العائلة", area: "الدفنة" },
         { audience: "women", location: "منزل رقم ٥", area: "الوكرة", deceasedIndex: 0 },
         { audience: "women", location: "منزل رقم ٩", area: "الخور", deceasedIndex: 1 },
       ],
     });
     includesInOrder(result, [
-      "توفي كل من", "سعود — 22 عاماً", "جاسم — 21 عاماً", "أبناء / فهد محمد جاسم الشملان",
-      "إخوتهم كل من", "ناصر", "وعلي", "جدهم / محمد جاسم الشملان رحمه الله", "أعمامهم كل من",
-      "عزاء الرجال في مجلس الشملان بمنطقة الدفنة",
+      "توفي كل من", "سعود — 22 عاماً", "جاسم — 21 عاماً", "أبناء / فهد محمد جاسم",
+      "إخوتهم كل من", "ناصر", "وعلي", "جدهم / محمد جاسم رحمه الله", "أعمامهم كل من",
+      "عزاء الرجال في مجلس العائلة بمنطقة الدفنة",
       "عزاء النساء لـسعود رحمه الله في منزل رقم ٥ بمنطقة الوكرة",
       "عزاء النساء لـجاسم رحمه الله في منزل رقم ٩ بمنطقة الخور",
       "الله يرحمهما ويغفر لهما",
@@ -135,7 +135,7 @@ const cases: Array<[string, () => void]> = [
   ["8 الأب أولاً وأربعة أبناء من الجنسين والدفن في عُمان", () => {
     const result = text({
       announcementMode: "father_first",
-      sharedParent: { title: "الوالد", name: "سالم حمد المري", deceased: false },
+      sharedParent: { title: "الوالد", name: "سالم حمد", deceased: false },
       deceasedPeople: [
         { fullName: "سعد", gender: "man" }, { fullName: "غانم", gender: "man" },
         { fullName: "إيمان", gender: "woman" }, { fullName: "فاطمة", gender: "woman" },
@@ -144,7 +144,7 @@ const cases: Array<[string, () => void]> = [
       burial: { status: "upcoming", outsideQatar: true, outsideLocation: "سلطنة عُمان" },
     });
     includesInOrder(result, [
-      "توفي أبناء الوالد / سالم حمد المري\nسعد وغانم وإيمان وفاطمة",
+      "توفي أبناء الوالد / سالم حمد\nسعد وغانم وإيمان وفاطمة",
       "صلاة الجنازة اليوم بعد صلاة العصر في جامع الإمام محمد بن عبدالوهاب",
       "والدفن في سلطنة عُمان",
       "الله يرحمهم ويغفر لهم",
@@ -154,23 +154,35 @@ const cases: Array<[string, () => void]> = [
     const result = text({
       announcementMode: "mother_child",
       deceasedPeople: [
-        { gender: "woman", identifyBy: "spouse", spouse: { kind: "harem", name: "خالد سعيد الهاجري", deceased: false } },
+        { gender: "woman", identifyBy: "spouse", spouse: { kind: "harem", name: "خالد سعيد", deceased: false } },
         { fullName: "آمنة", gender: "girl" },
       ],
     });
-    assert.ok(result.startsWith("توفيت حرم / خالد سعيد الهاجري\nوابنتها الطفلة / آمنة"), result);
+    assert.ok(result.startsWith("توفيت حرم / خالد سعيد\nوابنتها الطفلة / آمنة"), result);
     assert.ok(result.endsWith("الله يرحمهم ويغفر لهم"), result);
   }],
-  ["10 ستة إخوة أحياء واثنان متوفيان: التجميع بالمثنى آخر القائمة", () => {
+  ["10 ستة إخوة أحياء واثنان متوفيان: «رحمه الله» بجانب كل اسم", () => {
     const living = ["راشد", "حمد", "سعد", "فهد", "ناصر", "خليفة"].map((name) => ({ name, deceased: false }));
     const result = text({
       relatives: [{ relation: "", relationKey: "siblings", people: [...living, { name: "عبدالله", deceased: true }, { name: "أمين", deceased: true }] }],
     });
-    includesInOrder(result, ["أخ كل من", "راشد", "وخليفة", "وعبدالله وأمين رحمهما الله"]);
-    const inline = text({
-      relatives: [{ relation: "", relationKey: "siblings", deceasedPlacement: "inline", people: [...living, { name: "عبدالله", deceased: true }] }],
+    includesInOrder(result, ["أخ كل من", "راشد", "وخليفة", "وعبدالله رحمه الله", "وأمين رحمه الله"]);
+    assert.doesNotMatch(result, /رحمهما/u);
+    const grouped = text({
+      relatives: [{ relation: "", relationKey: "siblings", deceasedPlacement: "grouped", people: [...living, { name: "عبدالله", deceased: true }, { name: "أمين", deceased: true }] }],
     });
-    assert.match(inline, /وعبدالله رحمه الله/u);
+    assert.match(grouped, /وعبدالله وأمين رحمهما الله/u);
+  }],
+  ["جهة العمل أولاً ثم (متقاعد)، دون أقواس متداخلة", () => {
+    const result = text({
+      relatives: [{ relation: "", relationKey: "children", people: [
+        { name: "أحمد", deceased: false, occupation: "وزارة الداخلية (متقاعد)" },
+        { name: "خالد", deceased: false, occupation: "(متقاعد)" },
+        { name: "سعد", deceased: false, occupation: "قطر للطاقة" },
+      ] }],
+    });
+    includesInOrder(result, ["أحمد (وزارة الداخلية) (متقاعد)", "وخالد (متقاعد)", "وسعد (قطر للطاقة)"]);
+    assert.doesNotMatch(result, /\(\(|\)\)/u);
   }],
   ["11 قريب اسمه «رحمة الله» حيّ لا يُعامل كمتوفى", () => {
     const result = text({
@@ -205,16 +217,16 @@ const cases: Array<[string, () => void]> = [
     includesInOrder(result, ["تم الدفن اليوم السبت في البحرين", "عزاء الرجال من الغد في مجلس العائلة بمنطقة الدفنة", "لمدة 3 أيام"]);
   }],
   ["15 تأجيل الدفن حتى إشعار آخر ثم رسالة تعديل بموعد جديد", () => {
-    const deceased = [{ gender: "woman" as const, identifyBy: "spouse" as const, spouse: { kind: "harem" as const, name: "علي حسن المهندي", deceased: false } }];
+    const deceased = [{ gender: "woman" as const, identifyBy: "spouse" as const, spouse: { kind: "harem" as const, name: "علي حسن", deceased: false } }];
     const postponed = buildAnnouncement(request({ messageType: "postponement", deceasedPeople: deceased }));
-    assert.equal(postponed.text, "تأجيل دفن حرم / علي حسن المهندي رحمها الله حتى إشعار آخر");
+    assert.equal(postponed.text, "تأجيل دفن حرم / علي حسن رحمها الله حتى إشعار آخر");
     const amended = text({
       messageType: "amendment",
       relatedRequestNumber: "QTR-1",
       deceasedPeople: deceased,
       burial: { status: "upcoming", outsideQatar: false, day: "اليوم", weekday: "الخميس", time: "بعد صلاة العشاء", cemetery: "مقبرة مسيمير" },
     });
-    includesInOrder(amended, ["تعديل /", "توفيت حرم / علي حسن المهندي", "الدفن اليوم الخميس بعد صلاة العشاء في مقبرة مسيمير"]);
+    includesInOrder(amended, ["تعديل /", "توفيت حرم / علي حسن", "الدفن اليوم الخميس بعد صلاة العشاء في مقبرة مسيمير"]);
   }],
   ["16 عزاء رمضاني بجدول: يوم بعد العشاء ويومان بعد العصر", () => {
     const result = text({
@@ -257,7 +269,7 @@ const cases: Array<[string, () => void]> = [
   }],
   ["19 «توفي الوالد اللواء متقاعد /» مع أبناء بوظائف موحّدة الفاصل", () => {
     const result = text({
-      deceasedPeople: [{ title: "الوالد اللواء متقاعد", fullName: "سالم راشد المري", gender: "man", nationality: "قطري", age: 81 }],
+      deceasedPeople: [{ title: "الوالد اللواء متقاعد", fullName: "سالم راشد", gender: "man", nationality: "قطري", age: 81 }],
       relatives: [{
         relation: "",
         relationKey: "children",
@@ -269,14 +281,14 @@ const cases: Array<[string, () => void]> = [
         ],
       }],
     });
-    includesInOrder(result, ["توفي الوالد اللواء متقاعد / سالم راشد المري", "81 عاماً", "والد كل من", "أحمد (جامعة قطر)", "وداوود (كهرماء)", "ومبارك (وزارة البلدية)", "وخالد (متقاعد)"]);
+    includesInOrder(result, ["توفي الوالد اللواء متقاعد / سالم راشد", "81 عاماً", "والد كل من", "أحمد (جامعة قطر)", "وداوود (كهرماء)", "ومبارك (وزارة البلدية)", "وخالد (متقاعد)"]);
     assert.doesNotMatch(result, /قطري|العمل:/u);
   }],
-  ["20 «طالب مسعود سالم المهندي» اسم لا وظيفة", () => {
+  ["20 «طالب مسعود سالم» اسم لا وظيفة", () => {
     const result = text({
-      relatives: [{ relation: "", relationKey: "children", people: [{ name: "طالب مسعود سالم المهندي", deceased: false }] }],
+      relatives: [{ relation: "", relationKey: "children", people: [{ name: "طالب مسعود سالم", deceased: false }] }],
     });
-    assert.match(result, /والد \/ طالب مسعود سالم المهندي/u);
+    assert.match(result, /والد \/ طالب مسعود سالم/u);
   }],
 
   // ───── قواعد إضافية من التقرير ─────
