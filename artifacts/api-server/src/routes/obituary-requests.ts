@@ -169,6 +169,7 @@ function normalizePayload(payload: RequestPayload) {
     } : {}),
     deceasedPeople,
     relatives: normalizeRelatives(payload.relatives),
+    ...(payload.noRelatives === true ? { noRelatives: true } : {}),
     prayer: payload.prayer ?? {
       enabled: payload.hasSeparatePrayer === true,
       day: "",

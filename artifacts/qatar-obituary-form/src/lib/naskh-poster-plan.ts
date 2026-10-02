@@ -51,7 +51,7 @@ export const NASKH_COLORS = {
 
 export type NaskhRowStyle = "statement" | "name" | "body" | "heading" | "closing";
 export type NaskhRow = { style: NaskhRowStyle; text: string; label?: string };
-export type NaskhSectionId = "head" | "relatives" | "prayer" | "burial" | "men" | "women" | "phone" | "notes" | "closing";
+export type NaskhSectionId = "head" | "relatives" | "prayer" | "burial" | "condolenceStart" | "men" | "women" | "phone" | "notes" | "closing";
 export type NaskhQrKey = "prayer" | "burial" | "prayerBurialCombined" | "men" | "women";
 export type NaskhSection = { id: NaskhSectionId; rows: NaskhRow[]; qrKey?: NaskhQrKey };
 
@@ -217,6 +217,8 @@ export function buildNaskhSections(content: NormalizedContent): NaskhSection[] {
       rows.push({ style: "body", text: group.membersText });
     }
     sections.push({ id: "relatives", rows });
+  } else if (content.relativesNote) {
+    sections.push({ id: "relatives", rows: [{ style: "body", text: content.relativesNote }] });
   }
 
   if (content.hasCombinedPrayerBurial && content.prayerBurialCombined) {
@@ -231,6 +233,11 @@ export function buildNaskhSections(content: NormalizedContent): NaskhSection[] {
       const rows = eventRows(content.burial.title, content.burial.statusText);
       if (rows.length) sections.push({ id: "burial", rows, qrKey: content.burial.qrUrl ? "burial" : undefined });
     }
+  }
+
+  if (content.condolenceStart) {
+    const split = splitLeadingLabel(content.condolenceStart, ["العزاء"]);
+    sections.push({ id: "condolenceStart", rows: [split ? { style: "body", label: split.label, text: split.rest } : { style: "body", text: content.condolenceStart }] });
   }
 
   if (content.men) {

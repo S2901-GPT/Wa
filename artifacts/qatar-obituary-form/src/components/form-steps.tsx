@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { 
-  Trash2, Plus, User, Users, Calendar, Heart, FileText, CheckCircle2, 
+  Trash2, Plus, User, Users, UserX, Calendar, Heart, FileText, CheckCircle2, 
   MapPin, Clock, Phone, Sparkles, AlertCircle, Copy, Link as LinkIcon, UserCheck
 } from "lucide-react";
 
@@ -552,6 +552,12 @@ export function RelativesStep() {
     control: form.control,
     name: "relatives" as any,
   });
+  // «ليس لديه أقارب»: تأكيد صريح من المرسل يظهر للمسؤول وفي الصورة، ويُلغى تلقائياً عند إضافة مجموعة.
+  const noRelatives = form.watch("noRelatives");
+  const addGroup = (group: Record<string, unknown>) => {
+    form.setValue("noRelatives", false, { shouldDirty: true });
+    append(group as any);
+  };
 
   return (
     <div className="space-y-5 animate-in fade-in duration-300 w-full max-w-full box-border overflow-hidden">
@@ -573,16 +579,37 @@ export function RelativesStep() {
 
       {fields.length === 0 && (
         <Card className="border-dashed bg-muted/20 text-center p-6 sm:p-8 w-full box-border">
-          <p className="text-muted-foreground text-xs sm:text-sm mb-3">لم يتم إضافة مجموعات أقارب بعد.</p>
-          <Button
-            type="button"
-            variant="outline"
-            className="gap-2 text-xs sm:text-sm"
-            onClick={() => append({ relationType: "أبناؤه", relationKey: "children", deceasedPlacement: "auto", deceasedTarget: "all", persons: [] } as any)}
-          >
-            <Plus className="w-4 h-4" />
-            إضافة مجموعة قرابة أولى (مثل أبناؤه)
-          </Button>
+          {noRelatives ? (
+            <>
+              <p className="text-foreground font-semibold text-sm mb-1 flex items-center justify-center gap-2">
+                <UserX className="w-4 h-4 text-primary" />
+                تم تأكيد أنه ليس لديه أقارب يُذكرون
+              </p>
+              <p className="text-muted-foreground text-xs mb-3">سيظهر ذلك للمسؤول وفي صورة الإعلان.</p>
+              <Button type="button" variant="ghost" className="text-xs sm:text-sm" onClick={() => form.setValue("noRelatives", false, { shouldDirty: true })}>
+                تراجع وإضافة أقارب
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="text-muted-foreground text-xs sm:text-sm mb-3">لم يتم إضافة مجموعات أقارب بعد.</p>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2 text-xs sm:text-sm"
+                  onClick={() => addGroup({ relationType: "أبناؤه", relationKey: "children", deceasedPlacement: "auto", deceasedTarget: "all", persons: [] })}
+                >
+                  <Plus className="w-4 h-4" />
+                  إضافة مجموعة قرابة أولى (مثل أبناؤه)
+                </Button>
+                <Button type="button" variant="secondary" className="gap-2 text-xs sm:text-sm" onClick={() => form.setValue("noRelatives", true, { shouldDirty: true })}>
+                  <UserX className="w-4 h-4" />
+                  ليس لديه أقارب
+                </Button>
+              </div>
+            </>
+          )}
         </Card>
       )}
 
@@ -614,7 +641,7 @@ export function RelativesStep() {
           type="button"
           variant="outline"
           className="w-full border-dashed h-11 text-muted-foreground hover:text-primary gap-2 text-xs sm:text-sm"
-          onClick={() => append({ relationType: "أخوانه", relationKey: "siblings", deceasedPlacement: "auto", deceasedTarget: "all", persons: [] } as any)}
+          onClick={() => addGroup({ relationType: "أخوانه", relationKey: "siblings", deceasedPlacement: "auto", deceasedTarget: "all", persons: [] })}
         >
           <Plus className="w-4 h-4" />
           إضافة مجموعة قرابة جديدة (مثل إخوانه، أعمامه...)

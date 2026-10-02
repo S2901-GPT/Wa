@@ -70,6 +70,10 @@ export type NormalizedContent = {
     membersText: string;
     membersList: string[];
   }>;
+  /** «ليس لديه أقارب» عندما يؤكد المرسل ذلك ولا توجد مجموعات. */
+  relativesNote?: string;
+  /** «العزاء من …» المشتركة بين المواقع، تُكتب مرة واحدة قبلها. */
+  condolenceStart?: string;
   notes?: string;
   closing: string;
 };
@@ -377,12 +381,14 @@ export function normalizeObituaryPresentation(
   // 3. العزاء: كل جمهور في قسم واحد؛ المواقع الإضافية تُضاف أسطراً فيه.
   // «والنساء» فقط عندما يكون للرجال موقع عزاء فعلي (بطاقة)، لا سطر «العزاء في المقبرة».
   const hasMen = announcement.sections.some((item) => item.audience === "men" && typeof item.cardIndex === "number");
+  // البداية المشتركة «العزاء من …» تُكتب مرة واحدة، فتُحذف من جمل المواقع.
+  const condolenceStart = section("condolence-start")?.lines[0] || undefined;
   const condolenceBlock = (audience: "men" | "women"): NormalizedContent["men"] => {
     const blocks = announcement.sections.filter((item) => item.audience === audience);
     if (!blocks.length) return undefined;
     const lines = blocks.flatMap((block, index) => {
       const card: CondolenceCard | undefined = typeof block.cardIndex === "number" ? edited.condolences?.[block.cardIndex] : undefined;
-      const body = card ? posterCardLines(edited, card) : block.lines;
+      const body = card ? posterCardLines(edited, condolenceStart ? { ...card, start: "" } : card) : block.lines;
       const base = audience === "men" ? "عزاء الرجال" : "عزاء النساء";
       // العنوان العام للقسم هو «عزاء النساء» أصلاً، فالمواقع المرقّمة تُسمّى «الموقع الأول/الثاني».
       const numbered = block.label === `${base} (${index + 1})`;
@@ -405,6 +411,11 @@ export function normalizeObituaryPresentation(
   };
   const men = condolenceBlock("men");
   const women = condolenceBlock("women");
+  // البداية المشتركة: سطر مستقل في قالب النسخ، وداخل بطاقة أول عزاء في القوالب القديمة.
+  if (condolenceStart) {
+    const firstVenue = men ?? women;
+    if (firstVenue) firstVenue.startAndDuration = condolenceStart;
+  }
 
   // 4. أرقام الهاتف (الأرقام معزولة باتجاه LTR)
   const phoneContacts = (edited.condolencePhoneContacts || [])
@@ -422,6 +433,10 @@ export function normalizeObituaryPresentation(
     membersList: block.members,
     membersText: [block.members.join(" و"), block.reference].filter(Boolean).join(" — "),
   }));
+
+  const relativesNote = edited.noRelatives && !relatives.length
+    ? people.length > 1 ? "ليس لديهم أقارب" : people.every((person) => person.gender === "woman" || person.gender === "girl") ? "ليس لديها أقارب" : "ليس لديه أقارب"
+    : undefined;
 
   // 6. الملاحظات والختام
   const notes = cleanText(edited.notes);
@@ -447,6 +462,8 @@ export function normalizeObituaryPresentation(
     women,
     phoneContacts,
     relatives,
+    relativesNote,
+    condolenceStart,
     notes: notes || undefined,
     closing,
   };

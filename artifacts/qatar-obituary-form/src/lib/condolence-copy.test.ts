@@ -90,6 +90,31 @@ const cases: Array<[string, () => void]> = [
     const amendment = normalizeObituaryPresentation(makeRequest({ messageType: "amendment" }));
     assert.equal(amendment.headline.verb, "تعديل / توفي");
   }],
+  ["naskh headline without a title drops the slash and merges age, nationality and death place", () => {
+    const content = normalizeObituaryPresentation(makeRequest({
+      deceasedPeople: [{ fullName: "نبيل سرور سعد", gender: "man", age: 70, nationality: "تايلندي", deathPlace: "تايلند" }],
+    }));
+    assert.equal(content.headline.name, "نبيل سرور سعد");
+    assert.deepEqual(content.headline.rest, ["70 عاماً — تايلندي — وكانت الوفاة في تايلند"]);
+    assert.equal(content.relativesNote, undefined);
+  }],
+  ["a shared condolence start becomes one line, and «no relatives» is noted", () => {
+    const content = normalizeObituaryPresentation(makeRequest({
+      noRelatives: true,
+      condolenceOptions: ["men", "women"],
+      condolences: [
+        { audience: "men", location: "خيمة بجانب الجامع", start: "غداً" },
+        { audience: "women", location: "منزل الفقيد رقم 50", start: "غداً" },
+      ],
+    } as never));
+    assert.equal(content.condolenceStart, "العزاء من الغد");
+    assert.equal(content.men?.location, "في خيمة بجانب الجامع");
+    assert.equal(content.men?.startAndDuration, "العزاء من الغد");
+    assert.equal(content.women?.location, "في منزل الفقيد رقم 50");
+    assert.equal(content.relativesNote, "ليس لديه أقارب");
+    const woman = normalizeObituaryPresentation(makeRequest({ noRelatives: true, deceasedPeople: [{ fullName: "نورة", gender: "woman" }] } as never));
+    assert.equal(woman.relativesNote, "ليس لديها أقارب");
+  }],
   ["children get «شفيعاً لوالديه يارب», never the adult prayer", () => {
     const content = normalizeObituaryPresentation(makeRequest({ deceasedPeople: [{ fullName: "يوسف", gender: "boy" }] }));
     assert.equal(content.closing, "شفيعاً لوالديه يارب");

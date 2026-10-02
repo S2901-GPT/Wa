@@ -111,6 +111,21 @@ const cases: Array<[string, () => void]> = [
     assert.equal(prayer.qrKey, "prayer");
     assert.equal(sections.find((section) => section.id === "phone")!.rows[0].text, "للتعزية عبر الهاتف");
   }],
+  ["a shared start is its own row before the venues, and «no relatives» fills the relatives slot", () => {
+    const sections = buildNaskhSections(normalizeObituaryPresentation(makeRequest({
+      relatives: [],
+      noRelatives: true,
+      condolences: [
+        { audience: "men", location: "خيمة بجانب الجامع", start: "غداً", mapLink: "https://maps.google.com/?q=men" },
+        { audience: "women", location: "منزل الفقيد رقم 50", start: "غداً" },
+      ],
+    } as never)));
+    assert.deepEqual(sections.map((section) => section.id), ["head", "relatives", "burial", "condolenceStart", "men", "women", "closing"]);
+    assert.deepEqual(sections[1].rows, [{ style: "body", text: "ليس لديه أقارب" }]);
+    assert.deepEqual(sections[3].rows, [{ style: "body", label: "العزاء", text: "من الغد" }]);
+    assert.deepEqual(sections[4].rows, [{ style: "body", label: "عزاء الرجال", text: "في خيمة بجانب الجامع" }]);
+    assert.deepEqual(sections[5].rows, [{ style: "body", label: "والنساء", text: "في منزل الفقيد رقم 50" }]);
+  }],
   ["a common announcement fits the base height at full size", () => {
     const p = plan(makeRequest());
     assert.equal(p.height, 1350);

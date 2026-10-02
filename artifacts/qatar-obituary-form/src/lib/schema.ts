@@ -189,6 +189,7 @@ export const ObituaryPayloadSchema = z.object({
   sharedParent: LinkedPersonSchema.optional(),
   deceasedList: z.array(DeceasedPersonSchema).min(1, "يجب إضافة متوفى واحد على الأقل"),
   relatives: z.array(KinshipGroupSchema).optional().default([]),
+  noRelatives: z.boolean().default(false),
   prayer: EventLocationSchema.optional(),
   burial: EventLocationSchema.optional(),
   condolences: CondolenceSchema.optional(),
@@ -262,6 +263,7 @@ export function emptyFormValues(): ObituaryFormValues {
     sharedParent: { title: "", name: "", isDeceased: false },
     deceasedList: [emptyDeceased()],
     relatives: [],
+    noRelatives: false,
     burial: {
       enabled: false,
       status: "scheduled",
