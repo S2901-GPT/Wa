@@ -172,22 +172,22 @@ function relativesToApi(groups: ObituaryFormValues["relatives"], count: number):
 
 // ───────────────────────── العزاء ─────────────────────────
 
-/** «16:00» → «4:00 مساءً». */
+/** «16:00» → «4:00 مساءً»، و«12:30» → «12:30 ظهراً». */
 export function formatTime12h(value?: string | null): string {
   const text = clean(value);
   const match = /^(\d{1,2}):(\d{2})$/u.exec(text);
   if (!match) return text;
   const hours = Number(match[1]);
-  const period = hours >= 12 ? "مساءً" : "صباحاً";
+  const period = hours === 12 ? "ظهراً" : hours > 12 ? "مساءً" : "صباحاً";
   return `${hours % 12 || 12}:${match[2]} ${period}`;
 }
 
 /** «4:00 مساءً» → «16:00» (لإعادة الجدول إلى منتقي الوقت عند التعديل). */
 function parseTime12h(value: string): string {
-  const match = /^(\d{1,2}):(\d{2})\s*(صباحاً|مساءً)$/u.exec(clean(value));
+  const match = /^(\d{1,2}):(\d{2})\s*(صباحاً|ظهراً|مساءً)$/u.exec(clean(value));
   if (!match) return "";
   let hours = Number(match[1]) % 12;
-  if (match[3] === "مساءً") hours += 12;
+  if (match[3] !== "صباحاً") hours += 12;
   return `${String(hours).padStart(2, "0")}:${match[2]}`;
 }
 

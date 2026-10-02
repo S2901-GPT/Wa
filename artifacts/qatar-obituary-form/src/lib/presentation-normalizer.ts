@@ -5,6 +5,8 @@ import { formatDuration } from "./condolence-copy";
 export type NormalizedContent = {
   opening: string;
   statement: string;
+  /** رأس الإعلان بصيغة الأرشيف (قالب النسخ): «توفي» ثم «الوالد / فلان» ثم بقية أسطر التعريف. */
+  headline: { verb: string; name: string; rest: string[] };
   deceasedList: Array<{
     fullName: string;
     title?: string;
@@ -39,6 +41,8 @@ export type NormalizedContent = {
   };
   men?: {
     title: string;
+    /** عنوان الجملة الجارية كما في الأرشيف: «عزاء الرجال» و«والنساء» عند وجود عزاء للرجال. */
+    flowLabel: string;
     startAndDuration?: string;
     time?: string;
     location?: string;
@@ -48,6 +52,7 @@ export type NormalizedContent = {
   };
   women?: {
     title: string;
+    flowLabel: string;
     startAndDuration?: string;
     time?: string;
     location?: string;
@@ -370,6 +375,8 @@ export function normalizeObituaryPresentation(
   }
 
   // 3. العزاء: كل جمهور في قسم واحد؛ المواقع الإضافية تُضاف أسطراً فيه.
+  // «والنساء» فقط عندما يكون للرجال موقع عزاء فعلي (بطاقة)، لا سطر «العزاء في المقبرة».
+  const hasMen = announcement.sections.some((item) => item.audience === "men" && typeof item.cardIndex === "number");
   const condolenceBlock = (audience: "men" | "women"): NormalizedContent["men"] => {
     const blocks = announcement.sections.filter((item) => item.audience === audience);
     if (!blocks.length) return undefined;
@@ -390,6 +397,7 @@ export function normalizeObituaryPresentation(
     const qrUrl = qrFor(cleanText(firstCard?.location), map);
     return {
       title: audience === "men" ? "عزاء الرجال" : "عزاء النساء",
+      flowLabel: audience === "men" ? "عزاء الرجال" : hasMen ? "والنساء" : "عزاء النساء",
       location: lines.join("\n"),
       qrUrl,
       qrLabel: qrUrl ? (audience === "men" ? "موقع المجلس" : "موقع العزاء") : undefined,
@@ -420,10 +428,15 @@ export function normalizeObituaryPresentation(
   const closing = cleanText(draftOverrides?.closing) || announcement.closing;
   const opening = cleanText(draftOverrides?.opening) || "إنا لله وإنا إليه راجعون";
   const statement = edited.messageType === "amendment" ? `تعديل / ${announcement.statement}` : announcement.statement;
+  const headline = {
+    ...announcement.headline,
+    verb: edited.messageType === "amendment" ? `تعديل / ${announcement.headline.verb}` : announcement.headline.verb,
+  };
 
   return {
     opening,
     statement,
+    headline,
     deceasedList,
     deceasedCombinedNames,
     hasCombinedPrayerBurial,

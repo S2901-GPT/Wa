@@ -43,9 +43,17 @@ export type Announcement = {
   posterDetails: string[];
   /** مجموعات الأقارب بصيغتها النهائية (للقوالب البصرية). */
   relativeBlocks: RelativeBlock[];
+  /** رأس الإعلان بصيغة الأرشيف لقالب النسخ: الفعل («توفي»)، ثم «الوالد / فلان»، ثم بقية أسطر التعريف. */
+  headline: AnnouncementHeadline;
   sections: AnnouncementSection[];
   closing: string;
   warnings: string[];
+};
+
+export type AnnouncementHeadline = {
+  verb: string;
+  name: string;
+  rest: string[];
 };
 
 // ───────────────────────── أدوات لغوية عامة ─────────────────────────
@@ -157,6 +165,9 @@ export function dayTimePhrase(day?: string, weekday?: string, time?: string, now
   else if (weekdayText) when = `يوم ${weekdayText}`;
   return [when, timeText].filter(Boolean).join(" ");
 }
+
+/** مواقع لا تحتاج «في» قبلها: «في المجلس»، «بمنطقة»، «مقابل جامع…»، «بجانب…»، «أمام…»، «خلف…»، «قرب…». */
+const LOCATION_PREFIXED = /^(?:في|ب|مقابل|أمام|بجانب|بجوار|جنب|خلف|قرب|بالقرب|قريباً|قريبا|عند|داخل|على)\s/u;
 
 function withPrefix(text: string, prefix: string, alreadyPrefixed: RegExp): string {
   const value = clean(text);
@@ -608,6 +619,7 @@ function sharedParentLine(request: ObituaryRequestInput): string {
 
 type IdentityComposition = {
   identityLines: string[];
+  headline: AnnouncementHeadline;
   relativesLines: string[];
   relativeBlocks: RelativeBlock[];
   posterNames: string;
@@ -673,6 +685,7 @@ function composeIdentity(request: ObituaryRequestInput, warnings: string[]): Ide
     const details = personDetailLines(person, identity, { includeAge: true, placeInHeading: !!placeSuffix });
     return {
       identityLines: [`${singleVerb(person.gender)} ${first}${placeSuffix}`.trim(), ...rest, ...details],
+      headline: { verb: singleVerb(person.gender), name: `${first}${placeSuffix}`.trim(), rest: [...rest, ...details] },
       relativesLines,
       relativeBlocks,
       posterNames: identity.plain,
@@ -693,15 +706,16 @@ function composeIdentity(request: ObituaryRequestInput, warnings: string[]): Ide
     const allChildren = people.every((person) => isChild(person.gender));
     let identityLines: string[];
     let posterDetails: string[];
+    let nameLines: string[];
     if (mode === "siblings") {
       const heading = allChildren ? childGroupHeading(people) : groupVerb(people);
-      const nameLines = names.map((name, index) => [name, ages[index]].filter(Boolean).join(" — "));
+      nameLines = names.map((name, index) => [name, ages[index]].filter(Boolean).join(" — "));
       identityLines = [heading, ...nameLines, ...(parentLine ? [parentLine] : []), ...extra];
       posterDetails = [...nameLines, ...(parentLine ? [parentLine] : []), ...extra];
     } else {
       const verb = allChildren ? "انتقل إلى رحمة الله تعالى" : people.every((person) => isFemale(person.gender)) ? "توفيت" : "توفي";
       const heading = parentLine ? `${verb} ${parentLine}` : verb;
-      const nameLines = ages.some(Boolean)
+      nameLines = ages.some(Boolean)
         ? prefixAnd(names.map((name, index) => [name, ages[index]].filter(Boolean).join(" — ")))
         : [joinWithAnd(names)];
       identityLines = [heading, ...nameLines, ...extra];
@@ -709,6 +723,7 @@ function composeIdentity(request: ObituaryRequestInput, warnings: string[]): Ide
     }
     return {
       identityLines,
+      headline: { verb: identityLines[0] ?? "", name: joinWithAnd(names), rest: identityLines.slice(1).filter((line) => !nameLines.includes(line)) },
       relativesLines: groupRoleLines,
       relativeBlocks,
       posterNames: joinWithAnd(names),
@@ -745,6 +760,7 @@ function composeIdentity(request: ObituaryRequestInput, warnings: string[]): Ide
     });
     return {
       identityLines: lines,
+      headline: { verb: singleVerb(parent.gender), name: `${first}${placeSuffix}`.trim(), rest: lines.slice(1) },
       relativesLines: parentRoleLines,
       relativeBlocks,
       posterNames: joinWithAnd(posterParts),
@@ -762,6 +778,7 @@ function composeIdentity(request: ObituaryRequestInput, warnings: string[]): Ide
   const flattened = blocks.flatMap((block, index) => (index === 0 ? block : ["", ...block]));
   return {
     identityLines: [groupVerb(people), ...flattened],
+    headline: { verb: groupVerb(people), name: joinWithAnd(identities.map((identity) => identity.plain)), rest: flattened.filter((line) => !identities.some((identity) => identity.lines[0] === line)) },
     relativesLines: groupRoleLines,
     relativeBlocks,
     posterNames: joinWithAnd(identities.map((identity) => identity.plain)),
@@ -869,7 +886,7 @@ export function condolenceCardLines(card: CondolenceCard, label: string, now?: D
   const location = clean(card.location);
   const area = clean(card.area);
   const where = location
-    ? `${withPrefix(location, "في", /^(?:في|ب)\s/u)}${area && !location.includes(area) ? ` بمنطقة ${area}` : ""}`
+    ? `${withPrefix(location, "في", LOCATION_PREFIXED)}${area && !location.includes(area) ? ` بمنطقة ${area}` : ""}`
     : area ? `في ${area}` : "";
   const address = addressPhrase(card);
   const opening = sentence([label, startPhrase(card.start, now), where]);
@@ -1037,6 +1054,7 @@ export function buildAnnouncement(request: ObituaryRequestInput, options: Announ
       posterNames: identity.posterNames,
       posterDetails: identity.posterDetails,
       relativeBlocks: identity.relativeBlocks,
+      headline: identity.headline,
       sections,
       closing: "",
       warnings,
@@ -1052,6 +1070,7 @@ export function buildAnnouncement(request: ObituaryRequestInput, options: Announ
       posterNames: identity.posterNames,
       posterDetails: identity.posterDetails,
       relativeBlocks: identity.relativeBlocks,
+      headline: identity.headline,
       sections: [{ id: "notice", lines }, ...(notes.length ? [{ id: "notes", label: "ملاحظات", lines: notes }] : [])],
       closing: "",
       warnings,
@@ -1090,6 +1109,7 @@ export function buildAnnouncement(request: ObituaryRequestInput, options: Announ
     posterNames: identity.posterNames,
     posterDetails: identity.posterDetails,
     relativeBlocks: identity.relativeBlocks,
+    headline: identity.headline,
     sections,
     closing,
     warnings: [...new Set(warnings)],
