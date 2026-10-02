@@ -356,6 +356,28 @@ const cases: Array<[string, () => void]> = [
     });
     includesInOrder(result, ["توفيت كل من", "حرم / علي", "حرم / حسن", "/ سارة", "أرملة / حمد رحمهم الله", "الله يرحمهن ويغفر لهن"]);
   }],
+  ["قائمة النموذج الأصلية: «أبناء عمومته» بضمير المتوفى، و«أخرى» لا تُطبع", () => {
+    const cousins = (gender: "man" | "woman", names: string[]) => text({
+      deceasedPeople: [{ fullName: "نورة", gender }],
+      relatives: [{ relation: "أبناء عمومته", relationKey: "other", people: names.map((name) => ({ name, deceased: false })) }],
+    });
+    includesInOrder(cousins("woman", ["خالد", "سعد"]), ["أبناء عمومتها كل من", "خالد", "وسعد"]);
+    includesInOrder(cousins("man", ["خالد", "سعد"]), ["أبناء عمومته كل من"]);
+    assert.match(cousins("woman", ["خالد"]), /ابن عمها \/ خالد/u);
+
+    const blank = buildAnnouncement(request({ relatives: [{ relation: "أخرى", people: [{ name: "خالد", deceased: false }] }] }));
+    assert.match(blank.text, /الأقارب \/ خالد/u);
+    assert.doesNotMatch(blank.text, /أخرى/u);
+    assert.ok(blank.warnings.some((warning) => warning.includes("صلة القرابة")));
+  }],
+  ["عنوان حر مكتوب كاملاً لا يكرر «كل من»", () => {
+    const result = text({
+      deceasedPeople: [{ fullName: "نورة", gender: "woman" }],
+      relatives: [{ relation: "والدة كل من", relationKey: "other", people: [{ name: "باسل", deceased: false }, { name: "محمد", deceased: false }] }],
+    });
+    includesInOrder(result, ["والدة كل من", "باسل", "ومحمد"]);
+    assert.doesNotMatch(result, /كل من كل من/u);
+  }],
 ];
 
 let failed = 0;

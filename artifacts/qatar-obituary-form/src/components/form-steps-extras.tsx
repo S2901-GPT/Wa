@@ -3,17 +3,18 @@
  * طرق التعريف بالمتوفى، صلات القرابة من منظور المتوفى، المواقع الإضافية للعزاء، ومعاينة النص النهائي.
  * مفصولة عن form-steps.tsx حتى تبقى تعديلات الواجهة الأصلية في أضيق نطاق.
  */
-import React, { useMemo, useState } from "react";
-import { useFieldArray, useFormContext, useWatch, type FieldPath } from "react-hook-form";
-import { AlertTriangle, Mail, MapPin, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { get, useFieldArray, useFormContext, useFormState, useWatch, type FieldPath } from "react-hook-form";
+import { AlertTriangle, ChevronDown, Mail, MapPin, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { REFERENCE_LABELS, RELATION_OPTIONS, buildAnnouncement, relationTakesReference } from "@/lib/announcement";
-import { mapFormToPayload } from "@/lib/mapper";
+import { REFERENCE_LABELS, buildAnnouncement, relationKeyOf, relationTakesReference } from "@/lib/announcement";
+import { OTHER_RELATION, mapFormToPayload, relationSelectValue } from "@/lib/mapper";
 import { emptyCondolenceDetails, type ObituaryFormValues } from "@/lib/schema";
 
 type FormPath = FieldPath<ObituaryFormValues>;
@@ -102,6 +103,79 @@ function LinkedPersonFields({ prefix, nameLabel }: { prefix: string; nameLabel: 
   );
 }
 
+// ───────────────────────── «خيارات إضافية» ─────────────────────────
+
+/**
+ * نموذج المستخدم يبقى بشكله الأصلي، والخانات المضافة من الأرشيف تُطوى تحت «خيارات إضافية».
+ * اجعلها true لإعادة الشكل الموسّع (كل الخيارات ظاهرة دائماً).
+ */
+export const EXTRA_OPTIONS_OPEN_BY_DEFAULT = false;
+
+/** صفحة المسؤول (تعديل الطلب) تمرّر true فتظهر الخيارات كلها مفتوحة. */
+export const ExtrasOpenContext = createContext<boolean>(EXTRA_OPTIONS_OPEN_BY_DEFAULT);
+
+/** القيم الافتراضية لا تُعد تعبئة («تلقائي»، «سنوات»، «الجميع»…). */
+const DEFAULT_TOKENS = new Set(["announcement", "auto", "years", "all", "men"]);
+
+function isFilled(value: unknown): boolean {
+  if (value == null) return false;
+  if (typeof value === "string") return value.trim() !== "" && !DEFAULT_TOKENS.has(value);
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return true;
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === "object") return Object.values(value).some(isFilled);
+  return false;
+}
+
+/**
+ * قسم مطوي: يبقى مركّباً (القيم والتحقق لا تضيع)، ويُفتح تلقائياً إن كان فيه قيمة
+ * مُدخلة سابقاً (العودة لخطوة سابقة، أو تعديل طلب) أو خطأ تحقق.
+ */
+export function MoreOptions({ label = "خيارات إضافية", hint, paths, children }: {
+  label?: string;
+  hint?: string;
+  paths: string[];
+  children: React.ReactNode;
+}) {
+  const form = useFormContext<ObituaryFormValues>();
+  const openByDefault = useContext(ExtrasOpenContext);
+  const values = useWatch({ control: form.control, name: paths as FormPath[] }) as unknown[];
+  const { errors } = useFormState({ control: form.control });
+  const hasError = paths.some((path) => !!get(errors, path));
+  const [open, setOpen] = useState(() => openByDefault || values.some(isFilled));
+  useEffect(() => {
+    if (hasError) setOpen(true);
+  }, [hasError]);
+
+  return <Disclosure label={label} hint={hint} open={open} onOpenChange={setOpen}>{children}</Disclosure>;
+}
+
+function Disclosure({ label, hint, open, onOpenChange, children }: {
+  label: string;
+  hint?: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <Collapsible open={open} onOpenChange={onOpenChange} className="w-full box-border">
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors py-1"
+        >
+          <ChevronDown className={`w-3.5 h-3.5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+          <span className="font-medium">{label}</span>
+          {hint && !open && <span className="opacity-70 truncate">({hint})</span>}
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent forceMount className="data-[state=closed]:hidden pt-2 space-y-3">
+        {children}
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 function deceasedOptionLabel(person: ObituaryFormValues["deceasedList"][number] | undefined, index: number): string {
   const name = person?.fullName?.trim() || person?.kunya?.trim() || person?.femaleRelations?.[0]?.relatedName?.trim();
   return name ? `${index + 1}. ${name}` : `المتوفى ${index + 1}`;
@@ -133,7 +207,13 @@ const MESSAGE_TYPES = [
 export function MessageTypeCard() {
   const form = useFormContext<ObituaryFormValues>();
   const messageType = useWatch({ control: form.control, name: "messageType" });
+  const current = MESSAGE_TYPES.find((option) => option.value === messageType)?.label ?? "إعلان وفاة";
   return (
+    <MoreOptions
+      label={`نوع الرسالة: ${current}`}
+      hint="للتأجيل أو التعديل أو إلغاء العزاء"
+      paths={["messageType", "relatedRequestNumber", "cancellation"]}
+    >
     <Card className="border-border bg-muted/20 shadow-xs w-full box-border">
       <CardContent className="p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="flex items-center gap-2 sm:col-span-2 text-xs sm:text-sm font-semibold text-foreground">
@@ -158,6 +238,7 @@ export function MessageTypeCard() {
         )}
       </CardContent>
     </Card>
+    </MoreOptions>
   );
 }
 
@@ -215,6 +296,20 @@ export function DeceasedDetailsExtras({ index }: { index: number }) {
   );
 }
 
+/** خانات المتوفى المضافة كلها في قسم «خيارات إضافية» واحد، حتى تبقى البطاقة بشكلها الأصلي. */
+export function DeceasedExtras({ index }: { index: number }) {
+  const prefix = `deceasedList.${index}`;
+  return (
+    <MoreOptions
+      hint="الكنية، طريقة التعريف، الأب، وحدة العمر"
+      paths={[`${prefix}.identifyBy`, `${prefix}.kunya`, `${prefix}.father`, `${prefix}.ageUnit`, `${prefix}.noChildren`, `${prefix}.notes`]}
+    >
+      <DeceasedIdentityExtras index={index} />
+      <DeceasedDetailsExtras index={index} />
+    </MoreOptions>
+  );
+}
+
 const ANNOUNCEMENT_MODES = [
   { value: "unrelated", label: "متوفون بلا نسب مشترك", hint: "«توفي كل من» ثم كل اسم كامل وتحته عمره" },
   { value: "siblings", label: "إخوة بنسب مشترك", hint: "«توفي كل من / سعود / جاسم / أبناء / فهد …» والأقارب بضمير الجمع" },
@@ -251,45 +346,63 @@ export function MultipleDeceasedCard() {
 
 // ───────────────────────── الخطوة ٢ ─────────────────────────
 
-/** اختيار صلة القرابة من منظور الأقارب؛ يعرض العنوان الذي سيُكتب في الإعلان. */
-export function RelationKeySelect({ groupIndex }: { groupIndex: number }) {
+/**
+ * قائمة الصلة بشكلها الأصلية («أبناؤه، أخوانه، أعمامه…»). يُحفظ معها مفتاح الصلة في الخلفية
+ * حتى يكتب المولّد صيغة الأرشيف («والدة كل من»). «أخرى» تفتح خانة لكتابة الصلة.
+ */
+export function RelationSelect({ groupIndex, options }: { groupIndex: number; options: readonly string[] }) {
   const form = useFormContext<ObituaryFormValues>();
-  const group = useWatch({ control: form.control, name: `relatives.${groupIndex}` });
-  const key = group?.relationKey;
-  const option = RELATION_OPTIONS.find((item) => item.key === key);
+  const relationType = useWatch({ control: form.control, name: `relatives.${groupIndex}.relationType` });
+  const relationKey = useWatch({ control: form.control, name: `relatives.${groupIndex}.relationKey` });
+  const value = relationSelectValue(relationType, relationKey, options);
+  const setRelation = (text: string) => {
+    form.setValue(`relatives.${groupIndex}.relationType`, text, { shouldDirty: true });
+    form.setValue(`relatives.${groupIndex}.relationKey`, relationKeyOf({ relation: text }), { shouldDirty: true });
+  };
   return (
-    <div className="space-y-2 w-full">
-      <Select
-        value={key ?? ""}
-        onValueChange={(value) => {
-          const selected = RELATION_OPTIONS.find((item) => item.key === value);
-          form.setValue(`relatives.${groupIndex}.relationKey`, value as NonNullable<typeof key>, { shouldDirty: true });
-          form.setValue(`relatives.${groupIndex}.relationType`, value === "other" ? "" : selected?.label ?? "", { shouldDirty: true });
-        }}
-      >
-        <SelectTrigger className="h-9 text-sm font-semibold bg-background w-full sm:w-60">
-          <SelectValue placeholder="صلة الأشخاص بالمتوفى" />
+    <>
+      <Select value={value} onValueChange={(next) => setRelation(next === OTHER_RELATION ? "" : next)}>
+        <SelectTrigger className="h-9 bg-background font-semibold text-xs sm:text-sm w-full">
+          <SelectValue placeholder="صلة القرابة" />
         </SelectTrigger>
         <SelectContent>
-          {RELATION_OPTIONS.map((item) => <SelectItem key={item.key} value={item.key}>{item.label}</SelectItem>)}
+          {options.map((r) => (
+            <SelectItem key={r} value={r}>{r}</SelectItem>
+          ))}
         </SelectContent>
       </Select>
-      {option && option.key !== "other" && (
-        <p className="text-[11px] text-muted-foreground">يظهر في الإعلان: «{option.hint}»</p>
+      {value === OTHER_RELATION && (
+        <Input
+          placeholder="اكتب الصلة"
+          className="h-9 bg-background text-xs sm:text-sm w-full"
+          value={relationType ?? ""}
+          onChange={(event) => setRelation(event.target.value)}
+        />
       )}
-      {key === "other" && (
-        <TextInput name={`relatives.${groupIndex}.relationType`} label="العنوان كما يُكتب" placeholder="مثال: حفيدة الوالد" />
-      )}
+    </>
+  );
+}
+
+/** «يخص»، موضع «رحمه الله»، وسطر «أبناء /» لكل مجموعة أقارب (مطوية). */
+export function RelativeGroupExtras({ groupIndex }: { groupIndex: number }) {
+  const prefix = `relatives.${groupIndex}`;
+  return (
+    <div className="pt-2 mt-3 border-t border-border/50 w-full box-border">
+      <MoreOptions
+        hint="موضع «رحمه الله»، سطر «أبناء /»"
+        paths={[`${prefix}.deceasedPlacement`, `${prefix}.deceasedTarget`, `${prefix}.reference`]}
+      >
+        <RelativeGroupFields groupIndex={groupIndex} />
+      </MoreOptions>
     </div>
   );
 }
 
-/** «يخص»، موضع «رحمه الله»، وسطر «أبناء /» لكل مجموعة أقارب. */
-export function RelativeGroupExtras({ groupIndex }: { groupIndex: number }) {
+function RelativeGroupFields({ groupIndex }: { groupIndex: number }) {
   const form = useFormContext<ObituaryFormValues>();
   const key = useWatch({ control: form.control, name: `relatives.${groupIndex}.relationKey` });
   return (
-    <div className="space-y-3 pt-3 border-t border-border/50 w-full box-border">
+    <div className="space-y-3 w-full box-border">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <DeceasedTargetSelect name={`relatives.${groupIndex}.deceasedTarget`} label="يخص" />
         <SelectInput
@@ -367,13 +480,15 @@ export function ExtraVenuesSection({ audiences }: { audiences: Array<"men" | "wo
   );
 }
 
-/** «عزاء لـ» و«حتى» لبطاقة العزاء الرئيسية. */
+/** «عزاء لـ» و«حتى» لبطاقة العزاء الرئيسية (مطوية). */
 export function VenueExtras({ audience }: { audience: "men" | "women" }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full box-border">
-      <DeceasedTargetSelect name={`condolences.${audience}.deceasedTarget`} label="عزاء لـ" />
-      <TextInput name={`condolences.${audience}.until`} label="حتى (اختياري)" placeholder="مثال: يوم الاثنين 29 يونيو" />
-    </div>
+    <MoreOptions hint="حتى يوم معيّن" paths={[`condolences.${audience}.deceasedTarget`, `condolences.${audience}.until`]}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full box-border">
+        <DeceasedTargetSelect name={`condolences.${audience}.deceasedTarget`} label="عزاء لـ" />
+        <TextInput name={`condolences.${audience}.until`} label="حتى (اختياري)" placeholder="مثال: يوم الاثنين 29 يونيو" />
+      </div>
+    </MoreOptions>
   );
 }
 
@@ -406,9 +521,10 @@ export function CondolenceExtras({ type }: { type: string }) {
 
 // ───────────────────────── الخطوة ٦ ─────────────────────────
 
-/** النص النهائي كما سيُنشر، من المولّد نفسه الذي تستخدمه لوحة الإدارة والقوالب. */
+/** النص النهائي كما سيُنشر (مطوي)، من المولّد نفسه الذي تستخدمه لوحة الإدارة والقوالب. */
 export function AnnouncementPreview() {
   const form = useFormContext<ObituaryFormValues>();
+  const [open, setOpen] = useState(useContext(ExtrasOpenContext));
   const values = form.getValues();
   const announcement = useMemo(() => {
     try {
@@ -420,6 +536,12 @@ export function AnnouncementPreview() {
   }, [values]);
   if (!announcement) return null;
   return (
+    <Disclosure
+      label="معاينة نص الإعلان"
+      hint={announcement.warnings.length ? "فيه تنبيهات" : undefined}
+      open={open}
+      onOpenChange={setOpen}
+    >
     <Card className="border-primary/30 shadow-sm w-full box-border">
       <CardContent className="p-3 sm:p-5 space-y-3">
         <h3 className="text-sm sm:text-base font-bold text-primary">نص الإعلان كما سيُنشر</h3>
@@ -436,5 +558,6 @@ export function AnnouncementPreview() {
         </pre>
       </CardContent>
     </Card>
+    </Disclosure>
   );
 }

@@ -4,12 +4,12 @@ import { ObituaryFormValues, emptyDeceased } from "@/lib/schema";
 import {
   AnnouncementPreview,
   CondolenceExtras,
-  DeceasedDetailsExtras,
-  DeceasedIdentityExtras,
+  DeceasedExtras,
   ExtraVenuesSection,
   MessageTypeCard,
+  MoreOptions,
   MultipleDeceasedCard,
-  RelationKeySelect,
+  RelationSelect,
   RelativeGroupExtras,
   VenueExtras,
 } from "@/components/form-steps-extras";
@@ -58,6 +58,10 @@ const GENDER_OPTIONS = [
   { label: "ذكر", value: "ذكر" },
   { label: "أنثى", value: "أنثى" },
 ] as const;
+
+const COMMON_RELATIONS = [
+  "أبناؤه", "أخوانه", "أعمامه", "أخواله", "أبناء عمومته", "أصهاره", "أحفاده", "أخرى"
+];
 
 // مقابر الأرشيف (مسيمير تُكتب أيضاً مسمير/ميسمير؛ المزروعة افتُتحت ٢٠٢٦)
 const QATAR_CEMETERIES = [
@@ -297,9 +301,6 @@ export function DeceasedStep() {
                 </div>
               </div>
 
-              {/* طريقة التعريف، الكنية، والأب */}
-              <DeceasedIdentityExtras index={index} />
-
               {/* قسم خاص للإناث: أرملة فلان / حرم فلان */}
               {isFemale && (
                 <FemaleRelationsSection deceasedIndex={index} />
@@ -364,7 +365,8 @@ export function DeceasedStep() {
                 />
               </div>
 
-              <DeceasedDetailsExtras index={index} />
+              {/* الكنية، طريقة التعريف، الأب، وحدة العمر… (مطوية) */}
+              <DeceasedExtras index={index} />
 
               {fields.length === 1 && (
                 <Button
@@ -547,7 +549,6 @@ export function RelativesStep() {
         </h2>
         <p className="text-muted-foreground mt-1 text-xs sm:text-sm">
           أدخل مجموعات الأقارب والأشخاص في سطر واحد سريع. هذه الخطوة اختيارية ويمكنك تجاوزها بالضغط على "التالي".
-          اختر صلة الأشخاص بالمتوفى، ويكتب التطبيق العنوان بصيغة الأرشيف (مثل «والدة كل من»). تُذكر أسماء الأقارب الذكور حسب العرف.
         </p>
       </div>
 
@@ -564,10 +565,10 @@ export function RelativesStep() {
             type="button"
             variant="outline"
             className="gap-2 text-xs sm:text-sm"
-            onClick={() => append({ relationType: "الأبناء", relationKey: "children", deceasedPlacement: "auto", deceasedTarget: "all", persons: [] } as any)}
+            onClick={() => append({ relationType: "أبناؤه", relationKey: "children", deceasedPlacement: "auto", deceasedTarget: "all", persons: [] } as any)}
           >
             <Plus className="w-4 h-4" />
-            إضافة مجموعة قرابة أولى (مثل الأبناء)
+            إضافة مجموعة قرابة أولى (مثل أبناؤه)
           </Button>
         </Card>
       )}
@@ -575,8 +576,8 @@ export function RelativesStep() {
       {fields.map((field, gIndex) => (
         <Card key={field.id} className="relative border shadow-sm w-full max-w-full box-border">
           <CardHeader className="py-2.5 px-3 sm:px-4 bg-muted/30 border-b flex flex-row items-center justify-between gap-2">
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <RelationKeySelect groupIndex={gIndex} />
+            <div className="flex items-center gap-2 flex-1 max-w-xs">
+              <RelationSelect groupIndex={gIndex} options={COMMON_RELATIONS} />
             </div>
             <Button
               type="button"
@@ -600,10 +601,10 @@ export function RelativesStep() {
           type="button"
           variant="outline"
           className="w-full border-dashed h-11 text-muted-foreground hover:text-primary gap-2 text-xs sm:text-sm"
-          onClick={() => append({ relationType: "الإخوة", relationKey: "siblings", deceasedPlacement: "auto", deceasedTarget: "all", persons: [] } as any)}
+          onClick={() => append({ relationType: "أخوانه", relationKey: "siblings", deceasedPlacement: "auto", deceasedTarget: "all", persons: [] } as any)}
         >
           <Plus className="w-4 h-4" />
-          إضافة مجموعة قرابة جديدة (مثل الإخوة، الأعمام...)
+          إضافة مجموعة قرابة جديدة (مثل إخوانه، أعمامه...)
         </Button>
       )}
     </div>
@@ -1166,16 +1167,14 @@ export function CondolencesStep() {
             <p className="font-semibold">
               {condType === "none" ? "يُكتب «لا يوجد عزاء»" : condType === "tbd" ? "يُكتب «العزاء: سيُحدَّد لاحقاً»" : "يُكتب «عزاء الرجال في المقبرة فقط»"}
             </p>
-            <p className="text-[11px] opacity-90 mt-0.5">يمكن إضافة السبب أدناه (مثل: اتباعاً للسنة، أو تنفيذاً لوصية المتوفى).</p>
+            <p className="text-[11px] opacity-90 mt-0.5">يمكن إضافة السبب من «خيارات إضافية» أسفل الصفحة (مثل: اتباعاً للسنة، أو تنفيذاً لوصية المتوفى).</p>
           </div>
         </Card>
       )}
 
-      <CondolenceExtras type={condType} />
-
-      {/* 2. خانة أرقام الهواتف: تظهر في «هاتف فقط»، أو عند إضافة أرقام مع المقرات */}
-      {(condType === "phone_only" || form.watch("condolences.withPhones")) && (
-        <SmartPhonesSection isPhoneOnly={condType === "phone_only"} />
+      {/* 2. خانة أرقام الهواتف: مخفية بالكامل ولا تظهر إلا إذا تم تحديد "هاتف فقط" */}
+      {condType === "phone_only" && (
+        <SmartPhonesSection isPhoneOnly={true} />
       )}
 
       {/* مقرات العزاء المادية (تظهر فقط عند عزاء رجال أو نساء) */}
@@ -1203,11 +1202,26 @@ export function CondolencesStep() {
         </div>
       )}
 
-      {(condType === "full" || condType === "men_only" || condType === "women_only") && (
-        <ExtraVenuesSection
-          audiences={condType === "full" ? ["men", "women"] : condType === "men_only" ? ["men"] : ["women"]}
-        />
-      )}
+      {/* سبب العزاء، أرقام الهاتف مع المقرات، والمواقع الإضافية (مطوية) */}
+      <MoreOptions
+        hint="سبب العزاء، أرقام الهاتف، مواقع إضافية"
+        paths={[
+          "condolences.cancellationOrRestrictionReason",
+          "condolences.withPhones",
+          "condolences.extraVenues",
+          ...(condType === "phone_only" ? [] : ["condolences.phones"]),
+        ]}
+      >
+        <CondolenceExtras type={condType} />
+        {condType !== "phone_only" && form.watch("condolences.withPhones") && (
+          <SmartPhonesSection isPhoneOnly={false} />
+        )}
+        {(condType === "full" || condType === "men_only" || condType === "women_only") && (
+          <ExtraVenuesSection
+            audiences={condType === "full" ? ["men", "women"] : condType === "men_only" ? ["men"] : ["women"]}
+          />
+        )}
+      </MoreOptions>
     </div>
   );
 }
@@ -1249,8 +1263,6 @@ function CondolenceVenueCard({ audience, title }: { audience: "men" | "women"; t
             </FormItem>
           )}
         />
-
-        <VenueExtras audience={audience} />
 
         {/* رابط الخرائط والمدة */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full box-border">
@@ -1440,6 +1452,9 @@ function CondolenceVenueCard({ audience, title }: { audience: "men" | "women"; t
             </div>
           )}
         </div>
+
+        {/* «حتى» و«عزاء لـ» (مطوية) */}
+        <VenueExtras audience={audience} />
       </CardContent>
     </Card>
   );

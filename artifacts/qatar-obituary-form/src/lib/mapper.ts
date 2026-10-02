@@ -109,6 +109,28 @@ function relationLabel(group: NonNullable<ObituaryFormValues["relatives"]>[numbe
   return RELATION_OPTIONS.find((option) => option.key === group.relationKey)?.label ?? clean(group.relationType);
 }
 
+/** خيار «أخرى» في قائمة الصلة الأصلية للنموذج. */
+export const OTHER_RELATION = "أخرى";
+
+/** مقابل مفتاح الصلة في القائمة الأصلية («الأبناء» المحفوظة تظهر «أبناؤه»). */
+const KEY_TO_FORM_RELATION: Partial<Record<NonNullable<RelativeGroup["relationKey"]>, string>> = {
+  children: "أبناؤه",
+  siblings: "أخوانه",
+  paternal_uncles: "أعمامه",
+  maternal_uncles: "أخواله",
+  daughters_husbands: "أصهاره",
+  grandchildren: "أحفاده",
+};
+
+/** القيمة المعروضة في قائمة الصلة الأصلية؛ ما لا مقابل له فيها يظهر تحت «أخرى» مع نصه. */
+export function relationSelectValue(relationType: string | undefined, relationKey: string | undefined, options: readonly string[]): string {
+  const text = clean(relationType);
+  if (text && text !== OTHER_RELATION && options.includes(text)) return text;
+  const legacy = KEY_TO_FORM_RELATION[relationKey as keyof typeof KEY_TO_FORM_RELATION];
+  if (legacy && options.includes(legacy)) return legacy;
+  return relationKey || text ? OTHER_RELATION : "";
+}
+
 function relativesToApi(groups: ObituaryFormValues["relatives"], count: number): RelativeGroup[] {
   return (groups ?? []).map((group) => {
     const relationKey = group.relationKey ?? relationKeyOf({ relation: clean(group.relationType) });

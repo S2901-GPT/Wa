@@ -170,7 +170,13 @@ export default function AdminRequestDetailsPage() {
           {/* النص النهائي */}
           {announcement && (
             <section>
-              <h4 className="text-lg font-bold text-primary mb-4 border-b pb-2">نص الإعلان</h4>
+              <div className="flex items-center justify-between gap-2 mb-4 border-b pb-2">
+                <h4 className="text-lg font-bold text-primary">نص الإعلان</h4>
+                <Button type="button" variant="ghost" size="sm" onClick={copyToClipboard} className="gap-1.5 text-primary h-8">
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  {copied ? "تم النسخ" : "نسخ"}
+                </Button>
+              </div>
               {announcement.warnings.length > 0 && (
                 <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-4 text-amber-900">
                   <p className="flex items-center gap-2 font-bold"><AlertTriangle className="h-4 w-4" /> تنبيهات قبل النشر</p>

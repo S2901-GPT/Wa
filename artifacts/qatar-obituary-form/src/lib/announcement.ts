@@ -252,13 +252,30 @@ export function relationKeyOf(group: Pick<RelativeGroup, "relation" | "relationK
   return LEGACY_RELATIONS[clean(group.relation)] ?? "other";
 }
 
+/** عناوين حرة من قائمة النموذج الأصلية بضمير يتبع المتوفى: «أبناء عمومته / عمومتها / عمومتهم»، وللواحد «ابن عمه». */
+const COUSINS = { group: "أبناء عمومت", one: "ابن عم" };
+const PRONOUN_RELATIONS: Record<string, { group: string; one: string }> = { "أبناء عمومته": COUSINS, "أبناء عمومتها": COUSINS };
+
+/** «أخرى» دون عنوان مكتوب: لا يُطبع اسم الخيار نفسه في الإعلان. */
+export function isBlankRelation(group: Pick<RelativeGroup, "relation" | "relationKey">): boolean {
+  const relation = clean(group.relation);
+  return relationKeyOf(group) === "other" && (!relation || relation === "أخرى");
+}
+
 function roleHeading(
   group: RelativeGroup,
   key: RelationKey,
   count: number,
   perspective: { gender?: Gender } | { groupSuffix: "هم" | "هن" },
 ): string {
-  if (key === "other") return clean(group.relation) || "الأقارب";
+  if (key === "other") {
+    if (isBlankRelation(group)) return "الأقارب";
+    const relation = clean(group.relation);
+    const stems = PRONOUN_RELATIONS[relation];
+    if (!stems) return relation;
+    const stem = count === 1 ? stems.one : stems.group;
+    return stem + ("groupSuffix" in perspective ? perspective.groupSuffix : isFemale(perspective.gender) ? "ها" : "ه");
+  }
   const labels = ROLE_LABELS[key];
   if ("groupSuffix" in perspective) {
     return (count === 1 ? labels.groupOne : labels.group) + perspective.groupSuffix;
@@ -322,7 +339,9 @@ function roleBlock(
   const reference = referencePerson && clean(referencePerson.name) && relationTakesReference(key)
     ? referenceLine(referencePerson)
     : clean(group.familyReference) || undefined;
-  return { heading: single ? heading : `${heading} كل من`, members: names, reference, single };
+  // العنوان الحر قد يُكتب كاملاً («والدة كل من») فلا يُكرر «كل من».
+  const plural = /كل من$/u.test(heading) ? heading : `${heading} كل من`;
+  return { heading: single ? heading : plural, members: names, reference, single };
 }
 
 function blockLines(block: RelativeBlock): string[] {
@@ -987,6 +1006,9 @@ export function buildAnnouncement(request: ObituaryRequestInput, options: Announ
   const people = request.deceasedPeople ?? [];
   const messageType = request.messageType ?? "announcement";
   const identity = composeIdentity(request, warnings);
+  if ((request.relatives ?? []).some((group) => isBlankRelation(group) && group.people.some((person) => clean(person.name)))) {
+    warnings.push("صلة القرابة لإحدى مجموعات الأقارب غير مكتوبة (أخرى)؛ كُتب العنوان «الأقارب».");
+  }
   const closing = makeClosingPrayer(people);
   const statement = makeDeathStatement(people);
 

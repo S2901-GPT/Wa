@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import type { ObituaryRequest } from "@workspace/api-client-react";
 import { CreateObituaryRequestBody } from "@workspace/api-zod";
 import { buildAnnouncement } from "./announcement";
-import { mapFormToPayload, mapPayloadToForm } from "./mapper";
+import { OTHER_RELATION, mapFormToPayload, mapPayloadToForm, relationSelectValue } from "./mapper";
 import { ObituaryFormSchema, emptyDeceased, emptyFormValues, type ObituaryFormValues } from "./schema";
 
 const NOW = new Date(2026, 9, 2); // الجمعة 2 أكتوبر 2026
@@ -203,6 +203,25 @@ const cases: Array<[string, () => void]> = [
     assert.equal(values.deceasedList[0].notes, "الوالد اللواء متقاعد");
     assert.equal(values.relatives[0].relationKey, "siblings");
     assert.equal(values.burial?.locationName, "مقبرة الدحيل");
+  }],
+  ["قائمة الصلة الأصلية: «أبناؤه» يبقى ظاهراً بعد الحفظ، وما لا مقابل له تحت «أخرى»", () => {
+    const options = ["أبناؤه", "أخوانه", "أعمامه", "أخواله", "أبناء عمومته", "أصهاره", "أحفاده", OTHER_RELATION];
+    const values = form((draft) => {
+      draft.deceasedList[0] = { ...emptyDeceased(), gender: "أنثى", fullName: "نورة" };
+      draft.relatives = [
+        { relationType: "أبناؤه", relationKey: "children", deceasedPlacement: "auto", deceasedTarget: "all", persons: [{ name: "غانم", isDeceased: false }, { name: "ناصر", isDeceased: false }] },
+        { relationType: "أبناء عمومته", relationKey: "other", deceasedPlacement: "auto", deceasedTarget: "all", persons: [{ name: "خالد", isDeceased: false }] },
+      ];
+    });
+    serverAccepts(values);
+    assert.match(text(values), /والدة كل من\nغانم\nوناصر\nابن عمها \/ خالد/u);
+
+    const back = mapPayloadToForm(asRequest(values));
+    assert.equal(relationSelectValue(back.relatives[0].relationType, back.relatives[0].relationKey, options), "أبناؤه");
+    assert.equal(relationSelectValue(back.relatives[1].relationType, back.relatives[1].relationKey, options), "أبناء عمومته");
+    assert.equal(relationSelectValue("الأشقاء", "full_siblings", options), OTHER_RELATION);
+    assert.equal(relationSelectValue("", "other", options), OTHER_RELATION);
+    assert.equal(relationSelectValue(undefined, undefined, options), "");
   }],
 ];
 
