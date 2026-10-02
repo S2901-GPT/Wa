@@ -390,6 +390,22 @@ const cases: Array<[string, () => void]> = [
     includesInOrder(result, ["والدة كل من", "باسل", "ومحمد"]);
     assert.doesNotMatch(result, /كل من كل من/u);
   }],
+  ["«مقابل جامع…» لا تسبقه «في»", () => {
+    const text = buildAnnouncement({
+      deceasedPeople: [{ fullName: "محمد بن سالم", title: "الوالد", gender: "man" }],
+      relatives: [],
+      prayer: { enabled: false },
+      burial: { status: "upcoming", outsideQatar: false, day: "اليوم", time: "بعد صلاة المغرب", cemetery: "مقبرة مسيمير" },
+      condolenceOptions: ["men", "women"],
+      condolences: [
+        { audience: "men", location: "مقابل جامع جاسم درويش فخرو", area: "أبوهامور" },
+        { audience: "women", location: "منزل الفقيد رقم ٢٥", area: "بوهامور" },
+      ],
+    } as never).text;
+    assert.match(text, /عزاء الرجال مقابل جامع جاسم درويش فخرو بمنطقة أبوهامور/u);
+    assert.match(text, /والنساء في منزل الفقيد رقم ٢٥ بمنطقة بوهامور/u);
+    assert.doesNotMatch(text, /في مقابل/u);
+  }],
 ];
 
 let failed = 0;

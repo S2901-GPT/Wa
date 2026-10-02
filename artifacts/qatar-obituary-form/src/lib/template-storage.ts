@@ -26,6 +26,9 @@ try {
 
 const LOCAL_STORAGE_KEY = "qatar_condolence_templates_v2";
 const DEFAULT_TEMPLATE_KEY = "qatar_condolence_default_template_id";
+// علامة ترحيل لمرة واحدة: المتصفحات التي حُفظ فيها الافتراضي القديم تنتقل إلى قالب النسخ، ويبقى أي اختيار لاحق محترماً.
+const NASKH_MIGRATION_KEY = "qatar_condolence_default_naskh_v1";
+const FALLBACK_TEMPLATE_ID = "naskh";
 
 function getLocalCustomTemplates(): Record<string, CondolenceTemplate> {
   if (typeof window === "undefined" || !window.localStorage) return {};
@@ -47,8 +50,13 @@ function saveLocalCustomTemplates(templates: Record<string, CondolenceTemplate>)
 }
 
 export function getDefaultTemplateId(): string {
-  if (typeof window === "undefined" || !window.localStorage) return "official";
-  return localStorage.getItem(DEFAULT_TEMPLATE_KEY) || "official";
+  if (typeof window === "undefined" || !window.localStorage) return FALLBACK_TEMPLATE_ID;
+  if (!localStorage.getItem(NASKH_MIGRATION_KEY)) {
+    localStorage.setItem(NASKH_MIGRATION_KEY, "1");
+    localStorage.setItem(DEFAULT_TEMPLATE_KEY, FALLBACK_TEMPLATE_ID);
+    return FALLBACK_TEMPLATE_ID;
+  }
+  return localStorage.getItem(DEFAULT_TEMPLATE_KEY) || FALLBACK_TEMPLATE_ID;
 }
 
 export function setDefaultTemplateId(id: string): void {
@@ -147,9 +155,9 @@ export async function deleteCustomTemplate(templateId: string): Promise<boolean>
     }
   }
 
-  // If was default, revert to official
+  // If was default, revert to the built-in default
   if (getDefaultTemplateId() === templateId) {
-    setDefaultTemplateId("official");
+    setDefaultTemplateId(FALLBACK_TEMPLATE_ID);
   }
 
   return true;

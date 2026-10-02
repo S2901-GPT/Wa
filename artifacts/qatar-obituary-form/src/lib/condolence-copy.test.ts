@@ -76,6 +76,20 @@ const cases: Array<[string, () => void]> = [
     assert.equal(content.men?.qrUrl, "https://example.com/men");
     assert.equal(content.women?.location, "الموقع الأول:\nفي منزل ابنها غانم\nالموقع الثاني:\nفي منزل ابنها ناصر");
   }],
+  ["naskh headline: «توفي» then «الوالد / الاسم», and archive venue labels", () => {
+    const content = normalizeObituaryPresentation(makeRequest({
+      deceasedPeople: [{ fullName: "محمد بن سالم", title: "الوالد", gender: "man", age: 70 }],
+      condolenceOptions: ["men", "women"],
+      condolences: [{ audience: "men", location: "مجلس العائلة" }, { audience: "women", location: "منزل العائلة" }],
+    }));
+    assert.deepEqual(content.headline, { verb: "توفي", name: "الوالد / محمد بن سالم", rest: ["70 عاماً"] });
+    assert.equal(content.men?.flowLabel, "عزاء الرجال");
+    assert.equal(content.women?.flowLabel, "والنساء");
+    const womenOnly = normalizeObituaryPresentation(makeRequest({ condolenceOptions: ["women"], condolences: [{ audience: "women", location: "منزل العائلة" }] }));
+    assert.equal(womenOnly.women?.flowLabel, "عزاء النساء");
+    const amendment = normalizeObituaryPresentation(makeRequest({ messageType: "amendment" }));
+    assert.equal(amendment.headline.verb, "تعديل / توفي");
+  }],
   ["children get «شفيعاً لوالديه يارب», never the adult prayer", () => {
     const content = normalizeObituaryPresentation(makeRequest({ deceasedPeople: [{ fullName: "يوسف", gender: "boy" }] }));
     assert.equal(content.closing, "شفيعاً لوالديه يارب");

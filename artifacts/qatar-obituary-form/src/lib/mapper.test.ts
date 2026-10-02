@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import type { ObituaryRequest } from "@workspace/api-client-react";
 import { CreateObituaryRequestBody } from "@workspace/api-zod";
 import { buildAnnouncement } from "./announcement";
-import { OTHER_RELATION, mapFormToPayload, mapPayloadToForm, relationSelectValue } from "./mapper";
+import { OTHER_RELATION, formatTime12h, mapFormToPayload, mapPayloadToForm, relationSelectValue } from "./mapper";
 import { ObituaryFormSchema, emptyDeceased, emptyFormValues, type ObituaryFormValues } from "./schema";
 
 const NOW = new Date(2026, 9, 2); // الجمعة 2 أكتوبر 2026
@@ -42,6 +42,12 @@ const asRequest = (values: ObituaryFormValues): ObituaryRequest => ({
 });
 
 const cases: Array<[string, () => void]> = [
+  ["noon is «ظهراً» and round-trips through the time picker", () => {
+    assert.equal(formatTime12h("12:00"), "12:00 ظهراً");
+    assert.equal(formatTime12h("09:30"), "9:30 صباحاً");
+    assert.equal(formatTime12h("16:00"), "4:00 مساءً");
+    assert.equal(formatTime12h("00:15"), "12:15 صباحاً");
+  }],
   ["الجنس لا يُفترض: النموذج الفارغ يطلب اختياره", () => {
     const values = emptyFormValues();
     values.deceasedList[0].fullName = "محمد علي";

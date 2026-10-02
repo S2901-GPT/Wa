@@ -25,9 +25,13 @@ import {
   type QrCodeMap,
   type RenderValidationReport,
 } from "@/lib/single-page-engine";
+import { renderPoster } from "@/lib/poster-render";
+import { isNaskhTemplate } from "@/lib/naskh-poster-engine";
 import { DesignerCanvas } from "./designer-canvas";
 import { PropertiesPanel } from "./properties-panel";
 import { LayersPanel } from "./layers-panel";
+import { NaskhSettingsPanel } from "./naskh-settings-panel";
+import { NaskhPreviewCanvas } from "./naskh-preview-canvas";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -118,7 +122,9 @@ export function TemplateDesignerModal({
     });
   }, [initialTemplateId]);
 
-  const currentTemplate = templates[currentTemplateId] || BUILT_IN_TEMPLATES.official;
+  const currentTemplate = templates[currentTemplateId] || BUILT_IN_TEMPLATES.naskh;
+  // قالب النسخ انسيابي: بلا طبقات أو سحب، وله لوحة إعدادات الهوية بدل خصائص الكتل.
+  const isNaskh = isNaskhTemplate(currentTemplate);
 
   // Normalized content from active test dataset
   const activeDataset = TEST_DATASETS[selectedDatasetKey]?.request || TEST_DATASETS.standard.request;
@@ -277,16 +283,15 @@ export function TemplateDesignerModal({
       const remaining = { ...templates };
       delete remaining[currentTemplate.id];
       setTemplates(remaining);
-      setCurrentTemplateId("official");
+      setCurrentTemplateId("naskh");
       toast.success("تم حذف القالب المخصص");
     }
   };
 
-  // Export 1080×1350 PNG
+  // Export PNG (1080 × 1350، أو أطول في قالب النسخ)
   const handleExportPng = () => {
     void (async () => {
-      await loadCondolenceFonts();
-      const { canvas, report } = compileAndRenderSinglePage(currentTemplate, normalizedContent, qrImages);
+      const { canvas, report } = await renderPoster(currentTemplate, normalizedContent, qrImages);
 
       if (!report.isValid) {
         toast.error("يرجى إصلاح التداخلات قبل التصدير");
@@ -304,7 +309,7 @@ export function TemplateDesignerModal({
         link.download = `condolence-${currentTemplate.id}-${Date.now()}.png`;
         link.click();
         window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-        toast.success("تم تصدير صورة التعزية بصيغة PNG عالية الدقة (1080 × 1350)");
+        toast.success(`تم تصدير صورة التعزية بصيغة PNG عالية الدقة (${canvas.width} × ${canvas.height})`);
       }, "image/png");
     })();
   };
@@ -424,6 +429,7 @@ export function TemplateDesignerModal({
             <Maximize2 className="h-4 w-4" />
           </Button>
 
+          {!isNaskh && (<>
           <div className="h-4 w-px bg-border mx-1" />
 
           {/* Grid & Snap Toggles */}
@@ -486,6 +492,7 @@ export function TemplateDesignerModal({
               معاينة حقيقية
             </Button>
           </div>
+          </>)}
         </div>
 
         {/* Right: Actions (Save, Apply, Export, Close) */}
@@ -576,13 +583,19 @@ export function TemplateDesignerModal({
             </TabsList>
 
             <TabsContent value="layers" className="flex-1 p-0 m-0 overflow-hidden">
-              <LayersPanel
-                template={currentTemplate}
-                selectedBlockId={selectedBlockId}
-                onSelectBlock={(id) => setSelectedBlockId(id)}
-                onUpdateBlock={handleUpdateBlock}
-                onMoveLayer={handleMoveLayer}
-              />
+              {isNaskh ? (
+                <p className="p-3 text-[11px] leading-relaxed text-muted-foreground">
+                  قالب النسخ انسيابي بلا طبقات: الأقسام تُرتَّب تلقائياً بترتيب الأرشيف، وتُضبط هويته من لوحة الإعدادات.
+                </p>
+              ) : (
+                <LayersPanel
+                  template={currentTemplate}
+                  selectedBlockId={selectedBlockId}
+                  onSelectBlock={(id) => setSelectedBlockId(id)}
+                  onUpdateBlock={handleUpdateBlock}
+                  onMoveLayer={handleMoveLayer}
+                />
+              )}
             </TabsContent>
 
             <TabsContent value="templates" className="flex-1 p-3 m-0 overflow-y-auto space-y-2">
@@ -620,19 +633,29 @@ export function TemplateDesignerModal({
 
         {/* Center: Canvas Viewport */}
         <main className="flex-1 bg-muted/30 overflow-auto flex items-center justify-center p-6 relative">
-          <DesignerCanvas
-            template={currentTemplate}
-            content={normalizedContent}
-            qrImages={qrImages}
-            selectedBlockId={selectedBlockId}
-            onSelectBlock={setSelectedBlockId}
-            onUpdateBlock={handleUpdateBlock}
-            editMode={editMode}
-            showGrid={showGrid}
-            snapEnabled={snapEnabled}
-            zoom={zoom}
-            onValidationChange={setValidationReport}
-          />
+          {isNaskh ? (
+            <NaskhPreviewCanvas
+              template={currentTemplate}
+              content={normalizedContent}
+              qrImages={qrImages}
+              zoom={zoom}
+              onValidationChange={setValidationReport}
+            />
+          ) : (
+            <DesignerCanvas
+              template={currentTemplate}
+              content={normalizedContent}
+              qrImages={qrImages}
+              selectedBlockId={selectedBlockId}
+              onSelectBlock={setSelectedBlockId}
+              onUpdateBlock={handleUpdateBlock}
+              editMode={editMode}
+              showGrid={showGrid}
+              snapEnabled={snapEnabled}
+              zoom={zoom}
+              onValidationChange={setValidationReport}
+            />
+          )}
         </main>
 
         {/* Right Side: Properties Inspector */}
@@ -646,13 +669,17 @@ export function TemplateDesignerModal({
               <span className="text-[10px] font-mono text-muted-foreground">{selectedBlockId}</span>
             )}
           </div>
-          <PropertiesPanel
-            block={selectedBlockId ? currentTemplate.blocks[selectedBlockId] || null : null}
-            template={currentTemplate}
-            onUpdateBlock={handleUpdateBlock}
-            onUpdateTemplate={handleUpdateTemplate}
-            onMoveLayer={handleMoveLayer}
-          />
+          {isNaskh ? (
+            <NaskhSettingsPanel template={currentTemplate} onUpdateTemplate={handleUpdateTemplate} />
+          ) : (
+            <PropertiesPanel
+              block={selectedBlockId ? currentTemplate.blocks[selectedBlockId] || null : null}
+              template={currentTemplate}
+              onUpdateBlock={handleUpdateBlock}
+              onUpdateTemplate={handleUpdateTemplate}
+              onMoveLayer={handleMoveLayer}
+            />
+          )}
         </aside>
       </div>
 
@@ -661,7 +688,7 @@ export function TemplateDesignerModal({
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-green-500" />
-            <strong className="text-foreground">صفحة واحدة فقط (1080 × 1350 px)</strong>
+            <strong className="text-foreground">{isNaskh ? `طول ديناميكي (1080 × ${validationReport?.totalUsedHeight ?? 1350} px)` : "صفحة واحدة فقط (1080 × 1350 px)"}</strong>
           </span>
 
           {validationReport?.isCompactMode && (
@@ -682,7 +709,7 @@ export function TemplateDesignerModal({
         </div>
 
         <div className="flex items-center gap-3 text-[11px]">
-          <span>دقة الإخراج: 1080×1350</span>
+          <span>دقة الإخراج: 1080×{isNaskh ? validationReport?.totalUsedHeight ?? 1350 : 1350}</span>
           <span>·</span>
           <span>تصحيح QR: Level H عالي التباين</span>
         </div>

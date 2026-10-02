@@ -34,7 +34,6 @@ import {
   type CondolenceTemplate,
   IMAGE_HEIGHT,
   IMAGE_WIDTH,
-  loadCondolenceFonts,
 } from "@/lib/template-schema";
 import {
   fetchAllTemplates,
@@ -44,11 +43,11 @@ import {
 import { normalizeObituaryPresentation } from "@/lib/presentation-normalizer";
 import { buildAnnouncement } from "@/lib/announcement";
 import {
-  compileAndRenderSinglePage,
   generateQrImages,
   type QrCodeMap,
   type RenderValidationReport,
 } from "@/lib/single-page-engine";
+import { renderPoster } from "@/lib/poster-render";
 import { TemplateDesignerModal } from "./template-designer/template-designer-modal";
 
 function parseAddressDraft(address: string) {
@@ -146,7 +145,8 @@ export function CondolenceImageStudio({
 }) {
   const previewRef = useRef<HTMLCanvasElement>(null);
   const [templates, setTemplates] = useState<Record<string, CondolenceTemplate>>({});
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("official");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("naskh");
+  const [previewSize, setPreviewSize] = useState({ width: IMAGE_WIDTH, height: IMAGE_HEIGHT });
   const [draft, setDraft] = useState<ImageDraft>(() => createCondolenceImageDraft(request));
   const [qrImages, setQrImages] = useState<QrCodeMap>({});
   const [rendering, setRendering] = useState(true);
@@ -205,7 +205,7 @@ export function CondolenceImageStudio({
     };
   }, [normalizedContent]);
 
-  // Render Strictly Single-Page Canvas (1080 × 1350)
+  // Render the poster: 1080 × 1350 for block templates, and a dynamic height for the Naskh template
   useEffect(() => {
     let cancelled = false;
     if (!currentTemplate) return;
@@ -213,25 +213,19 @@ export function CondolenceImageStudio({
     setRendering(true);
     void (async () => {
       try {
-        await loadCondolenceFonts();
-        if (cancelled) return;
-
-        const { canvas: compiled, report } = compileAndRenderSinglePage(
-          currentTemplate,
-          normalizedContent,
-          qrImages
-        );
+        const { canvas: compiled, report } = await renderPoster(currentTemplate, normalizedContent, qrImages);
         if (cancelled) return;
 
         setValidationReport(report);
+        setPreviewSize({ width: compiled.width, height: compiled.height });
 
         const target = previewRef.current;
         if (target) {
-          target.width = IMAGE_WIDTH;
-          target.height = IMAGE_HEIGHT;
+          target.width = compiled.width;
+          target.height = compiled.height;
           const ctx = target.getContext("2d");
           if (ctx) {
-            ctx.clearRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
+            ctx.clearRect(0, 0, compiled.width, compiled.height);
             ctx.drawImage(compiled, 0, 0);
           }
         }
@@ -278,7 +272,7 @@ export function CondolenceImageStudio({
       link.download = `${request.requestNumber}-${selectedTemplateId}.png`;
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-      toast.success("تم تنزيل صورة التعزية بصيغة PNG عالية الدقة (1080 × 1350)");
+      toast.success(`تم تنزيل صورة التعزية بصيغة PNG عالية الدقة (${previewSize.width} × ${previewSize.height})`);
     }, "image/png");
   };
 
@@ -382,7 +376,7 @@ export function CondolenceImageStudio({
               </span>
               <span className="text-xs text-muted-foreground">·</span>
               <span className="text-xs text-green-700 dark:text-green-400 font-bold bg-green-500/10 px-2 py-0.5 rounded">
-                صفحة واحدة فقط (1080 × 1350 px)
+                {previewSize.height > IMAGE_HEIGHT ? `طول ديناميكي (1080 × ${previewSize.height} px)` : "صفحة واحدة فقط (1080 × 1350 px)"}
               </span>
             </div>
             <h2 className="text-lg font-bold text-foreground sm:text-xl mt-0.5">
@@ -440,8 +434,8 @@ export function CondolenceImageStudio({
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {Object.values(templates).slice(0, 3).map((t) => {
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {Object.values(templates).map((t) => {
                   const isSelected = selectedTemplateId === t.id;
                   return (
                     <button
@@ -488,7 +482,7 @@ export function CondolenceImageStudio({
               <canvas
                 ref={previewRef}
                 className="block h-auto w-full transition-opacity duration-200"
-                style={{ aspectRatio: "1080 / 1350" }}
+                style={{ aspectRatio: `${previewSize.width} / ${previewSize.height}` }}
                 aria-label="معاينة صورة التعزية"
               />
               {rendering && (

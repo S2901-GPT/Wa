@@ -1,11 +1,16 @@
 export const IMAGE_WIDTH = 1080;
 export const IMAGE_HEIGHT = 1350;
+const NASKH_FONT_SAMPLE = "إنا لله وإنا إليه راجعون توفي الوالد 0123456789";
 
 export async function loadCondolenceFonts() {
   if (typeof document === "undefined" || !document.fonts) return;
   await Promise.allSettled([
     document.fonts.load('700 48px "Noto Naskh Arabic"'),
     document.fonts.load('600 24px "Noto Naskh Arabic"'),
+    // خطوط Google مقسّمة بنطاقات Unicode، فيلزم نص عربي حتى يُحمَّل النطاق العربي قبل القياس على Canvas.
+    document.fonts.load('400 36px "Noto Naskh Arabic"', NASKH_FONT_SAMPLE),
+    document.fonts.load('700 36px "Noto Naskh Arabic"', NASKH_FONT_SAMPLE),
+    document.fonts.load('700 62px "Noto Naskh Arabic"', NASKH_FONT_SAMPLE),
     document.fonts.load('700 48px "IBM Plex Sans Arabic"'),
     document.fonts.load('500 24px "IBM Plex Sans Arabic"'),
     document.fonts.load('800 48px "Tajawal"'),
@@ -95,7 +100,19 @@ export type TemplateCanvas = {
     inset: number;
   };
   cornerDecorations?: boolean;
-  styleId: "official" | "modern" | "cards" | "custom";
+  styleId: "official" | "modern" | "cards" | "custom" | "naskh";
+};
+
+export type SocialNetwork = "instagram" | "snapchat" | "x";
+
+/** هوية الإعلان في قالب النسخ: الشعار يميناً وحسابات التواصل يساراً، والحد الأقصى لطول الصورة. */
+export type TemplateBranding = {
+  /** صورة الشعار كـ data URL (PNG مصغّر ≤ 256px)، أو فارغ فيظهر مكان محجوز. */
+  logoDataUrl?: string;
+  handle?: string;
+  socials?: SocialNetwork[];
+  /** الصورة تبدأ 1350 وتطول عند الحاجة حتى هذا الحد (1350–1800). */
+  maxHeight?: number;
 };
 
 export type CondolenceTemplate = {
@@ -113,6 +130,7 @@ export type CondolenceTemplate = {
     cardGap: number;
     pageMarginX: number;
   };
+  branding?: TemplateBranding;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -144,7 +162,7 @@ export const DEFAULT_TEMPLATE_OFFICIAL: CondolenceTemplate = {
   id: "official",
   name: "رسمي فاخر وهادئ",
   description: "طابع قطري وقور بإطار عنابي ملكي وذهب عتيق، مع خط نسخي أصيل وبطاقات عاجية مريحة",
-  isDefault: true,
+  isDefault: false,
   isBuiltIn: true,
   canvas: {
     width: 1080,
@@ -966,7 +984,35 @@ export const DEFAULT_TEMPLATE_CARDS: CondolenceTemplate = {
   },
 };
 
+// ==========================================
+// 4. TEMPLATE: النسخ الرسمي (قالب الصفحة المتدفقة)
+// يُرسم بمحرك مستقل (naskh-poster-engine.ts): خلفية مزخرفة، مخطوطة «إنا لله» أعلى، النص من اليمين،
+// فواصل رفيعة بين الأقسام، رمز الموقع بجانب كل عزاء، والشعار يميناً وحسابات التواصل يساراً.
+// الكتل هنا للتوافق مع النوع فقط ولا تؤثر في الرسم.
+// ==========================================
+export const DEFAULT_TEMPLATE_NASKH: CondolenceTemplate = {
+  id: "naskh",
+  name: "النسخ الرسمي",
+  description: "خلفية مزخرفة هادئة وخط النسخ، النص من اليمين بفواصل رفيعة، ورمز الموقع بجانب كل عزاء، ويطول تلقائياً عند كثرة الأسماء",
+  isDefault: true,
+  isBuiltIn: true,
+  canvas: {
+    width: IMAGE_WIDTH,
+    height: IMAGE_HEIGHT,
+    backgroundColor: "#FAF9F7",
+    styleId: "naskh",
+  },
+  blocks: DEFAULT_TEMPLATE_OFFICIAL.blocks,
+  layout: { ...DEFAULT_TEMPLATE_OFFICIAL.layout },
+  branding: {
+    handle: "qatarde",
+    socials: ["instagram", "snapchat", "x"],
+    maxHeight: 1800,
+  },
+};
+
 export const BUILT_IN_TEMPLATES: Record<string, CondolenceTemplate> = {
+  naskh: DEFAULT_TEMPLATE_NASKH,
   official: DEFAULT_TEMPLATE_OFFICIAL,
   modern: DEFAULT_TEMPLATE_MODERN,
   cards: DEFAULT_TEMPLATE_CARDS,
