@@ -21,11 +21,11 @@ import {
 } from "@/components/form-steps";
 
 const STEPS = [
-  { id: 1, title: 'المتوفون', fields: ['messageType', 'relatedRequestNumber', 'cancellation', 'announcementMode', 'sharedParent', 'deceasedPeople'] },
+  { id: 1, title: 'المتوفون', fields: ['messageType', 'relatedRequestNumber', 'cancellation', 'announcementMode', 'sharedParent', 'deceasedList'] },
   { id: 2, title: 'الأقارب', fields: ['relatives'] },
   { id: 3, title: 'الدفن والصلاة', fields: ['burial', 'prayer'] },
   { id: 4, title: 'العزاء', fields: ['condolences'] },
-  { id: 5, title: 'الملاحظات', fields: ['notes'] },
+  { id: 5, title: 'ابتداء العزاء والملاحظات', fields: ['condolenceStartDate', 'condolenceStartTime', 'notes'] },
   { id: 6, title: 'المراجعة', fields: [] }
 ];
 
@@ -55,7 +55,6 @@ export default function FormPage() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } else {
       toast.error("يرجى إكمال جميع الحقول المطلوبة بشكل صحيح.");
-      // Optional: log errors to console for debug
       console.log(form.formState.errors);
     }
   };
@@ -66,12 +65,13 @@ export default function FormPage() {
   };
 
   const onSubmit = (data: ObituaryFormValues) => {
+    // النموذج له شكل بياناته الخاص؛ الخادم لا يقبل إلا عقد الـ API (deceasedPeople…).
     const requestData = mapFormToPayload(data);
 
     createRequest.mutate(
       { data: requestData },
       {
-        onSuccess: (res) => {
+        onSuccess: (res: any) => {
           toast.success("تم إرسال الطلب بنجاح");
           setLocation(`/success/${res.requestNumber}`);
         },
@@ -83,36 +83,39 @@ export default function FormPage() {
   };
 
   return (
-    <div className="min-h-screen bg-muted/30 pb-20">
-      <div className="bg-primary text-primary-foreground py-12 px-4 mb-8 relative overflow-hidden">
+    <div className="min-h-screen bg-muted/30 pb-16 w-full max-w-full overflow-x-hidden box-border">
+      <div className="bg-primary text-primary-foreground py-6 sm:py-10 px-3 sm:px-4 mb-4 sm:mb-6 relative overflow-hidden w-full max-w-full box-border">
         <div className="absolute inset-0 opacity-10 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white to-transparent"></div>
-        <div className="container max-w-3xl mx-auto relative z-10 text-center">
-          <h1 className="text-3xl md:text-4xl font-bold mb-4">نموذج بيانات إعلان وفاة</h1>
-          <p className="text-primary-foreground/80 md:text-lg max-w-xl mx-auto">
+        <div className="container max-w-3xl mx-auto relative z-10 text-center px-1">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2 tracking-tight">تسجيل بيانات إعلان وفاة</h1>
+          <p className="text-primary-foreground/80 text-xs sm:text-sm md:text-base max-w-xl mx-auto">
             مساحة رسمية لتسجيل وتوثيق بيانات إعلانات الوفاة وتفاصيل الدفن والعزاء في دولة قطر
           </p>
         </div>
       </div>
 
-      <div className="container max-w-3xl mx-auto px-4">
+      <div className="container max-w-3xl mx-auto px-2 sm:px-4 w-full max-w-full box-border">
         {/* Stepper */}
-        <div className="mb-10">
-          <div className="flex items-center justify-between relative px-2">
+        <div className="mb-6 w-full overflow-hidden box-border">
+          <div className="flex items-center justify-between relative px-1 w-full">
             <div className="absolute left-0 right-0 top-1/2 h-0.5 bg-border -z-10 transform -translate-y-1/2"></div>
-            <div className="absolute right-0 top-1/2 h-0.5 bg-primary -z-10 transform -translate-y-1/2 transition-all duration-300" style={{ width: `${((currentStep - 1) / (STEPS.length - 1)) * 100}%` }}></div>
+            <div 
+              className="absolute right-0 top-1/2 h-0.5 bg-primary -z-10 transform -translate-y-1/2 transition-all duration-300" 
+              style={{ width: `${((currentStep - 1) / (STEPS.length - 1)) * 100}%` }}
+            ></div>
             
             {STEPS.map((step) => (
-              <div key={step.id} className="flex flex-col items-center gap-2">
+              <div key={step.id} className="flex flex-col items-center gap-1">
                 <div 
-                  className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm transition-colors border-2 ${
+                  className={`w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center font-bold text-[11px] sm:text-xs transition-colors border-2 ${
                     currentStep >= step.id 
-                      ? 'bg-primary border-primary text-primary-foreground shadow-md' 
+                      ? 'bg-primary border-primary text-primary-foreground shadow-sm' 
                       : 'bg-card border-border text-muted-foreground'
                   }`}
                 >
-                  {currentStep > step.id ? <CheckIcon className="w-5 h-5" /> : step.id}
+                  {currentStep > step.id ? <CheckIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> : step.id}
                 </div>
-                <span className={`text-xs hidden md:block font-medium absolute -bottom-6 ${currentStep >= step.id ? 'text-primary' : 'text-muted-foreground'}`}>
+                <span className={`text-[10px] sm:text-xs hidden sm:block font-medium ${currentStep >= step.id ? 'text-primary' : 'text-muted-foreground'}`}>
                   {step.title}
                 </span>
               </div>
@@ -120,10 +123,10 @@ export default function FormPage() {
           </div>
         </div>
 
-        <Card className="border-none shadow-xl bg-card/80 backdrop-blur-sm overflow-hidden">
+        <Card className="border-border/70 shadow-lg bg-card overflow-hidden w-full max-w-full box-border">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)}>
-              <CardContent className="pt-10 pb-4 px-6 md:px-10 min-h-[400px]">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="w-full max-w-full box-border">
+              <CardContent className="pt-6 pb-4 px-3 sm:px-6 md:px-8 min-h-[380px] w-full max-w-full box-border overflow-hidden">
                 {currentStep === 1 && <DeceasedStep />}
                 {currentStep === 2 && <RelativesStep />}
                 {currentStep === 3 && <BurialPrayerStep />}
@@ -132,13 +135,13 @@ export default function FormPage() {
                 {currentStep === 6 && <ReviewStep />}
               </CardContent>
 
-              <CardFooter className="flex justify-between border-t border-border/50 px-6 md:px-10 py-6 bg-muted/20">
+              <CardFooter className="flex justify-between border-t border-border/50 px-3 sm:px-6 md:px-8 py-3.5 sm:py-5 bg-muted/20 gap-2 w-full box-border">
                 <Button 
                   type="button" 
                   variant="outline" 
                   onClick={handlePrev}
                   disabled={currentStep === 1 || createRequest.isPending}
-                  className="gap-2 border-primary/20 hover:bg-primary/5 hover:text-primary"
+                  className="gap-1.5 sm:gap-2 px-3 sm:px-5 h-9 sm:h-10 text-xs sm:text-sm border-primary/20 hover:bg-primary/5 hover:text-primary shrink-0"
                 >
                   <ChevronRight className="w-4 h-4 rtl:rotate-180" />
                   السابق
@@ -146,14 +149,14 @@ export default function FormPage() {
                 
                 {/* مفتاحان مختلفان حتى لا يعيد React استخدام زر «التالي» نفسه فيصبح submit أثناء النقر ويتخطى المراجعة. */}
                 {currentStep < STEPS.length ? (
-                  <Button key="next" type="button" onClick={handleNext} className="gap-2 px-8">
+                  <Button key="next" type="button" onClick={handleNext} className="gap-1.5 sm:gap-2 px-4 sm:px-8 h-9 sm:h-10 text-xs sm:text-sm shrink-0">
                     التالي
                     <ChevronLeft className="w-4 h-4 rtl:rotate-180" />
                   </Button>
                 ) : (
-                  <Button key="submit" type="submit" disabled={createRequest.isPending} className="gap-2 px-8 bg-green-700 hover:bg-green-800 text-white">
+                  <Button key="submit" type="submit" disabled={createRequest.isPending} className="gap-1.5 sm:gap-2 px-3 sm:px-8 h-9 sm:h-10 text-xs sm:text-sm bg-green-700 hover:bg-green-800 text-white font-bold shrink-0">
                     {createRequest.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckIcon className="w-4 h-4" />}
-                    اعتماد وإرسال
+                    اعتماد وإرسال الطلب
                   </Button>
                 )}
               </CardFooter>

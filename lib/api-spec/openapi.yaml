@@ -242,8 +242,9 @@ components:
           type: boolean
         outsideLocation:
           type: string
-        postponeNote:
+        note:
           type: string
+          description: ملاحظة الدفن (سبب التأجيل، أو وصف دفن تمّ مثل «تم الدفن في مكة المكرمة»)
     CondolenceScheduleEntry:
       type: object
       properties:

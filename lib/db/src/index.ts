@@ -1,23 +1,41 @@
-import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
-import * as schema from "./schema";
-import { obituaryRequestsTable, type ObituaryRequestRow } from "./schema/obituary-requests";
+import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
+import {
+  getFirestore,
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  setDoc,
+  query,
+  orderBy,
+  type Firestore,
+} from "firebase/firestore";
+import firebaseConfig from "../../../firebase-applet-config.json";
+import { type ObituaryRequestRow } from "./schema/obituary-requests";
 
-const { Pool } = pg;
+// Initialize Firebase App & Firestore using the provisioned Firestore Database ID
+let firestoreDb: Firestore | null = null;
+try {
+  const app: FirebaseApp = getApps().length > 0 ? getApps()[0]! : initializeApp(firebaseConfig);
+  firestoreDb = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  console.info("[AI Studio] Cloud Firestore initialized successfully with database:", firebaseConfig.firestoreDatabaseId);
+} catch (err) {
+  console.warn("[AI Studio] Firebase Firestore initialization error:", err);
+}
 
-// In-memory mock store for when Postgres/Cloud SQL is not connected
-const inMemoryObituaryRequests: ObituaryRequestRow[] = [
+// In-memory cache & fallback store
+const inMemoryRequests: ObituaryRequestRow[] = [
   {
     id: 1,
     requestNumber: "QTR-20260927-1001",
-    deceasedName: "عبدالله بن خالد آل ثاني",
+    deceasedName: "عبدالله بن ناصر بن خليفة الكواري",
     status: "new",
     payload: {
       deceasedPeople: [
         {
-          fullName: "عبدالله بن خالد آل ثاني",
+          fullName: "عبدالله بن ناصر بن خليفة الكواري",
           gender: "man",
-          age: 72,
+          age: 78,
           nationality: "قطري",
           deathPlace: "الدوحة",
           title: "الوالد",
@@ -30,163 +48,263 @@ const inMemoryObituaryRequests: ObituaryRequestRow[] = [
           relation: "الأبناء",
           familyReference: "",
           people: [
-            { name: "خالد", occupation: "", deceased: false },
+            { name: "ناصر", occupation: "", deceased: false },
             { name: "محمد", occupation: "", deceased: false },
+            { name: "سلطان", occupation: "", deceased: false },
+          ],
+        },
+        {
+          relation: "الإخوة",
+          familyReference: "",
+          people: [
+            { name: "خليفة", occupation: "", deceased: false },
+            { name: "أحمد", occupation: "", deceased: true },
+            { name: "سالم", occupation: "", deceased: false },
           ],
         },
       ],
       prayer: {
         enabled: true,
-        day: "الأحد",
+        day: "الأحد 28 سبتمبر 2026",
         time: "بعد صلاة العصر",
         place: "جامع الإمام محمد بن عبدالوهاب",
-        mapLink: "",
+        mapLink: "https://maps.google.com/?q=Imam+Muhammad+ibn+Abd+al-Wahhab+Mosque+Doha",
       },
       burial: {
         status: "upcoming",
-        day: "الأحد",
-        time: "بعد صلاة العصر",
+        day: "الأحد 28 سبتمبر 2026",
+        time: "بعد صلاة الجنازة مباشرة",
         cemetery: "مقبرة مسيمير",
-        mapLink: "",
+        mapLink: "https://maps.google.com/?q=Mesaimeer+Cemetery+Doha",
         outsideQatar: false,
         outsideLocation: "",
       },
       condolences: [
         {
           audience: "men",
-          location: "مجلس الوالد في الدفنة",
-          mapLink: "",
-          start: "",
+          location: "مجلس العائلة في منطقة الدفنة",
+          mapLink: "https://maps.google.com/?q=Al+Dafna+Zone+66+Doha",
+          start: "الأحد 28 سبتمبر 2026",
           durationDays: 3,
-          time: "بعد صلاة العصر إلى صلاة العشاء",
+          time: "من بعد صلاة العصر حتى صلاة العشاء",
+          area: "الدفنة",
+          street: "شارع 850",
+          houseNumber: "14",
+        },
+        {
+          audience: "women",
+          location: "منزل الفقيد في منطقة الدفنة",
+          mapLink: "https://maps.google.com/?q=Dafna+Park+Doha",
+          start: "الأحد 28 سبتمبر 2026",
+          durationDays: 3,
+          time: "من الساعة 4:00 عصرًا حتى 8:30 مساءً",
+          area: "الدفنة",
+          street: "شارع 852",
+          houseNumber: "18",
         },
       ],
-      condolenceOptions: ["men", "phone"],
+      condolenceOptions: ["men", "women", "phone"],
       condolencePhoneContacts: [
-        { name: "خالد", phone: "55551234" },
+        { name: "محمد (ابنه)", phone: "+974 5512 3456" },
+        { name: "خليفة (شقيقه)", phone: "+974 6623 4567" },
       ],
-      notes: "إنا لله وإنا إليه راجعون",
+      notes: "تقبل التعازي مع مراعاة أوقات الصلاة، نسأل الله له المغفرة والرضوان.",
     },
     createdAt: new Date(),
     updatedAt: new Date(),
   },
 ];
 
-let nextId = 2;
+let nextNumericId = 2;
 
-function extractRequestNumberFromWhere(clause: any): string | null {
-  if (!clause) return null;
-  if (typeof clause === "string") return clause;
-  if (clause.value !== undefined) return String(clause.value);
-  if (clause.right !== undefined) {
-    if (typeof clause.right === "object" && clause.right !== null && clause.right.value !== undefined) {
-      return String(clause.right.value);
-    }
-    return String(clause.right);
-  }
-  try {
-    const str = JSON.stringify(clause);
-    const match = str.match(/QTR-[A-Za-z0-9_-]+/);
-    if (match) return match[0];
-  } catch {
-    // ignore serialization failure
-  }
-  return null;
+function docDataToRow(data: any, fallbackId: number): ObituaryRequestRow {
+  return {
+    id: typeof data.id === "number" ? data.id : fallbackId,
+    requestNumber: String(data.requestNumber || ""),
+    deceasedName: String(data.deceasedName || ""),
+    status: String(data.status || "new"),
+    payload: (data.payload && typeof data.payload === "object") ? data.payload : {},
+    createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
+    updatedAt: data.updatedAt ? new Date(data.updatedAt) : new Date(),
+  };
 }
 
-const mockDb = {
-  select: (_fields?: any) => ({
-    from: (_table: any) => {
-      const getRows = () => [...inMemoryObituaryRequests];
-      return {
-        orderBy: (_orderCol?: any) => {
-          const rows = getRows().sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-          return Promise.resolve(rows);
-        },
-        where: (clause: any) => {
-          const reqNum = extractRequestNumberFromWhere(clause);
-          const found = reqNum
-            ? inMemoryObituaryRequests.filter((r) => r.requestNumber === reqNum)
-            : [...inMemoryObituaryRequests];
-          return Promise.resolve(found);
-        },
-        then: (resolve: any, reject: any) => {
-          return Promise.resolve(getRows()).then(resolve, reject);
-        },
-      };
-    },
-  }),
-  insert: (_table: any) => ({
-    values: (data: any) => ({
-      returning: async () => {
-        const newRow: ObituaryRequestRow = {
-          id: nextId++,
-          requestNumber: data.requestNumber || `QTR-${Date.now()}`,
-          deceasedName: data.deceasedName || "",
-          status: data.status || "new",
-          payload: data.payload || {},
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-        inMemoryObituaryRequests.unshift(newRow);
-        return [newRow];
-      },
-    }),
-  }),
-  update: (_table: any) => ({
-    set: (data: any) => ({
-      where: (clause: any) => ({
-        returning: async () => {
-          const reqNum = extractRequestNumberFromWhere(clause);
-          const index = inMemoryObituaryRequests.findIndex((r) => r.requestNumber === reqNum);
-          if (index === -1) return [];
-          const existing = inMemoryObituaryRequests[index];
-          const updated: ObituaryRequestRow = {
-            ...existing,
-            ...data,
-            payload: data.payload ?? existing.payload,
-            deceasedName: data.deceasedName ?? existing.deceasedName,
-            status: data.status ?? existing.status,
-            updatedAt: data.updatedAt ?? new Date(),
-          };
-          inMemoryObituaryRequests[index] = updated;
-          return [updated];
-        },
-      }),
-    }),
-  }),
+let seedInitialized = false;
+async function ensureSeedData() {
+  if (!firestoreDb || seedInitialized) return;
+  seedInitialized = true;
+  try {
+    const colRef = collection(firestoreDb, "obituary_requests");
+    const snap = await getDocs(colRef);
+    if (snap.empty) {
+      for (const item of inMemoryRequests) {
+        await setDoc(doc(firestoreDb, "obituary_requests", item.requestNumber), {
+          id: item.id,
+          requestNumber: item.requestNumber,
+          deceasedName: item.deceasedName,
+          status: item.status,
+          payload: item.payload,
+          createdAt: item.createdAt.toISOString(),
+          updatedAt: item.updatedAt.toISOString(),
+        });
+      }
+      console.info("[AI Studio] Seeded initial request to Cloud Firestore");
+    } else {
+      // Sync from Firestore into memory cache
+      snap.forEach((d) => {
+        const row = docDataToRow(d.data(), nextNumericId++);
+        const idx = inMemoryRequests.findIndex((r) => r.requestNumber === row.requestNumber);
+        if (idx >= 0) {
+          inMemoryRequests[idx] = row;
+        } else {
+          inMemoryRequests.push(row);
+        }
+      });
+    }
+  } catch (err) {
+    console.warn("[AI Studio] Error syncing with Firestore collection:", err);
+  }
+}
+
+// Start initial sync in background
+ensureSeedData().catch(() => {});
+
+export const obituaryRequestsDb = {
+  async list(): Promise<ObituaryRequestRow[]> {
+    if (firestoreDb) {
+      try {
+        const colRef = collection(firestoreDb, "obituary_requests");
+        const snap = await getDocs(colRef);
+        if (!snap.empty) {
+          const list: ObituaryRequestRow[] = [];
+          snap.forEach((d) => {
+            list.push(docDataToRow(d.data(), nextNumericId++));
+          });
+          list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+          return list;
+        }
+      } catch (err) {
+        console.warn("[AI Studio] Firestore list error, using cached records:", err);
+      }
+    }
+    return [...inMemoryRequests].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  },
+
+  async getByRequestNumber(requestNumber: string): Promise<ObituaryRequestRow | null> {
+    if (firestoreDb) {
+      try {
+        const docRef = doc(firestoreDb, "obituary_requests", requestNumber);
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          return docDataToRow(snap.data(), nextNumericId++);
+        }
+      } catch (err) {
+        console.warn("[AI Studio] Firestore get error, checking memory cache:", err);
+      }
+    }
+    const found = inMemoryRequests.find((r) => r.requestNumber === requestNumber);
+    return found ? { ...found } : null;
+  },
+
+  async create(data: {
+    requestNumber: string;
+    deceasedName: string;
+    payload: Record<string, unknown>;
+    status?: string;
+  }): Promise<ObituaryRequestRow> {
+    const newRow: ObituaryRequestRow = {
+      id: nextNumericId++,
+      requestNumber: data.requestNumber,
+      deceasedName: data.deceasedName,
+      status: data.status || "new",
+      payload: data.payload,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    inMemoryRequests.unshift(newRow);
+
+    if (firestoreDb) {
+      try {
+        await setDoc(doc(firestoreDb, "obituary_requests", newRow.requestNumber), {
+          id: newRow.id,
+          requestNumber: newRow.requestNumber,
+          deceasedName: newRow.deceasedName,
+          status: newRow.status,
+          payload: newRow.payload,
+          createdAt: newRow.createdAt.toISOString(),
+          updatedAt: newRow.updatedAt.toISOString(),
+        });
+        console.info(`[AI Studio] Obituary request saved to Firestore: ${newRow.requestNumber}`);
+      } catch (err) {
+        console.error("[AI Studio] Failed to save obituary request to Firestore:", err);
+      }
+    }
+
+    return newRow;
+  },
+
+  async update(
+    requestNumber: string,
+    data: {
+      deceasedName?: string;
+      status?: string;
+      payload?: Record<string, unknown>;
+    }
+  ): Promise<ObituaryRequestRow | null> {
+    let existing = inMemoryRequests.find((r) => r.requestNumber === requestNumber);
+    if (!existing && firestoreDb) {
+      try {
+        const snap = await getDoc(doc(firestoreDb, "obituary_requests", requestNumber));
+        if (snap.exists()) {
+          existing = docDataToRow(snap.data(), nextNumericId++);
+          inMemoryRequests.push(existing);
+        }
+      } catch (err) {
+        console.warn("[AI Studio] Firestore lookup for update failed:", err);
+      }
+    }
+
+    if (!existing) {
+      return null;
+    }
+
+    const updatedRow: ObituaryRequestRow = {
+      ...existing,
+      deceasedName: data.deceasedName ?? existing.deceasedName,
+      status: data.status ?? existing.status,
+      payload: data.payload ?? existing.payload,
+      updatedAt: new Date(),
+    };
+
+    const idx = inMemoryRequests.findIndex((r) => r.requestNumber === requestNumber);
+    if (idx >= 0) {
+      inMemoryRequests[idx] = updatedRow;
+    }
+
+    if (firestoreDb) {
+      try {
+        await setDoc(
+          doc(firestoreDb, "obituary_requests", requestNumber),
+          {
+            id: updatedRow.id,
+            requestNumber: updatedRow.requestNumber,
+            deceasedName: updatedRow.deceasedName,
+            status: updatedRow.status,
+            payload: updatedRow.payload,
+            updatedAt: updatedRow.updatedAt.toISOString(),
+          },
+          { merge: true }
+        );
+        console.info(`[AI Studio] Obituary request updated in Firestore: ${requestNumber}`);
+      } catch (err) {
+        console.error("[AI Studio] Failed to update obituary request in Firestore:", err);
+      }
+    }
+
+    return updatedRow;
+  },
 };
 
-let pool: any = null;
-let db: any = mockDb;
-
-if (process.env.DATABASE_URL) {
-  try {
-    pool = new Pool({ connectionString: process.env.DATABASE_URL });
-    const realDb = drizzle(pool, { schema });
-    db = new Proxy(realDb, {
-      get(target, prop, receiver) {
-        const original = Reflect.get(target, prop, receiver);
-        if (typeof original === "function") {
-          return function (...args: any[]) {
-            try {
-              return original.apply(target, args);
-            } catch (e) {
-              console.warn("[AI Studio] Database query failed, falling back to mock store:", e);
-              return (mockDb as any)[prop]?.(...args);
-            }
-          };
-        }
-        return original;
-      },
-    });
-  } catch (err) {
-    console.warn("[AI Studio] Failed to initialize Postgres connection, using mock database:", err);
-    db = mockDb;
-  }
-} else {
-  console.info("[AI Studio] DATABASE_URL not set — using in-memory mock store.");
-}
-
-export { pool, db };
+export { firestoreDb };
 export * from "./schema";

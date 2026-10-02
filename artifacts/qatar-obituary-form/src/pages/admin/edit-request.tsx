@@ -82,7 +82,7 @@ export default function AdminEditRequestPage() {
         data: { 
           ...requestData, 
           status: req.status 
-        } 
+        }
       },
       {
         onSuccess: () => {
@@ -142,7 +142,7 @@ export default function AdminEditRequestPage() {
 
         <Card className="border-none shadow-lg bg-card/80 backdrop-blur-sm overflow-hidden">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit, () => toast.error("تعذر الحفظ: راجع الحقول المطلوبة في الخطوات (مثل الجنس أو موعد الدفن)."))}>
+            <form onSubmit={form.handleSubmit(onSubmit, () => toast.error("تعذر الحفظ: راجع الحقول المطلوبة في الخطوات (مثل الجنس)."))}>
               <CardContent className="pt-10 pb-4 px-6 md:px-10 min-h-[400px]">
                 {currentStep === 1 && <DeceasedStep />}
                 {currentStep === 2 && <RelativesStep />}

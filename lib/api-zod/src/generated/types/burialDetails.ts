@@ -16,5 +16,6 @@ export interface BurialDetails {
   mapLink?: string;
   outsideQatar: boolean;
   outsideLocation?: string;
-  postponeNote?: string;
+  /** ملاحظة الدفن (سبب التأجيل، أو وصف دفن تمّ مثل «تم الدفن في مكة المكرمة») */
+  note?: string;
 }

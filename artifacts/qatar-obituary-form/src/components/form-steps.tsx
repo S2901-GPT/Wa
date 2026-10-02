@@ -1,1130 +1,2016 @@
-import React, { useMemo, useState } from "react";
-import { useFormContext, useFieldArray, useWatch, type FieldPath } from "react-hook-form";
+import React, { useState, useMemo } from "react";
+import { useFormContext, useFieldArray } from "react-hook-form";
+import { ObituaryFormValues, emptyDeceased } from "@/lib/schema";
 import {
-  burialScheduleRequired,
-  emptyCondolenceCard,
-  emptyDeceased,
-  type ObituaryFormValues,
-} from "@/lib/schema";
-import { CEMETERIES, CONDOLENCE_STARTS, RELATIVE_DAYS, TIMES, WEEKDAYS, mapFormToPayload } from "@/lib/mapper";
-import { REFERENCE_LABELS, RELATION_OPTIONS, buildAnnouncement, relationTakesReference } from "@/lib/announcement";
+  AnnouncementPreview,
+  CondolenceExtras,
+  DeceasedDetailsExtras,
+  DeceasedIdentityExtras,
+  ExtraVenuesSection,
+  MessageTypeCard,
+  MultipleDeceasedCard,
+  RelationKeySelect,
+  RelativeGroupExtras,
+  VenueExtras,
+} from "@/components/form-steps-extras";
 import { FormField, FormItem, FormLabel, FormControl, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
-import { Trash2, Plus, User, Users, Calendar, Heart, FileText, CheckCircle2, AlertTriangle, Mail } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { 
+  Trash2, Plus, User, Users, Calendar, Heart, FileText, CheckCircle2, 
+  MapPin, Clock, Phone, Sparkles, AlertCircle, Copy, Link as LinkIcon, UserCheck
+} from "lucide-react";
 
-type FormPath = FieldPath<ObituaryFormValues>;
-
-const DAY_OPTIONS = [...RELATIVE_DAYS, ...WEEKDAYS, "أخرى"];
-const TIME_OPTIONS = [...TIMES, "وقت محدد", "أخرى"];
-const CEMETERY_OPTIONS = [...CEMETERIES, "أخرى"];
-/** ألقاب الأرشيف قبل اسم المتوفى (تتراكم: «الوالد اللواء متقاعد»). */
-const TITLE_SUGGESTIONS = [
-  "الوالد", "الوالدة", "الشيخ", "الشيخة", "الدكتور", "الدكتورة", "الأستاذ", "الأستاذة", "المحامي", "القاضي",
-  "سعادة", "فضيلة الشيخ", "الوالد اللواء متقاعد", "العميد ركن", "الشاب", "الشابة", "الطفل", "الطفلة",
-  "الرضيع", "الرضيعة", "شهيد الوطن",
+const PREFIX_TITLES = [
+  { label: "بدون لقب (تلقائي)", value: "none" },
+  { label: "الوالد", value: "الوالد" },
+  { label: "الوالدة", value: "الوالدة" },
+  { label: "الشاب", value: "الشاب" },
+  { label: "الشابة", value: "الشابة" },
+  { label: "الطفل", value: "الطفل" },
+  { label: "الطفلة", value: "الطفلة" },
+  { label: "الرضيع", value: "الرضيع" },
+  { label: "الرضيعة", value: "الرضيعة" },
+  { label: "المولودة", value: "المولودة" },
+  { label: "الشيخ", value: "الشيخ" },
+  { label: "الشيخة", value: "الشيخة" },
+  { label: "فضيلة الشيخ", value: "فضيلة الشيخ" },
+  { label: "سعادة الشيخ", value: "سعادة الشيخ" },
+  { label: "سعادة", value: "سعادة" },
+  { label: "سعادة السفير", value: "سعادة السفير" },
+  { label: "الدكتور", value: "الدكتور" },
+  { label: "الدكتورة", value: "الدكتورة" },
+  { label: "الأستاذ", value: "الأستاذ" },
+  { label: "اللواء", value: "اللواء" },
+  { label: "العميد", value: "العميد" },
+  { label: "النقيب", value: "النقيب" },
+  { label: "شهيد الوطن", value: "شهيد الوطن" },
 ];
-const SPOUSE_TITLE_SUGGESTIONS = ["الوالد", "الشيخ", "الدكتور", "سعادة", "سعادة اللواء ركن", "الأستاذ"];
 
+// 1. الجنس: ذكر أو أنثى حصرياً
 const GENDER_OPTIONS = [
-  { label: "رجل", value: "man" },
-  { label: "امرأة", value: "woman" },
-  { label: "طفل", value: "boy" },
-  { label: "طفلة", value: "girl" },
+  { label: "ذكر", value: "ذكر" },
+  { label: "أنثى", value: "أنثى" },
 ] as const;
 
-const IDENTIFY_OPTIONS = [
-  { value: "name", label: "بالاسم" },
-  { value: "kunya", label: "بالكنية (أم فلان / أبو فلان)" },
-  { value: "spouse", label: "عبر الزوج: «حرم / أرملة فلان»" },
-  { value: "father", label: "عبر الأب: «ابنة / ابن فلان»" },
-  { value: "children", label: "عبر الأبناء: «والدة / والد كل من»" },
+// مقابر الأرشيف (مسيمير تُكتب أيضاً مسمير/ميسمير؛ المزروعة افتُتحت ٢٠٢٦)
+const QATAR_CEMETERIES = [
+  "مقبرة مسيمير", "مقبرة الخور", "مقبرة الوكرة الجنوبية", "مقبرة أم صلال",
+  "مقبرة الريان", "مقبرة الرويس", "مقبرة مريخ", "مقبرة المزروعة",
+  "مقبرة الوكير", "مقبرة الخريطيات", "مقبرة الكعبان", "مقبرة أبوظلوف", "أخرى"
+];
+
+const PRAYER_TIMES_OPTIONS = [
+  "بعد صلاة الفجر", 
+  "بعد صلاة الظهر", 
+  "بعد صلاة العصر", 
+  "بعد صلاة المغرب", 
+  "بعد صلاة العشاء",
+  "بعد صلاة الجمعة",
+  "بعد صلاة التراويح",
+  "وقت آخر..."
+];
+
+const CONDOLENCE_TYPES = [
+  { 
+    id: "full", 
+    title: "عزاء رجال ونساء", 
+    desc: "تحديد مقرات وأوقات للرجال والنساء" 
+  },
+  { 
+    id: "men_only", 
+    title: "عزاء رجال فقط", 
+    desc: "استقبال التعازي في مجلس أو مقر الرجال فقط" 
+  },
+  { 
+    id: "women_only", 
+    title: "عزاء نساء فقط", 
+    desc: "استقبال التعازي في مقر النساء فقط" 
+  },
+  { 
+    id: "phone_only", 
+    title: "هاتف فقط", 
+    desc: "التعازي عبر الاتصال الهاتفي ورسائل WhatsApp" 
+  },
+  { 
+    id: "cemetery_only", 
+    title: "يقتصر على المقبرة", 
+    desc: "«عزاء الرجال في المقبرة فقط» اتباعاً للسنة أو تنفيذاً للوصية" 
+  },
+  { 
+    id: "tbd", 
+    title: "سيُحدَّد لاحقاً", 
+    desc: "يُعلن مقر العزاء في رسالة لاحقة" 
+  },
+  { 
+    id: "none", 
+    title: "لا يوجد عزاء", 
+    desc: "يُكتب «لا يوجد عزاء» صراحة في الإعلان" 
+  },
 ] as const;
 
-const MESSAGE_TYPES = [
-  { value: "announcement", label: "إعلان وفاة" },
-  { value: "postponement", label: "تأجيل الدفن حتى إشعار آخر" },
-  { value: "amendment", label: "تعديل إعلان سابق" },
-  { value: "condolence_cancellation", label: "إلغاء عزاء" },
+const TIME_WINDOWS = [
+  { value: "evening", label: "الفترة المسائية (من بعد صلاة العصر حتى 9 مساءً)" },
+  { value: "morning", label: "الفترة الصباحية (من 9 صباحاً حتى الظهر)" },
+  { value: "after_taraweeh", label: "بعد صلاة التراويح" },
+  { value: "open", label: "مفتوح طوال اليوم" },
+  { value: "exact_time", label: "ساعات محددة يدوياً" },
 ] as const;
 
-const ANNOUNCEMENT_MODES = [
-  { value: "unrelated", label: "متوفون بلا نسب مشترك", hint: "«توفي كل من» ثم كل اسم كامل وتحته عمره" },
-  { value: "siblings", label: "إخوة بنسب مشترك", hint: "«توفي كل من / سعود / جاسم / أبناء / فهد …» والأقارب بضمير الجمع" },
-  { value: "father_first", label: "الأب أولاً", hint: "«توفي أبناء الوالد / فلان / سعد وغانم وإيمان»" },
-  { value: "mother_child", label: "أم (أو أب) مع أبنائها", hint: "«توفيت حرم / فلان / وابنتها الطفلة / آمنة»" },
-] as const;
-
-function Required({ show = true }: { show?: boolean }) {
-  return show ? <span className="text-destructive">*</span> : null;
+function getTodayString() {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
-function TextField({
-  name, label, placeholder, ltr, description, required, textarea,
-}: {
-  name: FormPath;
-  label: React.ReactNode;
-  placeholder?: string;
-  ltr?: boolean;
-  description?: string;
-  required?: boolean;
-  textarea?: boolean;
-}) {
-  const form = useFormContext<ObituaryFormValues>();
-  return (
-    <FormField
-      control={form.control}
-      name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label} <Required show={!!required} /></FormLabel>
-          <FormControl>
-            {textarea ? (
-              <Textarea rows={2} placeholder={placeholder} className="bg-background" {...field} value={(field.value as string) ?? ""} />
-            ) : (
-              <Input
-                placeholder={placeholder}
-                className={`bg-background ${ltr ? "text-left" : ""}`}
-                dir={ltr ? "ltr" : undefined}
-                {...field}
-                value={(field.value as string | number | null) ?? ""}
-              />
-            )}
-          </FormControl>
-          {description && <FormDescription>{description}</FormDescription>}
-          <FormMessage />
-        </FormItem>
-      )}
-    />
-  );
-}
-
-function SelectField({
-  name, label, options, placeholder, required, description,
-}: {
-  name: FormPath;
-  label: React.ReactNode;
-  options: ReadonlyArray<string | { value: string; label: string }>;
-  placeholder?: string;
-  required?: boolean;
-  description?: string;
-}) {
-  const form = useFormContext<ObituaryFormValues>();
-  return (
-    <FormField
-      control={form.control}
-      name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label} <Required show={!!required} /></FormLabel>
-          <Select onValueChange={field.onChange} value={(field.value as string) || ""}>
-            <FormControl><SelectTrigger className="bg-background"><SelectValue placeholder={placeholder ?? "اختر"} /></SelectTrigger></FormControl>
-            <SelectContent>
-              {options.map((option) => {
-                const value = typeof option === "string" ? option : option.value;
-                const text = typeof option === "string" ? option : option.label;
-                return <SelectItem key={value} value={value}>{text}</SelectItem>;
-              })}
-            </SelectContent>
-          </Select>
-          {description && <FormDescription>{description}</FormDescription>}
-          <FormMessage />
-        </FormItem>
-      )}
-    />
-  );
-}
-
-function SwitchField({ name, label, description }: { name: FormPath; label: string; description?: string }) {
-  const form = useFormContext<ObituaryFormValues>();
-  return (
-    <FormField
-      control={form.control}
-      name={name}
-      render={({ field }) => (
-        <FormItem className="flex items-center justify-between gap-3 space-y-0 rounded-md border border-input bg-background px-3 py-2">
-          <div>
-            <FormLabel className="font-normal cursor-pointer">{label}</FormLabel>
-            {description && <FormDescription className="text-xs">{description}</FormDescription>}
-          </div>
-          <FormControl><Switch checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
-        </FormItem>
-      )}
-    />
-  );
-}
-
-function TitleSuggestions({ id, values }: { id: string; values: string[] }) {
-  return <datalist id={id}>{values.map((value) => <option key={value} value={value} />)}</datalist>;
-}
-
-function TitleField({ name, label, listId, suggestions, placeholder }: {
-  name: FormPath;
-  label: string;
-  listId: string;
-  suggestions: string[];
-  placeholder?: string;
-}) {
-  const form = useFormContext<ObituaryFormValues>();
-  return (
-    <FormField
-      control={form.control}
-      name={name}
-      render={({ field }) => (
-        <FormItem>
-          <FormLabel>{label}</FormLabel>
-          <FormControl>
-            <Input list={listId} placeholder={placeholder} className="bg-background" {...field} value={(field.value as string) ?? ""} />
-          </FormControl>
-          <TitleSuggestions id={listId} values={suggestions} />
-          <FormMessage />
-        </FormItem>
-      )}
-    />
-  );
-}
-
-function deceasedLabel(person: ObituaryFormValues["deceasedPeople"][number] | undefined, index: number): string {
-  const name = person?.fullName?.trim() || person?.kunya?.trim() || person?.spouse?.name?.trim();
-  return name ? `${index + 1}. ${name}` : `المتوفى ${index + 1}`;
-}
-
-function DeceasedTargetSelect({ name, label }: { name: FormPath; label: string }) {
-  const form = useFormContext<ObituaryFormValues>();
-  const people = useWatch({ control: form.control, name: "deceasedPeople" });
-  if ((people?.length ?? 0) < 2) return null;
-  return (
-    <SelectField
-      name={name}
-      label={label}
-      options={[
-        { value: "all", label: "الجميع" },
-        ...people.map((person, index) => ({ value: String(index), label: deceasedLabel(person, index) })),
-      ]}
-    />
-  );
-}
-
-// ───────────────────────── الخطوة ١: نوع الرسالة والمتوفون ─────────────────────────
-
-function MessageTypeCard() {
-  const form = useFormContext<ObituaryFormValues>();
-  const messageType = useWatch({ control: form.control, name: "messageType" });
-  return (
-    <Card className="border-border bg-muted/10 shadow-sm">
-      <CardContent className="pt-6 grid gap-4 md:grid-cols-2">
-        <SelectField name="messageType" label={<span className="flex items-center gap-2"><Mail className="w-4 h-4" />نوع الرسالة</span>} options={MESSAGE_TYPES} />
-        {messageType !== "announcement" && (
-          <TextField name="relatedRequestNumber" label="رقم طلب الإعلان الأصلي (اختياري)" placeholder="QTR-20260101-1234" ltr />
-        )}
-        {messageType === "condolence_cancellation" && (
-          <>
-            <SelectField
-              name="cancellation.audience"
-              label="العزاء الملغى"
-              options={[{ value: "men", label: "عزاء الرجال" }, { value: "women", label: "عزاء النساء" }, { value: "all", label: "العزاء كله" }]}
-            />
-            <TextField name="cancellation.from" label="نطاق الإلغاء (اختياري)" placeholder="مثال: لليوم الثالث" />
-            <TextField name="cancellation.reason" label="السبب (اختياري)" placeholder="مثال: بسبب الأحوال الجوية، أو: وفقاً لقرار وزارة الداخلية" />
-            <SwitchField name="cancellation.phoneOnly" label="يُكتفى بتلقي العزاء عبر الهاتف" />
-          </>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-function LinkedPersonFields({ prefix, nameLabel, titleSuggestions, listId, showDeceased = true }: {
-  prefix: "sharedParent" | `deceasedPeople.${number}.father` | `deceasedPeople.${number}.spouse` | `relatives.${number}.reference`;
-  nameLabel: React.ReactNode;
-  titleSuggestions: string[];
-  listId: string;
-  showDeceased?: boolean;
-}) {
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
-      <TitleField name={`${prefix}.title` as FormPath} label="اللقب" listId={listId} suggestions={titleSuggestions} placeholder="الوالد" />
-      <TextField name={`${prefix}.name` as FormPath} label={nameLabel} placeholder="الاسم الكامل" />
-      {showDeceased && <SwitchField name={`${prefix}.deceased` as FormPath} label="متوفى (رحمه الله)" />}
-    </div>
-  );
-}
-
-function DeceasedCard({ index, count, onRemove }: { index: number; count: number; onRemove: () => void }) {
-  const form = useFormContext<ObituaryFormValues>();
-  const person = useWatch({ control: form.control, name: `deceasedPeople.${index}` });
-  const [showFather, setShowFather] = useState(() => !!person?.father?.name);
-  const gender = person?.gender;
-  const identifyBy = person?.identifyBy ?? "name";
-  const spouseKind = person?.spouse?.kind ?? "harem";
-  const showSpouse = gender === "woman" || identifyBy === "spouse";
-  const fatherVisible = showFather || identifyBy === "father";
-
-  return (
-    <Card className="relative overflow-hidden border-border bg-background shadow-sm">
-      {count > 1 && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="absolute top-2 left-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 z-10"
-          onClick={onRemove}
-        >
-          <Trash2 className="w-4 h-4" />
-        </Button>
-      )}
-      <CardContent className="pt-8">
-        <div className="grid gap-6">
-          {count > 1 && <p className="font-bold text-primary">المتوفى {index + 1}</p>}
-          <FormField
-            control={form.control}
-            name={`deceasedPeople.${index}.gender`}
-            render={({ field }) => (
-              <FormItem className="space-y-3">
-                <FormLabel className="text-base">الجنس <Required /></FormLabel>
-                <FormControl>
-                  <RadioGroup onValueChange={field.onChange} value={field.value ?? ""} className="flex flex-wrap gap-2">
-                    {GENDER_OPTIONS.map((option) => (
-                      <FormItem key={option.value} className="flex items-center space-x-2 space-x-reverse space-y-0 border border-input rounded-md px-3 py-2 bg-background flex-1 min-w-[80px]">
-                        <FormControl><RadioGroupItem value={option.value} /></FormControl>
-                        <FormLabel className="font-normal cursor-pointer w-full text-center text-sm">{option.label}</FormLabel>
-                      </FormItem>
-                    ))}
-                  </RadioGroup>
-                </FormControl>
-                <FormDescription>اختيار صريح؛ تُبنى عليه صيغة «توفي / توفيت» والدعاء.</FormDescription>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <SelectField
-              name={`deceasedPeople.${index}.identifyBy`}
-              label="التعريف بالمتوفى في رأس الإعلان"
-              options={IDENTIFY_OPTIONS}
-              description="كثير من إعلانات النساء لا تذكر اسم المتوفاة؛ اختر الطريقة المناسبة."
-            />
-            <TitleField
-              name={`deceasedPeople.${index}.title`}
-              label="اللقب قبل الاسم (اختياري)"
-              listId={`titles-${index}`}
-              suggestions={TITLE_SUGGESTIONS}
-              placeholder="الوالد، الوالدة، الشيخ، الدكتور…"
-            />
-            <TextField
-              name={`deceasedPeople.${index}.fullName`}
-              label={identifyBy === "name" ? "الاسم الكامل" : "الاسم الكامل (اختياري)"}
-              required={identifyBy === "name"}
-              placeholder="مثال: مريم بنت عبدالله العطية"
-            />
-            <TextField
-              name={`deceasedPeople.${index}.kunya`}
-              label={identifyBy === "kunya" ? "الكنية" : "الكنية (اختياري)"}
-              required={identifyBy === "kunya"}
-              placeholder="مثال: أم هشام، أو: أم باسل المومني"
-              description={identifyBy === "name" ? "تظهر بين قوسين بعد الاسم." : undefined}
-            />
-          </div>
-
-          {showSpouse && (
-            <div className="rounded-lg border border-border/60 bg-muted/10 p-4 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="font-medium">الزوج {identifyBy === "spouse" ? <Required /> : <span className="text-muted-foreground text-sm">(اختياري)</span>}</p>
-                <FormField
-                  control={form.control}
-                  name={`deceasedPeople.${index}.spouse.kind`}
-                  render={({ field }) => (
-                    <RadioGroup onValueChange={field.onChange} value={field.value} className="flex gap-2">
-                      {[{ value: "harem", label: "حرم" }, { value: "widow", label: "أرملة (الزوج متوفى)" }].map((option) => (
-                        <label key={option.value} className="flex items-center gap-2 rounded-md border border-input bg-background px-3 py-1.5 text-sm cursor-pointer">
-                          <RadioGroupItem value={option.value} />
-                          {option.label}
-                        </label>
-                      ))}
-                    </RadioGroup>
-                  )}
-                />
-              </div>
-              <LinkedPersonFields
-                prefix={`deceasedPeople.${index}.spouse`}
-                nameLabel="اسم الزوج"
-                titleSuggestions={SPOUSE_TITLE_SUGGESTIONS}
-                listId={`spouse-titles-${index}`}
-                showDeceased={spouseKind === "harem"}
-              />
-              <p className="text-xs text-muted-foreground">
-                {spouseKind === "widow"
-                  ? "سيُكتب «أرملة … رحمهم الله» بالجمع الذي يشمل المتوفاة وزوجها."
-                  : "إن كان الزوج متوفى فعّل «متوفى» ليُكتب «حرم … رحمه الله»."}
-              </p>
-            </div>
-          )}
-
-          {fatherVisible ? (
-            <div className="rounded-lg border border-border/60 bg-muted/10 p-4 space-y-3">
-              <p className="font-medium">الأب {identifyBy === "father" ? <Required /> : <span className="text-muted-foreground text-sm">(اختياري — يظهر مع الإخوة «أبناء الوالد /» أو في سطر «ابن/ابنة»)</span>}</p>
-              <LinkedPersonFields
-                prefix={`deceasedPeople.${index}.father`}
-                nameLabel="اسم الأب"
-                titleSuggestions={SPOUSE_TITLE_SUGGESTIONS}
-                listId={`father-titles-${index}`}
-              />
-            </div>
-          ) : (
-            <Button type="button" variant="ghost" size="sm" className="justify-start text-primary w-fit gap-1" onClick={() => setShowFather(true)}>
-              <Plus className="w-3 h-3" /> إضافة الأب
-            </Button>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <TextField name={`deceasedPeople.${index}.age`} label="العمر (اختياري)" placeholder="مثال: 65" />
-            <SelectField
-              name={`deceasedPeople.${index}.ageUnit`}
-              label="وحدة العمر"
-              options={[{ value: "years", label: "سنوات" }, { value: "months", label: "أشهر" }, { value: "days", label: "أيام" }]}
-            />
-            <TextField name={`deceasedPeople.${index}.nationality`} label="الجنسية (اختياري)" placeholder="مثال: مصري" description="تُذكر لغير القطريين فقط." />
-            <TextField name={`deceasedPeople.${index}.deathPlace`} label="مكان الوفاة (اختياري)" placeholder="مثال: لندن" description="يُكتب «توفي … في لندن»." />
-            <TextField name={`deceasedPeople.${index}.occupation`} label="الصفة / الجهة (اختياري)" placeholder="مثال: سفير سابق" />
-            <SwitchField name={`deceasedPeople.${index}.noChildren`} label={gender === "woman" || gender === "girl" ? "ليس لها أبناء" : "ليس له أبناء"} />
-          </div>
-          <TextField name={`deceasedPeople.${index}.note`} label="سطر إضافي (اختياري)" placeholder="مثال: ( أم زوجة ) الشيخ / فلان" />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
+// ==========================================
+// الخطوة 1: بيانات المتوفين (DeceasedStep)
+// ==========================================
 export function DeceasedStep() {
   const form = useFormContext<ObituaryFormValues>();
-  const { fields, append, remove } = useFieldArray({ control: form.control, name: "deceasedPeople" });
-  const mode = useWatch({ control: form.control, name: "announcementMode" });
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "deceasedList"
+  });
 
-  const add = () => {
-    append(emptyDeceased());
-    if (form.getValues("announcementMode") === "single") form.setValue("announcementMode", "unrelated");
-  };
-  const removeAt = (index: number) => {
-    remove(index);
-    if (fields.length - 1 <= 1) form.setValue("announcementMode", "single");
-  };
+  const [activeTab, setActiveTab] = useState(0);
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="mb-6 border-b pb-4">
-        <h2 className="text-2xl font-bold text-primary flex items-center gap-2">
-          <User className="w-6 h-6 text-primary/70" />
-          بيانات المتوفين
+    <div className="space-y-5 animate-in fade-in duration-300 w-full max-w-full box-border overflow-hidden">
+      <div className="border-b pb-3">
+        <h2 className="text-xl sm:text-2xl font-bold text-primary flex items-center gap-2">
+          <User className="w-5 h-5 sm:w-6 sm:h-6 text-primary/70 shrink-0" />
+          بيانات المتوفى / المتوفين
         </h2>
-        <p className="text-muted-foreground mt-1">يرجى إدخال بيانات المتوفى بدقة وعناية.</p>
+        <p className="text-muted-foreground mt-1 text-xs sm:text-sm">
+          أدخل بيانات المتوفى بدقة. في حال كانت المتوفاة أنثى، يمكن الاكتفاء بصلة القرابة (أرملة فلان / حرم فلان) بدون نشر الاسم الأول.
+        </p>
       </div>
 
       <MessageTypeCard />
 
-      <div className="space-y-8">
-        {fields.map((field, index) => (
-          <DeceasedCard key={field.id} index={index} count={fields.length} onRemove={() => removeAt(index)} />
-        ))}
-
-        {fields.length > 1 && (
-          <Card className="border-primary/20 bg-primary/5 shadow-sm">
-            <CardContent className="pt-6 space-y-4">
-              <SelectField
-                name="announcementMode"
-                label="صيغة الإعلان عند تعدد المتوفين"
-                options={ANNOUNCEMENT_MODES.map(({ value, label }) => ({ value, label }))}
-                description={ANNOUNCEMENT_MODES.find((option) => option.value === mode)?.hint}
-              />
-              {(mode === "siblings" || mode === "father_first") && (
-                <div className="space-y-2">
-                  <p className="font-medium">الأب المشترك <Required /></p>
-                  <LinkedPersonFields prefix="sharedParent" nameLabel="اسم الأب" titleSuggestions={SPOUSE_TITLE_SUGGESTIONS} listId="shared-parent-titles" />
-                </div>
-              )}
-              {mode === "mother_child" && (
-                <p className="text-sm text-muted-foreground">المتوفى الأول هو الأم (أو الأب)، والبقية أبناؤها؛ يُكتب «وابنتها الطفلة / …».</p>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full border-dashed border-2 h-14 text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
-          onClick={add}
-        >
-          <Plus className="w-5 h-5 ml-2" />
-          إضافة متوفى آخر
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-// ───────────────────────── الخطوة ٢: الأقارب ─────────────────────────
-
-export function RelativesStep() {
-  const form = useFormContext<ObituaryFormValues>();
-  const { fields, append, remove } = useFieldArray({ control: form.control, name: "relatives" });
-  const rootError = form.formState.errors.relatives?.message ?? form.formState.errors.relatives?.root?.message;
-
-  return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="mb-6 border-b pb-4">
-        <h2 className="text-2xl font-bold text-primary flex items-center gap-2">
-          <Users className="w-6 h-6 text-primary/70" />
-          بيانات الأقارب
-        </h2>
-        <p className="text-muted-foreground mt-1">
-          اختر صلة الأشخاص بالمتوفى، ويكتب التطبيق العنوان بصيغة الأرشيف (مثل «والدة كل من»). تُذكر أسماء الأقارب الذكور حسب العرف.
-        </p>
-      </div>
-      {rootError && <p className="text-sm font-medium text-destructive">{rootError}</p>}
-
-      <div className="space-y-8">
-        {fields.map((field, index) => (
-          <RelativeGroupCard key={field.id} index={index} onRemove={() => remove(index)} />
-        ))}
-
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full border-dashed border-2 h-14 text-muted-foreground hover:border-primary/50 hover:text-primary transition-colors"
-          onClick={() => append({
-            relationKey: undefined as unknown as ObituaryFormValues["relatives"][number]["relationKey"],
-            relationOther: "",
-            familyReference: "",
-            reference: { title: "", name: "", deceased: false },
-            deceasedPlacement: "auto",
-            deceasedTarget: "all",
-            people: [{ name: "", occupation: "", deceased: false }],
+      {/* شريط تعدد المتوفين بالأزرار السريعة (Tabs) مع flex-wrap للجوال */}
+      {fields.length > 1 && (
+        <div className="flex flex-wrap items-center gap-1.5 p-1.5 sm:p-2 bg-muted/40 rounded-lg border w-full box-border">
+          {fields.map((field, idx) => {
+            const currentName = form.watch(`deceasedList.${idx}.fullName`) || `متوفى #${idx + 1}`;
+            return (
+              <Button
+                key={field.id}
+                type="button"
+                variant={activeTab === idx ? "default" : "outline"}
+                size="sm"
+                className="gap-1.5 h-8 text-xs shrink-0"
+                onClick={() => setActiveTab(idx)}
+              >
+                <span className="truncate max-w-[120px]">{currentName}</span>
+                <span
+                  role="button"
+                  className="hover:text-destructive p-0.5 rounded font-bold"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    remove(idx);
+                    if (activeTab >= idx && activeTab > 0) setActiveTab(activeTab - 1);
+                  }}
+                >
+                  ×
+                </span>
+              </Button>
+            );
           })}
-        >
-          <Plus className="w-5 h-5 ml-2" />
-          إضافة مجموعة قرابة جديدة
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function RelativeGroupCard({ index, onRemove }: { index: number; onRemove: () => void }) {
-  const form = useFormContext<ObituaryFormValues>();
-  const group = useWatch({ control: form.control, name: `relatives.${index}` });
-  const key = group?.relationKey;
-  const option = RELATION_OPTIONS.find((item) => item.key === key);
-
-  return (
-    <Card className="relative overflow-hidden border-border bg-background shadow-sm">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="absolute top-2 left-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 z-10"
-        onClick={onRemove}
-      >
-        <Trash2 className="w-4 h-4" />
-      </Button>
-      <CardContent className="pt-8">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="md:col-span-1 space-y-4">
-            <DeceasedTargetSelect name={`relatives.${index}.deceasedTarget`} label="يخص" />
-            <SelectField
-              name={`relatives.${index}.relationKey`}
-              label="صلة الأشخاص بالمتوفى"
-              placeholder="اختر صلة القرابة"
-              options={RELATION_OPTIONS.map((item) => ({ value: item.key, label: item.label }))}
-              description={option && option.key !== "other" ? `يظهر في الإعلان: «${option.hint}»` : undefined}
-            />
-            {key === "other" && (
-              <TextField name={`relatives.${index}.relationOther`} label="العنوان كما يُكتب" placeholder="مثال: حفيدة الوالد" />
-            )}
-            <SelectField
-              name={`relatives.${index}.deceasedPlacement`}
-              label="موضع «رحمه الله» للمتوفين منهم"
-              options={[
-                { value: "auto", label: "تلقائي (يُجمَّع إن كانوا اثنين فأكثر)" },
-                { value: "inline", label: "بجانب كل اسم" },
-                { value: "grouped", label: "مجمّعة في آخر القائمة" },
-              ]}
-            />
-          </div>
-          <div className="md:col-span-3 border-r pr-6 border-border/50 space-y-4">
-            <RelativePeopleArray relativeIndex={index} />
-            {relationTakesReference(key) && (
-              <div className="rounded-lg border border-border/60 bg-muted/10 p-4 space-y-2">
-                <p className="font-medium text-sm">
-                  سطر «أبناء /» — {REFERENCE_LABELS[key!]} <span className="text-muted-foreground">(اختياري)</span>
-                </p>
-                <LinkedPersonFields
-                  prefix={`relatives.${index}.reference`}
-                  nameLabel="الاسم"
-                  titleSuggestions={SPOUSE_TITLE_SUGGESTIONS}
-                  listId={`reference-titles-${index}`}
-                />
-                {(key === "siblings" || key === "full_siblings") && (
-                  <p className="text-xs text-muted-foreground">إن تُرك فارغاً يُستعمل الأب المسجل في بيانات المتوفى.</p>
-                )}
-              </div>
-            )}
-            <TextField name={`relatives.${index}.familyReference`} label="سطر إضافي بعد القائمة (اختياري)" placeholder="مثال: آل عبدالله" />
-          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-primary hover:bg-primary/10 gap-1 text-xs h-8"
+            onClick={() => {
+              append(emptyDeceased());
+              setActiveTab(fields.length);
+            }}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            إضافة متوفى آخر
+          </Button>
         </div>
-      </CardContent>
-    </Card>
-  );
-}
+      )}
 
-function RelativePeopleArray({ relativeIndex }: { relativeIndex: number }) {
-  const form = useFormContext<ObituaryFormValues>();
-  const { fields, append, remove } = useFieldArray({
-    control: form.control,
-    name: `relatives.${relativeIndex}.people`,
-  });
+      {fields.map((field, index) => {
+        if (fields.length > 1 && activeTab !== index) return null;
 
-  return (
-    <div className="space-y-3">
-      <FormLabel>الأشخاص</FormLabel>
-      {fields.map((field, personIndex) => (
-        <div key={field.id} className="flex items-start gap-2 bg-muted/20 p-3 rounded-md border border-border/50 relative">
-          <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <FormField
-              control={form.control}
-              name={`relatives.${relativeIndex}.people.${personIndex}.name`}
-              render={({ field }) => (
-                <FormItem>
-                  <FormControl><Input placeholder="الاسم" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name={`relatives.${relativeIndex}.people.${personIndex}.occupation`}
-              render={({ field }) => (
-                <FormItem>
-                  <FormControl><Input placeholder="الجهة / الصفة (تُكتب بين قوسين)" {...field} value={field.value || ""} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <div className="flex items-center gap-4">
+        const currentGender = form.watch(`deceasedList.${index}.gender`);
+        const isFemale = currentGender === "أنثى";
+
+        return (
+          <Card key={field.id} className="relative overflow-hidden border-border bg-card shadow-sm w-full max-w-full box-border">
+            <CardContent className="p-3 sm:p-5 space-y-5 w-full max-w-full box-border">
+              
+              {/* الجنس: ذكر أو أنثى فقط */}
               <FormField
                 control={form.control}
-                name={`relatives.${relativeIndex}.people.${personIndex}.deceased`}
-                render={({ field }) => (
-                  <FormItem className="flex items-center space-x-2 space-x-reverse space-y-0 border border-input rounded-md px-3 h-10 bg-background flex-1">
-                    <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                    <FormLabel className="font-normal cursor-pointer text-sm whitespace-nowrap !mt-0">متوفى (رحمه الله)</FormLabel>
+                name={`deceasedList.${index}.gender`}
+                render={({ field: genderField }) => (
+                  <FormItem className="space-y-1.5 w-full">
+                    <FormLabel className="text-xs sm:text-sm font-semibold text-foreground">الجنس <span className="text-destructive">*</span></FormLabel>
+                    <div className="grid grid-cols-2 gap-2 w-full max-w-xs box-border">
+                      {GENDER_OPTIONS.map((opt) => {
+                        const isSelected = genderField.value === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => genderField.onChange(opt.value)}
+                            className={`flex items-center justify-center gap-1.5 py-2.5 px-3 rounded-lg border text-xs sm:text-sm font-semibold transition-all ${
+                              isSelected 
+                                ? "bg-primary text-primary-foreground border-primary shadow-xs" 
+                                : "bg-background hover:bg-muted text-foreground border-input"
+                            }`}
+                          >
+                            <User className="w-3.5 h-3.5" />
+                            <span>{opt.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <FormMessage />
                   </FormItem>
                 )}
               />
-              {fields.length > 1 && (
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 w-full box-border">
+                {/* اللقب الشرفي / الصدارة */}
+                <FormField
+                  control={form.control}
+                  name={`deceasedList.${index}.title`}
+                  render={({ field: titleField }) => (
+                    <FormItem className="w-full min-w-0">
+                      <FormLabel className="text-xs sm:text-sm font-semibold">اللقب الشرفي / التصدير</FormLabel>
+                      <Select 
+                        value={titleField.value || "none"} 
+                        onValueChange={titleField.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="h-10 bg-background w-full text-xs sm:text-sm">
+                            <SelectValue placeholder="اختر اللقب إن وجد" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent className="max-h-60">
+                          {PREFIX_TITLES.map((t) => (
+                            <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                {/* الاسم الكامل */}
+                <div className="md:col-span-2 w-full min-w-0">
+                  <FormField
+                    control={form.control}
+                    name={`deceasedList.${index}.fullName`}
+                    render={({ field: nameField }) => (
+                      <FormItem className="w-full min-w-0">
+                        <FormLabel className="text-xs sm:text-sm font-semibold">
+                          الاسم {isFemale ? <span className="text-muted-foreground font-normal">(اختياري في حال تحديد أرملة فلان أو حرم فلان أدناه)</span> : <span className="text-destructive">*</span>}
+                        </FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder={isFemale ? "اسم المتوفاة (يمكن تركه فارغاً إذا ذُكرت أرملة فلان)" : "الاسم الثلاثي أو الرباعي"} 
+                            className="h-10 bg-background w-full text-xs sm:text-sm" 
+                            {...nameField} 
+                            value={nameField.value || ""} 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
+              {/* طريقة التعريف، الكنية، والأب */}
+              <DeceasedIdentityExtras index={index} />
+
+              {/* قسم خاص للإناث: أرملة فلان / حرم فلان */}
+              {isFemale && (
+                <FemaleRelationsSection deceasedIndex={index} />
+              )}
+
+              {/* بيانات إضافية اختيارية */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2 border-t border-border/50 w-full box-border">
+                <FormField
+                  control={form.control}
+                  name={`deceasedList.${index}.age`}
+                  render={({ field: ageField }) => (
+                    <FormItem className="w-full min-w-0">
+                      <FormLabel className="text-xs text-muted-foreground">العمر (اختياري)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          min="0" 
+                          placeholder="مثال: 72" 
+                          className="h-9 bg-background w-full text-xs sm:text-sm" 
+                          value={ageField.value ?? ""} 
+                          onChange={(e) => ageField.onChange(e.target.value ? Number(e.target.value) : undefined)} 
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name={`deceasedList.${index}.nationality`}
+                  render={({ field: natField }) => (
+                    <FormItem className="w-full min-w-0">
+                      <FormLabel className="text-xs text-muted-foreground">الجنسية (اختياري)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="مثال: قطري" 
+                          className="h-9 bg-background w-full text-xs sm:text-sm" 
+                          {...natField} 
+                          value={natField.value || ""} 
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name={`deceasedList.${index}.deathLocation`}
+                  render={({ field: locField }) => (
+                    <FormItem className="w-full min-w-0">
+                      <FormLabel className="text-xs text-muted-foreground">مكان الوفاة بالخارج (إن وجد)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          placeholder="مثال: في لندن، في تايلاند" 
+                          className="h-9 bg-background w-full text-xs sm:text-sm" 
+                          {...locField} 
+                          value={locField.value || ""} 
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <DeceasedDetailsExtras index={index} />
+
+              {fields.length === 1 && (
                 <Button
                   type="button"
                   variant="outline"
-                  size="icon"
-                  className="shrink-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => remove(personIndex)}
+                  size="sm"
+                  className="w-full border-dashed gap-1 text-muted-foreground hover:text-primary mt-2 text-xs h-9"
+                  onClick={() => {
+                    append(emptyDeceased());
+                    if (form.getValues("announcementMode") === "single") form.setValue("announcementMode", "unrelated");
+                    setActiveTab(1);
+                  }}
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Plus className="w-3.5 h-3.5" />
+                  إضافة متوفى آخر في نفس الإعلان (إن وجد)
                 </Button>
               )}
-            </div>
-          </div>
-        </div>
-      ))}
-      <Button
-        type="button"
-        variant="ghost"
-        size="sm"
-        className="mt-2 text-primary hover:bg-primary/10 gap-1"
-        onClick={() => append({ name: "", occupation: "", deceased: false })}
-      >
-        <Plus className="w-3 h-3" />
-        إضافة شخص آخر
-      </Button>
+            </CardContent>
+          </Card>
+        );
+      })}
+
+      <MultipleDeceasedCard />
     </div>
   );
 }
 
-// ───────────────────────── الخطوة ٣: الدفن والصلاة ─────────────────────────
-
-function DayTimeFields({ prefix, dayRequired, timeRequired, dayLabel, timeLabel }: {
-  prefix: "burial" | "prayer";
-  dayRequired: boolean;
-  timeRequired: boolean;
-  dayLabel: string;
-  timeLabel: string;
-}) {
+// مكون فرعي: معرفات المتوفاة (أرملة / حرم)
+function FemaleRelationsSection({ deceasedIndex }: { deceasedIndex: number }) {
   const form = useFormContext<ObituaryFormValues>();
-  const dayType = useWatch({ control: form.control, name: `${prefix}.dayType` });
-  const timeType = useWatch({ control: form.control, name: `${prefix}.timeType` });
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-4 bg-muted/10 rounded-lg border border-border/50">
-      <div className="space-y-4">
-        <SelectField name={`${prefix}.dayType`} label={dayLabel} required={dayRequired} options={DAY_OPTIONS} placeholder="اختر اليوم" />
-        {RELATIVE_DAYS.includes(dayType ?? "") && (
-          <SelectField name={`${prefix}.weekday`} label="اسم اليوم (اختياري)" options={WEEKDAYS} placeholder="مثال: السبت" description="يُكتب «اليوم السبت»." />
-        )}
-        {dayType === "أخرى" && <TextField name={`${prefix}.dayOther`} label="حدد اليوم" placeholder="مثال: الأحد ١٢ مايو" />}
-      </div>
-      <div className="space-y-4">
-        <SelectField name={`${prefix}.timeType`} label={timeLabel} required={timeRequired} options={TIME_OPTIONS} placeholder="اختر الوقت" />
-        {["وقت محدد", "أخرى"].includes(timeType ?? "") && (
-          <TextField name={`${prefix}.timeOther`} label="حدد الوقت" placeholder="مثال: بعد الساعة ١٢:٣٠" />
-        )}
-      </div>
-    </div>
-  );
-}
-
-export function BurialPrayerStep() {
-  const form = useFormContext<ObituaryFormValues>();
-  const burial = useWatch({ control: form.control, name: "burial" });
-  const prayer = useWatch({ control: form.control, name: "prayer" });
-  const messageType = useWatch({ control: form.control, name: "messageType" });
-  const required = burialScheduleRequired({ messageType, burial, prayer });
-  const isOutsideQatar = !!burial?.outsideQatar;
-  const postponed = burial?.status === "postponed";
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: `deceasedList.${deceasedIndex}.femaleRelations` as any,
+  });
 
   return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <section className="space-y-6">
-        <div className="border-b pb-4">
-          <h2 className="text-2xl font-bold text-primary flex items-center gap-2">
-            <Calendar className="w-6 h-6 text-primary/70" />
-            الدفن
-          </h2>
-          <p className="text-muted-foreground mt-1">متى وأين سيتم / تم الدفن.</p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <FormField
-            control={form.control}
-            name="burial.status"
-            render={({ field }) => (
-              <FormItem className="space-y-3">
-                <FormLabel className="text-base font-bold text-primary">حالة الدفن <Required /></FormLabel>
-                <FormControl>
-                  <RadioGroup onValueChange={field.onChange} value={field.value} className="flex flex-wrap gap-3">
-                    {[
-                      { value: "upcoming", label: "سيتم الدفن" },
-                      { value: "completed", label: "تم الدفن" },
-                      { value: "postponed", label: "مؤجل حتى إشعار آخر" },
-                    ].map((option) => (
-                      <FormItem key={option.value} className="flex items-center space-x-2 space-x-reverse space-y-0 border border-input rounded-md px-4 py-3 flex-1 bg-background min-w-[120px]">
-                        <FormControl><RadioGroupItem value={option.value} /></FormControl>
-                        <FormLabel className="font-normal cursor-pointer w-full text-center text-base">{option.label}</FormLabel>
-                      </FormItem>
-                    ))}
-                  </RadioGroup>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="burial.outsideQatar"
-            render={({ field }) => (
-              <FormItem className="space-y-3">
-                <FormLabel className="text-base font-bold text-primary">مكان الدفن</FormLabel>
-                <FormControl>
-                  <RadioGroup onValueChange={(value) => field.onChange(value === "true")} value={field.value ? "true" : "false"} className="flex gap-4">
-                    <FormItem className="flex items-center space-x-2 space-x-reverse space-y-0 border border-input rounded-md px-4 py-3 flex-1 bg-background">
-                      <FormControl><RadioGroupItem value="false" /></FormControl>
-                      <FormLabel className="font-normal cursor-pointer w-full text-center text-base">داخل قطر</FormLabel>
-                    </FormItem>
-                    <FormItem className="flex items-center space-x-2 space-x-reverse space-y-0 border border-input rounded-md px-4 py-3 flex-1 bg-background">
-                      <FormControl><RadioGroupItem value="true" /></FormControl>
-                      <FormLabel className="font-normal cursor-pointer w-full text-center text-base">خارج قطر</FormLabel>
-                    </FormItem>
-                  </RadioGroup>
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-        </div>
-
-        {postponed ? (
-          <TextField name="burial.postponeNote" label="ملاحظة التأجيل (اختياري)" placeholder="مثال: لحين وصول الجثمان" />
-        ) : (
-          <>
-            <DayTimeFields
-              prefix="burial"
-              dayLabel="يوم الدفن"
-              timeLabel="وقت الدفن"
-              dayRequired={required.day}
-              timeRequired={required.time}
-            />
-            {!required.day && !postponed && burial?.status === "upcoming" && !isOutsideQatar && prayer?.enabled && (
-              <p className="text-xs text-muted-foreground -mt-3">يمكن ترك موعد الدفن إن كان بعد صلاة الجنازة مباشرة.</p>
-            )}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {!isOutsideQatar ? (
-                <div className="space-y-4">
-                  <SelectField name="burial.cemeteryType" label="المقبرة" required={required.cemetery} options={CEMETERY_OPTIONS} placeholder="اختر المقبرة" />
-                  {burial?.cemeteryType === "أخرى" && <TextField name="burial.cemeteryOther" label="اسم المقبرة" placeholder="اسم المقبرة" />}
-                </div>
-              ) : (
-                <TextField
-                  name="burial.outsideLocation"
-                  label="مكان الدفن"
-                  required={messageType === "announcement" || messageType === "amendment"}
-                  placeholder="مثال: مصر، أو: مكة المكرمة، أو: بلده"
-                  description="يُكتب «والدفن في مصر»."
-                />
-              )}
-              <TextField name="burial.mapLink" label="رابط خرائط جوجل (اختياري)" placeholder="https://maps.google.com/..." ltr />
-            </div>
-          </>
-        )}
-      </section>
-
-      {!postponed && (
-        <section className="space-y-6 pt-6 border-t border-border/50">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-primary flex items-center gap-2">صلاة الجنازة</h2>
-              <p className="text-muted-foreground mt-1">إذا كانت الصلاة في مكان أو وقت مختلف عن الدفن: «صلاة الجنازة … في جامع X / والدفن في مقبرة Y».</p>
-            </div>
-            <FormField
-              control={form.control}
-              name="prayer.enabled"
-              render={({ field }) => (
-                <FormItem className="flex items-center gap-2 m-0 p-0 border-none bg-transparent">
-                  <FormLabel className="m-0 font-medium text-base">صلاة منفصلة</FormLabel>
-                  <FormControl><Switch checked={field.value} onCheckedChange={field.onChange} className="scale-110" /></FormControl>
-                </FormItem>
-              )}
-            />
-          </div>
-
-          {prayer?.enabled && (
-            <div className="space-y-6 p-6 bg-primary/5 rounded-lg border border-primary/20 animate-in fade-in zoom-in-95">
-              <DayTimeFields prefix="prayer" dayLabel="يوم الصلاة" timeLabel="وقت الصلاة" dayRequired={false} timeRequired={false} />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <TextField name="prayer.place" label="مكان الصلاة" placeholder="مثال: جامع الإمام محمد بن عبدالوهاب" />
-                <TextField name="prayer.mapLink" label="رابط خرائط جوجل للمسجد" placeholder="https://maps.google.com/..." ltr />
-              </div>
-            </div>
-          )}
-        </section>
-      )}
-    </div>
-  );
-}
-
-// ───────────────────────── الخطوة ٤: العزاء ─────────────────────────
-
-function CondolenceCardForm({ index, title, canRemove, onRemove }: {
-  index: number;
-  title: string;
-  canRemove: boolean;
-  onRemove: () => void;
-}) {
-  const form = useFormContext<ObituaryFormValues>();
-  const card = useWatch({ control: form.control, name: `condolences.cards.${index}` });
-  const schedule = useFieldArray({ control: form.control, name: `condolences.cards.${index}.schedule` });
-  const prefix = `condolences.cards.${index}` as const;
-  const expanded = !!card?.expanded;
-
-  return (
-    <Card className="border border-border shadow-sm">
-      <div className="flex items-center justify-between bg-muted/50 px-4 py-3 border-b border-border/50">
-        <h3 className="font-bold text-base text-primary">{title}</h3>
-        {canRemove && (
-          <Button type="button" variant="ghost" size="icon" onClick={onRemove} aria-label="حذف الموقع" className="text-muted-foreground hover:text-destructive">
-            <Trash2 className="w-4 h-4" />
-          </Button>
-        )}
-      </div>
-      <CardContent className="p-4 space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <DeceasedTargetSelect name={`${prefix}.deceasedTarget`} label="عزاء لـ" />
-          <SelectField
-            name={`${prefix}.startType`}
-            label="بداية العزاء"
-            options={[...CONDOLENCE_STARTS, { value: "أخرى", label: "يوم محدد" }]}
-            placeholder="اختر البداية"
-          />
-          {card?.startType === "أخرى" && <TextField name={`${prefix}.startOther`} label="حدد اليوم" placeholder="مثال: الأربعاء، أو: يوم الخميس" />}
-        </div>
-        <TextField
-          name={`${prefix}.location`}
-          label="المكان / الوصف"
-          textarea
-          placeholder="مجلس العائلة، منزل ابنتها، بمنزل أختها حرم فلان، خيمة، قاعة…"
-        />
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <TextField name={`${prefix}.area`} label="المنطقة" placeholder="مثال: الدفنة" />
-          <TextField name={`${prefix}.mapLink`} label="رابط الموقع (اختياري)" placeholder="https://maps.google.com/..." ltr />
+    <div className="p-3 sm:p-4 rounded-lg bg-pink-50/50 dark:bg-pink-950/10 border border-pink-200 dark:border-pink-900/50 space-y-3 w-full box-border overflow-hidden">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h4 className="text-xs sm:text-sm font-semibold text-foreground flex items-center gap-1.5">
+            <Sparkles className="w-4 h-4 text-pink-600 dark:text-pink-400 shrink-0" />
+            معرّف القرابة للمتوفاة (أرملة / حرم)
+          </h4>
+          <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">
+            يتيح التعريف بالزوج (أرملة فلان أو حرم فلان) ويُغني عن كتابة الاسم الأول للمتوفاة.
+          </p>
         </div>
         <Button
           type="button"
-          variant="ghost"
-          className="h-auto px-0 text-primary hover:bg-transparent"
-          onClick={() => form.setValue(`${prefix}.expanded`, !expanded, { shouldDirty: true })}
+          variant="outline"
+          size="sm"
+          className="h-8 text-xs border-pink-300 hover:bg-pink-100 dark:hover:bg-pink-950/40 shrink-0"
+          onClick={() => append({ relationType: "أرملة", relatedTitle: "", relatedName: "", isHusbandDeceased: true })}
         >
-          {expanded ? "إخفاء التفاصيل" : "إضافة تفاصيل"} <span className="mr-2 text-xs text-muted-foreground">وقت، مدة، جدول، وعنوان دقيق (تُحفظ حتى لو أُخفيت)</span>
+          <Plus className="w-3.5 h-3.5 ml-1" />
+          إضافة صلة
         </Button>
-        {expanded && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-lg border border-border/60 bg-muted/10 p-4">
-            <TextField name={`${prefix}.time`} label="وقت العزاء" placeholder="الفترة المسائية، أو: من ٤ عصراً إلى ٩ مساءً" />
-            <TextField name={`${prefix}.durationDays`} label="مدة العزاء بالأيام" placeholder="مثال: 3" />
-            <TextField name={`${prefix}.until`} label="حتى (اختياري)" placeholder="مثال: يوم الاثنين ٢٩ يونيو" />
-            <div className="sm:col-span-2 space-y-2">
-              <FormLabel>جدول متغير (اختياري)</FormLabel>
-              {schedule.fields.map((entry, entryIndex) => (
-                <div key={entry.id} className="flex gap-2 items-start">
-                  <div className="grid flex-1 grid-cols-1 sm:grid-cols-2 gap-2">
-                    <TextField name={`${prefix}.schedule.${entryIndex}.days`} label="الأيام" placeholder="مثال: الجمعة والسبت" />
-                    <TextField name={`${prefix}.schedule.${entryIndex}.time`} label="الوقت" placeholder="مثال: من بعد صلاة العصر" />
-                  </div>
-                  <Button type="button" variant="ghost" size="icon" className="mt-7" onClick={() => schedule.remove(entryIndex)} aria-label="حذف"><Trash2 className="w-4 h-4" /></Button>
-                </div>
-              ))}
-              <Button type="button" variant="outline" size="sm" className="gap-1" onClick={() => schedule.append({ days: "", time: "" })}>
-                <Plus className="w-3 h-3" /> إضافة يوم بفترة مختلفة
+      </div>
+
+      {fields.length === 0 && (
+        <div className="text-xs text-muted-foreground bg-background/60 p-2 rounded border border-dashed text-center">
+          لم يتم تحديد صلة (أرملة / حرم). إذا رغبت بالتعريف بالزوج، اضغط زر "إضافة صلة".
+        </div>
+      )}
+
+      {fields.map((field, rIndex) => {
+        const relationType = form.watch(`deceasedList.${deceasedIndex}.femaleRelations.${rIndex}.relationType` as any);
+        const isArmala = relationType === "أرملة";
+
+        return (
+          <div key={field.id} className="flex flex-col sm:flex-row flex-wrap gap-2 bg-background p-2.5 rounded-md border shadow-2xs items-stretch sm:items-center w-full box-border">
+            <div className="w-full sm:w-32 shrink-0">
+              <FormField
+                control={form.control}
+                name={`deceasedList.${deceasedIndex}.femaleRelations.${rIndex}.relationType` as any}
+                render={({ field: relTypeField }) => (
+                  <Select 
+                    value={relTypeField.value} 
+                    onValueChange={(val: "أرملة" | "حرم") => {
+                      relTypeField.onChange(val);
+                      if (val === "أرملة") {
+                        form.setValue(`deceasedList.${deceasedIndex}.femaleRelations.${rIndex}.isHusbandDeceased` as any, true);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="h-9 text-xs w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="أرملة" className="text-xs">أرملة (المرحوم)</SelectItem>
+                      <SelectItem value="حرم" className="text-xs">حرم</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+
+            <div className="w-full sm:w-28 shrink-0">
+              <FormField
+                control={form.control}
+                name={`deceasedList.${deceasedIndex}.femaleRelations.${rIndex}.relatedTitle` as any}
+                render={({ field: titleField }) => (
+                  <Input 
+                    placeholder="اللقب: الوالد، الشيخ" 
+                    className="h-9 text-xs w-full" 
+                    {...titleField} 
+                    value={titleField.value || ""} 
+                  />
+                )}
+              />
+            </div>
+
+            <div className="flex-1 min-w-0 w-full sm:w-auto">
+              <FormField
+                control={form.control}
+                name={`deceasedList.${deceasedIndex}.femaleRelations.${rIndex}.relatedName` as any}
+                render={({ field: nameField }) => (
+                  <Input 
+                    placeholder="اسم الزوج (مثال: ناصر بن خليفة الكواري)" 
+                    className="h-9 text-xs w-full" 
+                    {...nameField} 
+                  />
+                )}
+              />
+            </div>
+
+            {!isArmala && (
+              <div className="flex items-center gap-1.5 shrink-0 px-1 py-1">
+                <FormField
+                  control={form.control}
+                  name={`deceasedList.${deceasedIndex}.femaleRelations.${rIndex}.isHusbandDeceased` as any}
+                  render={({ field: deceasedField }) => (
+                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer select-none">
+                      <Switch 
+                        checked={deceasedField.value || false} 
+                        onCheckedChange={deceasedField.onChange} 
+                        className="scale-75" 
+                      />
+                      <span>متوفى أيضاً</span>
+                    </label>
+                  )}
+                />
+              </div>
+            )}
+
+            <div className="flex justify-end sm:justify-center shrink-0">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                onClick={() => remove(rIndex)}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
               </Button>
             </div>
-            <TextField name={`${prefix}.street`} label="الشارع" />
-            <TextField name={`${prefix}.houseNumber`} label="رقم المنزل" />
-            <TextField name={`${prefix}.buildingNumber`} label="البناية / العمارة" />
-            <TextField name={`${prefix}.floor`} label="الطابق" />
-            <TextField name={`${prefix}.apartmentNumber`} label="الشقة" />
-            <TextField name={`${prefix}.locationNotes`} label="ملاحظات إضافية" textarea />
           </div>
-        )}
-      </CardContent>
-    </Card>
+        );
+      })}
+    </div>
   );
 }
 
-export function CondolencesStep() {
+// ==========================================
+// الخطوة 2: الأقارب (RelativesStep)
+// ==========================================
+export function RelativesStep() {
   const form = useFormContext<ObituaryFormValues>();
-  const options = useWatch({ control: form.control, name: "condolences" });
-  const cards = useFieldArray({ control: form.control, name: "condolences.cards" });
-  const phone = useFieldArray({ control: form.control, name: "condolences.phoneContacts" });
-
-  const ensureCard = (audience: "men" | "women") => {
-    if (!form.getValues("condolences.cards").some((card) => card.audience === audience)) {
-      cards.append(emptyCondolenceCard(audience));
-    }
-  };
-  const setOption = (name: "none" | "phone" | "men" | "women" | "tbd", checked: boolean) => {
-    form.setValue(`condolences.${name}`, checked, { shouldDirty: true });
-    if (name === "none" && checked) {
-      (["phone", "men", "women", "tbd"] as const).forEach((option) => form.setValue(`condolences.${option}`, false));
-    } else if (checked) {
-      form.setValue("condolences.none", false);
-    }
-    if (checked && (name === "men" || name === "women")) ensureCard(name);
-  };
-  const copyMenToWomen = () => {
-    const all = form.getValues("condolences.cards");
-    const men = all.find((card) => card.audience === "men");
-    if (!men) return;
-    const womenIndex = all.findIndex((card) => card.audience === "women");
-    const copy = { ...men, audience: "women" as const, schedule: men.schedule.map((entry) => ({ ...entry })) };
-    if (womenIndex >= 0) form.setValue(`condolences.cards.${womenIndex}`, copy, { shouldDirty: true });
-    else cards.append(copy);
-  };
-
-  const renderAudience = (audience: "men" | "women") => {
-    const indexes = cards.fields.map((card, index) => ({ card, index })).filter(({ card }) => card.audience === audience);
-    const base = audience === "men" ? "عزاء الرجال" : "عزاء النساء";
-    return (
-      <div className="space-y-3">
-        {indexes.map(({ card, index }, position) => (
-          <CondolenceCardForm
-            key={card.id}
-            index={index}
-            title={indexes.length > 1 ? `${base} — الموقع ${position + 1}` : base}
-            canRemove={indexes.length > 1}
-            onRemove={() => cards.remove(index)}
-          />
-        ))}
-        <Button type="button" variant="outline" size="sm" className="gap-1" onClick={() => cards.append(emptyCondolenceCard(audience))}>
-          <Plus className="w-3 h-3" /> إضافة موقع آخر لـ{base}
-        </Button>
-      </div>
-    );
-  };
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "relatives" as any,
+  });
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="mb-6 border-b pb-4">
-        <h2 className="text-2xl font-bold text-primary flex items-center gap-2">
-          <Heart className="w-6 h-6 text-primary/70" />
-          العزاء
+    <div className="space-y-5 animate-in fade-in duration-300 w-full max-w-full box-border overflow-hidden">
+      <div className="border-b pb-3">
+        <h2 className="text-xl sm:text-2xl font-bold text-primary flex items-center gap-2">
+          <Users className="w-5 h-5 sm:w-6 sm:h-6 text-primary/70 shrink-0" />
+          بيانات الأقارب وصلات القرابة
         </h2>
-        <p className="text-muted-foreground mt-1">فعّل ما ينطبق فقط، وستظهر التفاصيل عند الحاجة.</p>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {([
-          ["men", "عزاء الرجال"],
-          ["women", "عزاء النساء"],
-          ["phone", "تعزية عبر الهاتف"],
-          ["tbd", "سيُحدَّد لاحقاً"],
-          ["none", "لا يوجد عزاء"],
-        ] as const).map(([name, label]) => (
-          <FormField key={name} control={form.control} name={`condolences.${name}`} render={({ field }) => (
-            <FormItem className="flex items-center justify-between space-y-0 rounded-md border border-input bg-background px-4 py-3">
-              <FormLabel className="cursor-pointer text-base">{label}</FormLabel>
-              <FormControl><Switch checked={field.value} onCheckedChange={(checked) => setOption(name, checked)} /></FormControl>
-            </FormItem>
-          )} />
-        ))}
+        <p className="text-muted-foreground mt-1 text-xs sm:text-sm">
+          أدخل مجموعات الأقارب والأشخاص في سطر واحد سريع. هذه الخطوة اختيارية ويمكنك تجاوزها بالضغط على "التالي".
+          اختر صلة الأشخاص بالمتوفى، ويكتب التطبيق العنوان بصيغة الأرشيف (مثل «والدة كل من»). تُذكر أسماء الأقارب الذكور حسب العرف.
+        </p>
       </div>
 
-      <TextField
-        name="condolences.note"
-        label="سبب أو ملاحظة على العزاء (اختياري)"
-        placeholder="مثال: اتباعاً للسنة، أو: تنفيذاً لوصية المتوفى"
-      />
+      {(() => {
+        const relativesError = form.formState.errors.relatives as { message?: string; root?: { message?: string } } | undefined;
+        const message = relativesError?.message ?? relativesError?.root?.message;
+        return message ? <p className="text-xs sm:text-sm font-medium text-destructive">{message}</p> : null;
+      })()}
 
-      {options?.men && (
-        <div className="space-y-3">
-          <FormField
-            control={form.control}
-            name="condolences.menMode"
-            render={({ field }) => (
-              <FormItem className="space-y-2">
-                <FormLabel>عزاء الرجال</FormLabel>
-                <RadioGroup onValueChange={field.onChange} value={field.value} className="flex flex-wrap gap-2">
-                  {[{ value: "venue", label: "في مجلس / منزل / خيمة" }, { value: "cemetery", label: "في المقبرة فقط" }].map((option) => (
-                    <label key={option.value} className="flex items-center gap-2 rounded-md border border-input bg-background px-3 py-2 text-sm cursor-pointer">
-                      <RadioGroupItem value={option.value} />
-                      {option.label}
-                    </label>
-                  ))}
-                </RadioGroup>
-              </FormItem>
-            )}
-          />
-          {options.menMode === "venue" && renderAudience("men")}
-        </div>
+      {fields.length === 0 && (
+        <Card className="border-dashed bg-muted/20 text-center p-6 sm:p-8 w-full box-border">
+          <p className="text-muted-foreground text-xs sm:text-sm mb-3">لم يتم إضافة مجموعات أقارب بعد.</p>
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2 text-xs sm:text-sm"
+            onClick={() => append({ relationType: "الأبناء", relationKey: "children", deceasedPlacement: "auto", deceasedTarget: "all", persons: [] } as any)}
+          >
+            <Plus className="w-4 h-4" />
+            إضافة مجموعة قرابة أولى (مثل الأبناء)
+          </Button>
+        </Card>
       )}
-      {options?.women && (
-        <div className="space-y-2">
-          {options.men && options.menMode === "venue" && (
-            <Button type="button" variant="ghost" size="sm" className="text-primary" onClick={copyMenToWomen}>نفس بيانات عزاء الرجال</Button>
-          )}
-          {renderAudience("women")}
-        </div>
-      )}
-      {options?.phone && (
-        <Card className="border border-border shadow-sm">
-          <CardContent className="p-4 space-y-3">
-            <SelectField
-              name="condolences.phoneAudience"
-              label="العزاء عبر الهاتف لـ"
-              options={[{ value: "all", label: "الجميع" }, { value: "women", label: "النساء" }, { value: "men", label: "الرجال" }]}
-            />
-            <div>
-              <h3 className="font-bold text-primary">أرقام التعزية (اختياري)</h3>
-              <p className="text-sm text-muted-foreground">مثال: الاسم «والدها» يُكتب «العزاء عن طريق هاتف والدها».</p>
+
+      {fields.map((field, gIndex) => (
+        <Card key={field.id} className="relative border shadow-sm w-full max-w-full box-border">
+          <CardHeader className="py-2.5 px-3 sm:px-4 bg-muted/30 border-b flex flex-row items-center justify-between gap-2">
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <RelationKeySelect groupIndex={gIndex} />
             </div>
-            {phone.fields.map((field, index) => (
-              <div key={field.id} className="grid grid-cols-[1fr_1fr_auto] gap-2">
-                <FormField control={form.control} name={`condolences.phoneContacts.${index}.name`} render={({ field }) => (
-                  <FormItem className="space-y-0"><FormControl><Input placeholder="اسم الشخص (اختياري)" {...field} /></FormControl></FormItem>
-                )} />
-                <FormField control={form.control} name={`condolences.phoneContacts.${index}.phone`} render={({ field }) => (
-                  <FormItem className="space-y-0"><FormControl><Input placeholder="رقم الهاتف (اختياري)" dir="ltr" className="text-left" {...field} /></FormControl></FormItem>
-                )} />
-                <Button type="button" variant="ghost" size="icon" onClick={() => phone.remove(index)} aria-label="حذف"><Trash2 className="w-4 h-4" /></Button>
-              </div>
-            ))}
-            <Button type="button" variant="outline" size="sm" className="gap-1" onClick={() => phone.append({ name: "", phone: "" })}>
-              <Plus className="w-3 h-3" /> إضافة رقم
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="text-muted-foreground hover:text-destructive h-8 w-8 shrink-0"
+              onClick={() => remove(gIndex)}
+            >
+              <Trash2 className="w-4 h-4" />
             </Button>
+          </CardHeader>
+          <CardContent className="p-3 sm:p-4 w-full box-border">
+            <InlinePersonsManager groupIndex={gIndex} />
+            <RelativeGroupExtras groupIndex={gIndex} />
           </CardContent>
         </Card>
+      ))}
+
+      {fields.length > 0 && (
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full border-dashed h-11 text-muted-foreground hover:text-primary gap-2 text-xs sm:text-sm"
+          onClick={() => append({ relationType: "الإخوة", relationKey: "siblings", deceasedPlacement: "auto", deceasedTarget: "all", persons: [] } as any)}
+        >
+          <Plus className="w-4 h-4" />
+          إضافة مجموعة قرابة جديدة (مثل الإخوة، الأعمام...)
+        </Button>
       )}
     </div>
   );
 }
 
-// ───────────────────────── الخطوة ٥: الملاحظات ─────────────────────────
-
-export function ContactsNotesStep() {
+function InlinePersonsManager({ groupIndex }: { groupIndex: number }) {
   const form = useFormContext<ObituaryFormValues>();
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: `relatives.${groupIndex}.persons` as any,
+  });
+
+  const [newName, setNewName] = useState("");
+  const [newWorkplace, setNewWorkplace] = useState("");
+  const [newIsDeceased, setNewIsDeceased] = useState(false);
+  const [newJobStatus, setNewJobStatus] = useState<"active" | "retired" | "former" | "none">("none");
+
+  const handleAddPerson = () => {
+    if (!newName.trim()) return;
+    append({
+      name: newName.trim(),
+      workplace: newWorkplace.trim() || undefined,
+      isDeceased: newIsDeceased,
+      jobStatus: newJobStatus,
+    } as any);
+
+    setNewName("");
+    setNewWorkplace("");
+    setNewIsDeceased(false);
+    setNewJobStatus("none");
+  };
 
   return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <section>
-        <div className="border-b pb-4 mb-6">
-          <h2 className="text-2xl font-bold text-primary flex items-center gap-2">
-            <FileText className="w-6 h-6 text-primary/70" />
-            ملاحظات عامة
-          </h2>
+    <div className="space-y-3 w-full box-border">
+      {/* شبكة الإدخال المتجاوبة مع الجوال بالكامل */}
+      <div className="p-2.5 sm:p-3 bg-muted/20 rounded-lg border flex flex-col sm:flex-row flex-wrap gap-2 items-stretch sm:items-center w-full box-border">
+        <Input
+          placeholder="الاسم (مثال: ناصر)"
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          className="h-9 min-w-0 flex-1 bg-background text-xs sm:text-sm"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleAddPerson();
+            }
+          }}
+        />
+        <Input
+          placeholder="جهة العمل (اختياري: قطر للطاقة)"
+          value={newWorkplace}
+          onChange={(e) => setNewWorkplace(e.target.value)}
+          className="h-9 min-w-0 flex-1 bg-background text-xs sm:text-sm"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              handleAddPerson();
+            }
+          }}
+        />
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <Select 
+            value={newJobStatus} 
+            onValueChange={(val: any) => setNewJobStatus(val)}
+          >
+            <SelectTrigger className="h-9 flex-1 sm:w-28 sm:flex-none bg-background text-xs">
+              <SelectValue placeholder="الصفة" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">على رأس عمله</SelectItem>
+              <SelectItem value="retired">متقاعد</SelectItem>
+              <SelectItem value="former">سابقاً</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <label className="flex items-center gap-1 px-2.5 py-1 rounded bg-background border text-xs cursor-pointer select-none shrink-0 h-9">
+            <Switch 
+              checked={newIsDeceased} 
+              onCheckedChange={setNewIsDeceased} 
+              className="scale-75" 
+            />
+            <span className={newIsDeceased ? "font-semibold text-destructive text-[11px]" : "text-muted-foreground text-[11px]"}>متوفى</span>
+          </label>
+
+          <Button
+            type="button"
+            size="sm"
+            className="h-9 gap-1 flex-1 sm:flex-none shrink-0 text-xs px-3"
+            onClick={handleAddPerson}
+            disabled={!newName.trim()}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            إضافة
+          </Button>
         </div>
+      </div>
+
+      {/* عرض الأقارب المضافين */}
+      {fields.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1 w-full box-border">
+          {fields.map((p: any, pIndex) => (
+            <div 
+              key={p.id} 
+              className="flex items-center justify-between p-2 rounded border bg-background text-xs shadow-2xs group w-full min-w-0 box-border"
+            >
+              <div className="flex items-center gap-1.5 overflow-hidden min-w-0">
+                <span className="font-semibold truncate">{p.name}</span>
+                {p.isDeceased && (
+                  <Badge variant="secondary" className="text-[10px] px-1 py-0 bg-muted text-destructive font-normal shrink-0">
+                    (رحمه الله)
+                  </Badge>
+                )}
+                {p.workplace && (
+                  <span className="text-muted-foreground text-[10px] truncate max-w-[80px]">
+                    • {p.workplace}
+                  </span>
+                )}
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0"
+                onClick={() => remove(pIndex)}
+              >
+                <Trash2 className="w-3 h-3" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="text-xs text-muted-foreground text-center py-1">
+          لا يوجد أشخاص مسجلون في هذه المجموعة بعد. أدخل الاسم واضغط زر "إضافة".
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ==========================================
+// الخطوة 3: الصلاة والدفن (BurialPrayerStep)
+// ==========================================
+export function BurialPrayerStep() {
+  const form = useFormContext<ObituaryFormValues>();
+  
+  const burialStatus = form.watch("burial.status") || "scheduled";
+  const isDone = burialStatus === "done";
+  const isPostponed = burialStatus === "pending" || burialStatus === "cancelled";
+  const isSeparatePrayer = Boolean(form.watch("prayer.enabled"));
+
+  // حالة اختيار مقبرة "أخرى"
+  const currentBurialLocation = form.watch("burial.locationName") || "";
+  const [isOtherCemetery, setIsOtherCemetery] = useState(() => {
+    return Boolean(currentBurialLocation && !QATAR_CEMETERIES.slice(0, -1).includes(currentBurialLocation));
+  });
+
+  // حالة اختيار وقت آخر يدوياً
+  const currentBurialTime = form.watch("burial.timeDescription") || "";
+  const [isCustomBurialTime, setIsCustomBurialTime] = useState(() => {
+    return Boolean(currentBurialTime && !PRAYER_TIMES_OPTIONS.slice(0, -1).includes(currentBurialTime));
+  });
+
+  const isBurialOutside = form.watch("burial.isOutsideQatar");
+
+  return (
+    <div className="space-y-5 animate-in fade-in duration-300 w-full max-w-full box-border overflow-hidden">
+      <div className="border-b pb-3">
+        <h2 className="text-xl sm:text-2xl font-bold text-primary flex items-center gap-2">
+          <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-primary/70 shrink-0" />
+          الصلاة والدفن
+        </h2>
+        <p className="text-muted-foreground mt-1 text-xs sm:text-sm">
+          تحديد موعد ومكان صلاة الجنازة والدفن. في حال كان الدفن قد تم بالفعل، اختر "تم الدفن" لتدوين تفاصيله.
+        </p>
+      </div>
+
+      <Card className="border shadow-sm overflow-hidden w-full max-w-full box-border">
+        <div className="bg-primary/5 px-3 sm:px-6 py-3.5 border-b flex flex-col sm:flex-row sm:items-center justify-between gap-3 w-full box-border">
+          <div className="min-w-0">
+            <h3 className="font-bold text-sm sm:text-base text-primary flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-primary shrink-0" />
+              {isDone ? "بيانات الدفن المنتهي" : (isSeparatePrayer ? "بيانات الدفن" : "الصلاة والدفن (الموحدة)")}
+            </h3>
+            <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5">
+              {isDone 
+                ? "تمت إجراءات الدفن مسبقاً، يمكنك تدوين التفاصيل أو مكان الدفن أدناه" 
+                : (isSeparatePrayer ? "مكان ووقت الدفن بالمقبرة" : "الصلاة والدفن في نفس الموقع")}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 shrink-0">
+            {/* حالة الدفن */}
+            <FormField
+              control={form.control}
+              name="burial.status"
+              render={({ field }) => (
+                <div className="flex items-center gap-1 bg-background p-1 rounded-lg border text-xs">
+                  <button
+                    type="button"
+                    onClick={() => field.onChange("scheduled")}
+                    className={`px-2.5 py-1 rounded transition-colors ${
+                      !isDone && !isPostponed ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    سيتم الدفن
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => field.onChange("pending")}
+                    className={`px-2.5 py-1 rounded transition-colors ${
+                      isPostponed ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    مؤجل
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      field.onChange("done");
+                      form.setValue("prayer.enabled", false);
+                      form.setValue("prayer.locationName", "");
+                      form.setValue("prayer.dateDescription", "");
+                      form.setValue("prayer.timeDescription", "");
+                    }}
+                    className={`px-2.5 py-1 rounded transition-colors ${
+                      isDone ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    تم الدفن
+                  </button>
+                </div>
+              )}
+            />
+
+            {/* خارج قطر (يظهر فقط إذا كان الدفن قادماً) */}
+            {!isDone && !isPostponed && (
+              <FormField
+                control={form.control}
+                name="burial.isOutsideQatar"
+                render={({ field }) => (
+                  <label className="flex items-center gap-1 text-xs cursor-pointer select-none">
+                    <Switch checked={field.value || false} onCheckedChange={field.onChange} className="scale-75" />
+                    <span className="text-muted-foreground text-[11px]">خارج قطر</span>
+                  </label>
+                )}
+              />
+            )}
+          </div>
+        </div>
+
+        <CardContent className="p-3 sm:p-5 space-y-4 w-full box-border">
+          {/* 3. منطق زر "تم الدفن": طي وإخفاء جميع حقول الدفن والصلاة وإظهار حقل "ملاحظات الدفن" فقط */}
+          {isDone ? (
+            <div className="p-3.5 sm:p-5 rounded-lg bg-primary/5 border border-primary/20 space-y-2 animate-in fade-in">
+              <FormLabel className="text-xs sm:text-sm font-bold text-primary flex items-center gap-1.5">
+                <FileText className="w-4 h-4 text-primary shrink-0" />
+                ملاحظات الدفن
+              </FormLabel>
+              <FormField
+                control={form.control}
+                name="burial.notes"
+                render={({ field }) => (
+                  <FormItem className="w-full">
+                    <FormControl>
+                      <Input 
+                        placeholder="وضح تفاصيل الدفن (مثال: تم الدفن في مكة المكرمة، أو تم الدفن فجر اليوم بمقبرة مسيمير...)" 
+                        className="h-10 bg-background text-xs sm:text-sm font-medium w-full" 
+                        {...field} 
+                        value={field.value || ""} 
+                      />
+                    </FormControl>
+                    <FormDescription className="text-[11px] text-muted-foreground">
+                      بما أنه تم الدفن مسبقاً، سيتم الاكتفاء بهذه الملاحظة في الإعلان دون نشر موعد قادم للصلاة والدفن.
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
+            </div>
+          ) : isPostponed ? (
+            <div className="p-3.5 sm:p-5 rounded-lg bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 space-y-2 animate-in fade-in">
+              <FormLabel className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1.5">
+                <FileText className="w-4 h-4 shrink-0" />
+                تأجيل الدفن حتى إشعار آخر
+              </FormLabel>
+              <FormField
+                control={form.control}
+                name="burial.notes"
+                render={({ field }) => (
+                  <FormItem className="w-full">
+                    <FormControl>
+                      <Input 
+                        placeholder="سبب التأجيل (اختياري، مثال: لحين وصول الجثمان)" 
+                        className="h-10 bg-background text-xs sm:text-sm w-full" 
+                        {...field} 
+                        value={field.value || ""} 
+                      />
+                    </FormControl>
+                    <FormDescription className="text-[11px] text-muted-foreground">
+                      يُكتب «تأجيل الدفن حتى إشعار آخر». عند تحديد الموعد الجديد أرسل «تعديل إعلان سابق».
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
+            </div>
+          ) : (
+            <>
+              {/* اختيار المقبرة مع flex-wrap كامل للجوال */}
+              {!isBurialOutside ? (
+                <div className="space-y-1.5 w-full">
+                  <FormLabel className="text-xs sm:text-sm font-semibold">المقبرة</FormLabel>
+                  <FormField
+                    control={form.control}
+                    name="burial.locationName"
+                    render={({ field }) => (
+                      <div className="space-y-2 w-full">
+                        <div className="flex flex-wrap gap-1.5 w-full box-border">
+                          {QATAR_CEMETERIES.map((c) => {
+                            const isOther = c === "أخرى";
+                            const isSelected = isOther ? isOtherCemetery : (field.value === c && !isOtherCemetery);
+                            return (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => {
+                                  if (isOther) {
+                                    setIsOtherCemetery(true);
+                                    field.onChange("");
+                                  } else {
+                                    setIsOtherCemetery(false);
+                                    field.onChange(c);
+                                  }
+                                }}
+                                className={`px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors shrink-0 ${
+                                  isSelected
+                                    ? "bg-primary text-primary-foreground border-primary font-semibold"
+                                    : "bg-background hover:bg-muted text-foreground"
+                                }`}
+                              >
+                                {c}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {/* حقل نصي لكتابة اسم المقبرة يدوياً عند اختيار "أخرى" */}
+                        {isOtherCemetery && (
+                          <Input 
+                            placeholder="اكتب اسم المقبرة يدوياً (مثال: مقبرة الوسيل)" 
+                            className="h-10 bg-background text-xs sm:text-sm animate-in fade-in w-full"
+                            value={field.value || ""} 
+                            onChange={(e) => field.onChange(e.target.value)}
+                          />
+                        )}
+                      </div>
+                    )}
+                  />
+                </div>
+              ) : (
+                <FormField
+                  control={form.control}
+                  name="burial.locationName"
+                  render={({ field }) => (
+                    <FormItem className="w-full">
+                      <FormLabel className="text-xs sm:text-sm font-semibold">مكان الدفن خارج الدولة</FormLabel>
+                      <FormControl>
+                        <Input placeholder="الدولة، المدينة، واسم المقبرة (مثال: القاهرة - مقابر الأسرة)" className="h-10 text-xs sm:text-sm w-full" {...field} value={field.value || ""} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {/* يوم ووقت الدفن */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full box-border">
+                {/* يوم الدفن: Date Input */}
+                <FormField
+                  control={form.control}
+                  name="burial.dateDescription"
+                  render={({ field }) => (
+                    <FormItem className="w-full min-w-0">
+                      <FormLabel className="text-xs sm:text-sm font-semibold">تاريخ / يوم الدفن</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="date" 
+                          className="h-10 bg-background text-xs sm:text-sm w-full" 
+                          value={field.value || ""} 
+                          onChange={(e) => field.onChange(e.target.value)} 
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                {/* وقت الدفن: أزرار لجميع الصلوات + وقت آخر */}
+                <FormField
+                  control={form.control}
+                  name="burial.timeDescription"
+                  render={({ field }) => (
+                    <FormItem className="w-full min-w-0">
+                      <FormLabel className="text-xs sm:text-sm font-semibold">وقت الدفن</FormLabel>
+                      <div className="flex flex-wrap gap-1 mb-1.5 w-full box-border">
+                        {PRAYER_TIMES_OPTIONS.map((t) => {
+                          const isOther = t === "وقت آخر...";
+                          const isSelected = isOther ? isCustomBurialTime : (field.value === t && !isCustomBurialTime);
+                          return (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={() => {
+                                if (isOther) {
+                                  setIsCustomBurialTime(true);
+                                  field.onChange("");
+                                } else {
+                                  setIsCustomBurialTime(false);
+                                  field.onChange(t);
+                                }
+                              }}
+                              className={`px-2 py-1 rounded text-[11px] sm:text-xs border font-medium transition-colors shrink-0 ${
+                                isSelected ? "bg-primary text-primary-foreground border-primary font-semibold" : "bg-background"
+                              }`}
+                            >
+                              {t}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {isCustomBurialTime && (
+                        <Input 
+                          placeholder="أدخل الوقت الدقيق (مثال: الساعة 9:30 صباحاً)" 
+                          className="h-10 bg-background text-xs sm:text-sm animate-in fade-in w-full" 
+                          value={field.value || ""} 
+                          onChange={(e) => field.onChange(e.target.value)}
+                        />
+                      )}
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              {/* مفتاح التبديل التدريجي للفصل بين الصلاة والدفن (Default: OFF) */}
+              <div className="pt-3 border-t flex flex-wrap items-center justify-between gap-2 w-full">
+                <div className="space-y-0.5 max-w-[80%]">
+                  <span className="text-xs sm:text-sm font-semibold text-foreground">الصلاة في مكان أو وقت مختلف عن الدفن؟</span>
+                  <p className="text-[11px] text-muted-foreground">
+                    فعل هذا الخيار فقط إذا كانت الصلاة بجامع منفصل (مثل جامع الإمام محمد بن عبدالوهاب) ثم الانتقال للمقبرة.
+                  </p>
+                </div>
+                <Switch
+                  checked={isSeparatePrayer}
+                  onCheckedChange={(checked) => {
+                    form.setValue("prayer.enabled", checked);
+                    if (!checked) {
+                      form.setValue("prayer.locationName", "");
+                      form.setValue("prayer.dateDescription", "");
+                      form.setValue("prayer.timeDescription", "");
+                    }
+                  }}
+                />
+              </div>
+
+              {/* تفاصيل صلاة الجنازة المنفصلة (حقل واحد فقط وفارغ للمسجد/الجامع) */}
+              {isSeparatePrayer && (
+                <div className="mt-3 p-3 sm:p-4 rounded-lg bg-primary/5 border border-primary/20 space-y-2 animate-in fade-in zoom-in-95 w-full box-border">
+                  <div className="flex items-center gap-2 text-primary font-bold text-xs sm:text-sm">
+                    <Clock className="w-4 h-4 shrink-0" />
+                    صلاة الجنازة (المسجد / الجامع)
+                  </div>
+                  <FormField
+                    control={form.control}
+                    name="prayer.locationName"
+                    render={({ field }) => (
+                      <FormItem className="w-full">
+                        <FormLabel className="text-xs font-semibold">المسجد / الجامع</FormLabel>
+                        <FormControl>
+                          <Input 
+                            placeholder="اكتب اسم المسجد أو الجامع (مثال: جامع الإمام محمد بن عبدالوهاب)" 
+                            className="h-10 bg-background text-xs sm:text-sm w-full" 
+                            {...field} 
+                            value={field.value || ""} 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ==========================================
+// الخطوة 4: العزاء الديناميكي (CondolencesStep)
+// ==========================================
+export function CondolencesStep() {
+  const form = useFormContext<ObituaryFormValues>();
+  const condType = form.watch("condolences.type") || "full";
+
+  const copyMenToWomen = () => {
+    const menData = form.getValues("condolences.men");
+    if (menData) {
+      form.setValue("condolences.women", {
+        ...menData,
+      }, { shouldDirty: true });
+    }
+  };
+
+  return (
+    <div className="space-y-5 animate-in fade-in duration-300 w-full max-w-full box-border overflow-hidden">
+      <div className="border-b pb-3">
+        <h2 className="text-xl sm:text-2xl font-bold text-primary flex items-center gap-2">
+          <Heart className="w-5 h-5 sm:w-6 sm:h-6 text-primary/70 shrink-0" />
+          العزاء ومقر الاستقبال
+        </h2>
+        <p className="text-muted-foreground mt-1 text-xs sm:text-sm">
+          اختر نوع العزاء المناسب. سيتم تلقائياً إخفاء أو إظهار تفاصيل المقرات وفق اختيارك.
+        </p>
+      </div>
+
+      {/* بطاقات اختيار نوع العزاء */}
+      <FormField
+        control={form.control}
+        name="condolences.type"
+        render={({ field }) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 w-full max-w-full box-border">
+            {CONDOLENCE_TYPES.map((t) => {
+              const isSelected = (field.value || "full") === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => field.onChange(t.id)}
+                  className={`p-2.5 sm:p-3 rounded-lg border text-right transition-all flex flex-col justify-between w-full box-border ${
+                    isSelected 
+                      ? "bg-primary/10 border-primary shadow-xs ring-1 ring-primary" 
+                      : "bg-card hover:bg-muted/50 border-input"
+                  }`}
+                >
+                  <div className="flex items-center justify-between w-full mb-1">
+                    <span className="font-bold text-xs sm:text-sm text-foreground">{t.title}</span>
+                    {isSelected && <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" />}
+                  </div>
+                  <span className="text-[11px] text-muted-foreground">{t.desc}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      />
+
+      {/* تنبيه عند اختيار لا يوجد عزاء أو المقبرة فقط */}
+      {(condType === "none" || condType === "cemetery_only" || condType === "tbd") && (
+        <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/10 p-3 sm:p-4 text-amber-800 dark:text-amber-300 text-xs sm:text-sm flex items-center gap-2.5 w-full box-border">
+          <AlertCircle className="w-5 h-5 shrink-0" />
+          <div>
+            <p className="font-semibold">
+              {condType === "none" ? "يُكتب «لا يوجد عزاء»" : condType === "tbd" ? "يُكتب «العزاء: سيُحدَّد لاحقاً»" : "يُكتب «عزاء الرجال في المقبرة فقط»"}
+            </p>
+            <p className="text-[11px] opacity-90 mt-0.5">يمكن إضافة السبب أدناه (مثل: اتباعاً للسنة، أو تنفيذاً لوصية المتوفى).</p>
+          </div>
+        </Card>
+      )}
+
+      <CondolenceExtras type={condType} />
+
+      {/* 2. خانة أرقام الهواتف: تظهر في «هاتف فقط»، أو عند إضافة أرقام مع المقرات */}
+      {(condType === "phone_only" || form.watch("condolences.withPhones")) && (
+        <SmartPhonesSection isPhoneOnly={condType === "phone_only"} />
+      )}
+
+      {/* مقرات العزاء المادية (تظهر فقط عند عزاء رجال أو نساء) */}
+      {(condType === "full" || condType === "men_only") && (
+        <CondolenceVenueCard audience="men" title="عزاء الرجال" />
+      )}
+
+      {(condType === "full" || condType === "women_only") && (
+        <div className="space-y-2 w-full box-border">
+          {condType === "full" && (
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="text-xs text-primary gap-1 h-8"
+                onClick={copyMenToWomen}
+              >
+                <Copy className="w-3.5 h-3.5" />
+                نسخ نفس موقع عزاء الرجال إلى النساء
+              </Button>
+            </div>
+          )}
+          <CondolenceVenueCard audience="women" title="عزاء النساء" />
+        </div>
+      )}
+
+      {(condType === "full" || condType === "men_only" || condType === "women_only") && (
+        <ExtraVenuesSection
+          audiences={condType === "full" ? ["men", "women"] : condType === "men_only" ? ["men"] : ["women"]}
+        />
+      )}
+    </div>
+  );
+}
+
+// مكون فرعي: بطاقة مقر العزاء
+function CondolenceVenueCard({ audience, title }: { audience: "men" | "women"; title: string }) {
+  const form = useFormContext<ObituaryFormValues>();
+  const prefix = `condolences.${audience}` as const;
+  const isScheduleEnabled = form.watch(`${prefix}.schedule.enabled` as any);
+
+  return (
+    <Card className="border shadow-sm w-full max-w-full box-border">
+      <CardHeader className="py-2.5 px-3 sm:px-4 bg-muted/30 border-b">
+        <CardTitle className="text-xs sm:text-sm font-bold text-primary flex items-center gap-2">
+          <MapPin className="w-4 h-4 shrink-0" />
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-3 sm:p-4 space-y-3.5 w-full box-border">
+        {/* اسم ووصف مقر العزاء (إجباري *) */}
         <FormField
           control={form.control}
-          name="notes"
+          name={`${prefix}.locationName` as any}
           render={({ field }) => (
-            <FormItem>
-              <FormLabel>أي تفاصيل إضافية ترغب في إدراجها بالإعلان</FormLabel>
+            <FormItem className="w-full">
+              <FormLabel className="text-xs font-semibold flex items-center gap-1 text-foreground">
+                <span>اسم ووصف مقر العزاء</span>
+                <span className="text-destructive font-bold">*</span>
+              </FormLabel>
               <FormControl>
-                <Textarea placeholder="مثال: ليس لديه أحد في قطر" className="min-h-[150px] resize-y" {...field} />
+                <Input 
+                  placeholder={audience === "men" ? "مثال: مجلس فلان بن فلان في منطقة الدفنة" : "مثال: منزل فلانة في منطقة معيذر"} 
+                  className="h-10 bg-background text-xs sm:text-sm w-full" 
+                  {...field} 
+                  value={field.value || ""} 
+                />
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-      </section>
-    </div>
+
+        <VenueExtras audience={audience} />
+
+        {/* رابط الخرائط والمدة */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full box-border">
+          <div className="sm:col-span-2 w-full min-w-0">
+            <FormField
+              control={form.control}
+              name={`${prefix}.mapsLink` as any}
+              render={({ field }) => (
+                <FormItem className="w-full min-w-0">
+                  <FormLabel className="text-xs text-muted-foreground flex items-center gap-1">
+                    <LinkIcon className="w-3 h-3 shrink-0" />
+                    رابط خرائط Google للمقر (اختياري)
+                  </FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="https://maps.google.com/..." 
+                      dir="ltr" 
+                      className="h-10 bg-background text-left text-xs w-full" 
+                      {...field} 
+                      value={field.value || ""} 
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={form.control}
+            name={`${prefix}.durationDays` as any}
+            render={({ field }) => (
+              <FormItem className="w-full min-w-0">
+                <FormLabel className="text-xs text-muted-foreground">المدة (أيام - اختياري)</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="number" 
+                    min="1" 
+                    max="7" 
+                    placeholder="3" 
+                    className="h-10 bg-background text-xs sm:text-sm w-full" 
+                    value={field.value ?? ""} 
+                    onChange={(e) => field.onChange(e.target.value ? Number(e.target.value) : undefined)} 
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* أوقات وفترات استقبال المعزين (مغلقة ومخفية بشكل افتراضي) */}
+        <div className="p-3 bg-muted/20 rounded-lg border space-y-3 w-full box-border">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              <Clock className="w-4 h-4 text-primary shrink-0" />
+              <span className="text-xs sm:text-sm font-semibold text-foreground">إضافة أوقات للعزاء</span>
+            </div>
+            <Switch
+              checked={Boolean(isScheduleEnabled)}
+              onCheckedChange={(checked) => {
+                form.setValue(`${prefix}.schedule.enabled` as any, checked, { shouldDirty: true });
+              }}
+            />
+          </div>
+
+          {isScheduleEnabled && (
+            <div className="pt-2 border-t space-y-2.5 animate-in fade-in zoom-in-95">
+              <Tabs defaultValue="evening" className="w-full">
+                <TabsList className="grid grid-cols-3 w-full h-9 p-0.5 bg-muted">
+                  <TabsTrigger value="morning" className="text-xs py-1">
+                    صباحي
+                  </TabsTrigger>
+                  <TabsTrigger value="evening" className="text-xs py-1">
+                    مسائي
+                  </TabsTrigger>
+                  <TabsTrigger value="friday" className="text-xs py-1">
+                    الجمعة
+                  </TabsTrigger>
+                </TabsList>
+
+                {/* تبويب صباحي: من [ خانة وقت ] إلى [ خانة وقت ] */}
+                <TabsContent value="morning" className="pt-2 space-y-2">
+                  <div className="flex items-center gap-2 w-full">
+                    <span className="text-xs text-muted-foreground shrink-0 font-medium">من</span>
+                    <FormField
+                      control={form.control}
+                      name={`${prefix}.schedule.morningFrom` as any}
+                      render={({ field }) => (
+                        <FormItem className="flex-1 min-w-0">
+                          <FormControl>
+                            <Input 
+                              type="time" 
+                              className="h-9 bg-background text-xs sm:text-sm w-full" 
+                              {...field} 
+                              value={field.value || ""} 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <span className="text-xs text-muted-foreground shrink-0 font-medium">إلى</span>
+                    <FormField
+                      control={form.control}
+                      name={`${prefix}.schedule.morningTo` as any}
+                      render={({ field }) => (
+                        <FormItem className="flex-1 min-w-0">
+                          <FormControl>
+                            <Input 
+                              type="time" 
+                              className="h-9 bg-background text-xs sm:text-sm w-full" 
+                              {...field} 
+                              value={field.value || ""} 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </TabsContent>
+
+                {/* تبويب مسائي: من [ خانة وقت ] إلى [ خانة وقت ] */}
+                <TabsContent value="evening" className="pt-2 space-y-2">
+                  <div className="flex items-center gap-2 w-full">
+                    <span className="text-xs text-muted-foreground shrink-0 font-medium">من</span>
+                    <FormField
+                      control={form.control}
+                      name={`${prefix}.schedule.eveningFrom` as any}
+                      render={({ field }) => (
+                        <FormItem className="flex-1 min-w-0">
+                          <FormControl>
+                            <Input 
+                              type="time" 
+                              className="h-9 bg-background text-xs sm:text-sm w-full" 
+                              {...field} 
+                              value={field.value || ""} 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <span className="text-xs text-muted-foreground shrink-0 font-medium">إلى</span>
+                    <FormField
+                      control={form.control}
+                      name={`${prefix}.schedule.eveningTo` as any}
+                      render={({ field }) => (
+                        <FormItem className="flex-1 min-w-0">
+                          <FormControl>
+                            <Input 
+                              type="time" 
+                              className="h-9 bg-background text-xs sm:text-sm w-full" 
+                              {...field} 
+                              value={field.value || ""} 
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                </TabsContent>
+
+                {/* تبويب الجمعة: حقل نصي لإدخال قيم مثل (بعد صلاة العصر) */}
+                <TabsContent value="friday" className="pt-2 space-y-2">
+                  <FormField
+                    control={form.control}
+                    name={`${prefix}.schedule.fridayNote` as any}
+                    render={({ field }) => (
+                      <FormItem className="w-full">
+                        <FormControl>
+                          <Input 
+                            placeholder="مثال: بعد صلاة العصر" 
+                            className="h-9 bg-background text-xs sm:text-sm w-full" 
+                            {...field} 
+                            value={field.value || ""} 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </TabsContent>
+              </Tabs>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
-// ───────────────────────── الخطوة ٦: المراجعة ─────────────────────────
+// ميزة استدعاء الأقارب التلقائي وهواتف التعزية
+function SmartPhonesSection({ isPhoneOnly }: { isPhoneOnly: boolean }) {
+  const form = useFormContext<ObituaryFormValues>();
+  const phones = form.watch("condolences.phones") || [];
+  const relativesGroups = form.watch("relatives") || [];
+  const [newManualPhone, setNewManualPhone] = useState("");
 
-/** معاينة النص النهائي كما سيُنشر، من المولّد نفسه الذي يستخدمه المسؤول والصورة. */
-export function AnnouncementPreview({ values }: { values: ObituaryFormValues }) {
-  const announcement = useMemo(() => buildAnnouncement(mapFormToPayload(values)), [values]);
+  const aliveRelatives = useMemo(() => {
+    const list: { name: string; relation: string; key: string }[] = [];
+    relativesGroups.forEach((group) => {
+      const relationName = group.relationType || "قريب";
+      (group.persons || []).forEach((person) => {
+        if (person.name && !person.isDeceased) {
+          list.push({
+            name: person.name,
+            relation: relationName,
+            key: `${relationName}_${person.name}`,
+          });
+        }
+      });
+    });
+    return list;
+  }, [relativesGroups]);
+
+  const [relativePhoneMap, setRelativePhoneMap] = useState<Record<string, string>>({});
+
+  const handleRelativePhoneChange = (key: string, name: string, relation: string, phone: string) => {
+    const updatedMap = { ...relativePhoneMap, [key]: phone };
+    setRelativePhoneMap(updatedMap);
+
+    const activeRelativePhones = Object.entries(updatedMap)
+      .filter(([_, num]) => num && num.trim().length > 0)
+      .map(([k, num]) => {
+        const item = aliveRelatives.find(r => r.key === k);
+        return item ? `${item.name} (${item.relation}): ${num.trim()}` : num.trim();
+      });
+
+    const manualOnly = phones.filter(p => !aliveRelatives.some(r => p.startsWith(r.name)));
+    form.setValue("condolences.phones", [...activeRelativePhones, ...manualOnly], { shouldDirty: true });
+  };
+
+  const handleAddManualPhone = () => {
+    if (!newManualPhone.trim()) return;
+    const current = form.getValues("condolences.phones") || [];
+    form.setValue("condolences.phones", [...current, newManualPhone.trim()], { shouldDirty: true });
+    setNewManualPhone("");
+  };
+
+  const handleRemovePhone = (index: number) => {
+    const current = form.getValues("condolences.phones") || [];
+    form.setValue("condolences.phones", current.filter((_, i) => i !== index), { shouldDirty: true });
+  };
+
   return (
-    <div className="space-y-4">
-      {announcement.warnings.length > 0 && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
-          <p className="flex items-center gap-2 font-bold"><AlertTriangle className="w-4 h-4" /> تنبيهات قبل النشر</p>
-          <ul className="mt-2 list-disc pr-5 text-sm space-y-1">
-            {announcement.warnings.map((warning) => <li key={warning}>{warning}</li>)}
-          </ul>
+    <Card className="border bg-muted/10 p-3 sm:p-4 space-y-3.5 w-full box-border overflow-hidden">
+      <div className="flex items-center justify-between border-b pb-2">
+        <div>
+          <h4 className="text-xs sm:text-sm font-semibold text-foreground flex items-center gap-1.5">
+            <Phone className="w-4 h-4 text-primary shrink-0" />
+            أرقام هواتف التعزية
+          </h4>
+          <p className="text-[11px] text-muted-foreground mt-0.5">
+            {isPhoneOnly 
+              ? "تم استدعاء الأقارب المسجلين لتسهيل إدخال أرقامهم. إدخال الرقم اختياري لكل قريب." 
+              : "أدخل أرقام الهواتف المخصصة لاستقبال اتصالات ورسائل التعزية (اختياري)."}
+          </p>
+        </div>
+      </div>
+
+      {isPhoneOnly && aliveRelatives.length > 0 && (
+        <div className="space-y-2 w-full box-border">
+          <div className="text-xs font-semibold text-foreground flex items-center gap-1">
+            <UserCheck className="w-3.5 h-3.5 text-primary shrink-0" />
+            أقارب الفقيد المسجلون (إدخال الرقم اختياري):
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full box-border">
+            {aliveRelatives.map((rel) => (
+              <div key={rel.key} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 p-2 bg-background rounded-md border text-xs shadow-2xs w-full min-w-0 box-border">
+                <div className="flex-1 truncate">
+                  <span className="font-semibold text-foreground">{rel.name}</span>
+                  <span className="text-muted-foreground text-[11px] mr-1">({rel.relation})</span>
+                </div>
+                <Input
+                  placeholder="رقم الهاتف"
+                  dir="ltr"
+                  className="h-8 w-full sm:w-32 text-xs text-left bg-muted/20"
+                  value={relativePhoneMap[rel.key] || ""}
+                  onChange={(e) => handleRelativePhoneChange(rel.key, rel.name, rel.relation, e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       )}
-      <pre dir="rtl" className="whitespace-pre-wrap break-words rounded-lg border border-border bg-background p-5 font-sans text-base leading-8">
-        {announcement.text}
-      </pre>
+
+      <div className="space-y-1.5 pt-1 w-full box-border">
+        {isPhoneOnly && aliveRelatives.length > 0 && (
+          <div className="text-xs text-muted-foreground font-medium">أو أضف رقماً إضافياً مباشرة:</div>
+        )}
+        <div className="flex gap-1.5 w-full box-border">
+          <Input
+            placeholder="مثال: ناصر: 55123456 أو 66987654"
+            dir="ltr"
+            value={newManualPhone}
+            onChange={(e) => setNewManualPhone(e.target.value)}
+            className="h-9 bg-background text-xs sm:text-sm text-left flex-1 min-w-0"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                handleAddManualPhone();
+              }
+            }}
+          />
+          <Button
+            type="button"
+            size="sm"
+            className="h-9 shrink-0 text-xs px-2.5"
+            onClick={handleAddManualPhone}
+            disabled={!newManualPhone.trim()}
+          >
+            <Plus className="w-3.5 h-3.5 ml-1" />
+            إضافة
+          </Button>
+        </div>
+      </div>
+
+      {phones.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pt-1 w-full box-border">
+          {phones.map((phone, idx) => (
+            <Badge key={idx} variant="outline" className="h-7 px-2 text-xs bg-background gap-1.5 font-normal">
+              <span dir="ltr">{phone}</span>
+              <button 
+                type="button" 
+                onClick={() => handleRemovePhone(idx)} 
+                className="hover:text-destructive text-muted-foreground font-bold"
+              >
+                ×
+              </button>
+            </Badge>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+}
+
+// ==========================================
+// دالة مساعدة لتحديد الكلمة المناسبة للتاريخ مقارنةً باليوم
+// ==========================================
+export function getRelativeDateLabel(dateString: string): string {
+  if (!dateString) return "";
+  const parts = dateString.split("-").map(Number);
+  if (parts.length !== 3) return dateString;
+  const [year, month, day] = parts;
+  const selected = new Date(year, month - 1, day);
+  selected.setHours(0, 0, 0, 0);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const diffTime = selected.getTime() - today.getTime();
+  const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+  const daysArabic = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+  const dayName = daysArabic[selected.getDay()];
+
+  if (diffDays === 0) {
+    return `اليوم (${dayName})`;
+  } else if (diffDays === 1) {
+    return `غداً (${dayName})`;
+  } else if (diffDays === -1) {
+    return `أمس (${dayName})`;
+  } else {
+    return `يوم ${dayName} (${dateString})`;
+  }
+}
+
+export function formatTime12h(timeStr: string): string {
+  if (!timeStr) return "";
+  if (!timeStr.includes(":")) return timeStr;
+  const [hStr, mStr] = timeStr.split(":");
+  const h = parseInt(hStr, 10);
+  if (isNaN(h)) return timeStr;
+  const period = h >= 12 ? "مساءً" : "صباحاً";
+  const h12 = h % 12 || 12;
+  return `${h12}:${mStr} ${period}`;
+}
+
+// ==========================================
+// الخطوة 5: ابتداء العزاء والملاحظات (ContactsNotesStep)
+// ==========================================
+export function ContactsNotesStep() {
+  const form = useFormContext<ObituaryFormValues>();
+  const startDate = form.watch("condolenceStartDate");
+  const relativeDateText = getRelativeDateLabel(startDate || "");
+
+  return (
+    <div className="space-y-5 animate-in fade-in duration-300 w-full max-w-full box-border overflow-hidden">
+      <div className="border-b pb-3">
+        <h2 className="text-xl sm:text-2xl font-bold text-primary flex items-center gap-2">
+          <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-primary/70 shrink-0" />
+          ابتداء العزاء والملاحظات
+        </h2>
+      </div>
+
+      {/* 2. ابتداء العزاء: خانة التاريخ الحقيقي (Date Picker) وخانة ملاحظة الوقت */}
+      <div className="p-3.5 sm:p-4 rounded-lg bg-primary/5 border border-primary/20 space-y-3 w-full max-w-full box-border">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <FormLabel className="text-sm sm:text-base font-bold text-primary flex items-center gap-2">
+            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0" />
+            ابتداء العزاء من:
+          </FormLabel>
+          {relativeDateText && (
+            <Badge variant="secondary" className="text-xs font-semibold px-2.5 py-1 bg-primary/15 text-primary border-primary/20">
+              {relativeDateText}
+            </Badge>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full box-border">
+          {/* خانة التاريخ الحقيقي (Date Picker) */}
+          <FormField
+            control={form.control}
+            name="condolenceStartDate"
+            render={({ field }) => (
+              <FormItem className="w-full min-w-0">
+                <FormLabel className="text-xs font-semibold text-foreground">تاريخ ابتداء العزاء</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="date" 
+                    className="h-10 bg-background text-xs sm:text-sm font-medium w-full" 
+                    value={field.value || ""} 
+                    onChange={field.onChange}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* خانة ملاحظة الوقت (مثل: بعد صلاة العصر) */}
+          <FormField
+            control={form.control}
+            name="condolenceStartTime"
+            render={({ field }) => (
+              <FormItem className="w-full min-w-0">
+                <FormLabel className="text-xs font-semibold text-foreground">ملاحظة الوقت</FormLabel>
+                <FormControl>
+                  <Input 
+                    placeholder="مثال: بعد صلاة العصر" 
+                    className="h-10 bg-background text-xs sm:text-sm font-medium w-full" 
+                    {...field} 
+                    value={field.value || ""} 
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+      </div>
+
+      <FormField
+        control={form.control}
+        name="notes"
+        render={({ field }) => (
+          <FormItem className="w-full max-w-full box-border">
+            <FormLabel className="text-xs sm:text-sm font-semibold">ملاحظات وتنويهات إضافية (اختياري)</FormLabel>
+            <FormControl>
+              <Textarea 
+                placeholder="مثال: يقتصر العزاء على المقبرة تنفيذاً لوصية المتوفى، وإنا لله وإنا إليه راجعون..." 
+                className="min-h-[120px] resize-none bg-background text-xs sm:text-sm leading-relaxed w-full box-border" 
+                {...field} 
+                value={field.value || ""} 
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
     </div>
   );
 }
 
+// ==========================================
+// الخطوة 6: المراجعة النهائية (ReviewStep)
+// ==========================================
 export function ReviewStep() {
   const form = useFormContext<ObituaryFormValues>();
-  const values = form.getValues();
+  const data = form.getValues();
+
+  const deceased = data.deceasedList || [];
+  const relatives = data.relatives || [];
+  const burial = data.burial;
+  const prayer = data.prayer;
+  const condolences = data.condolences;
+  const startDate = data.condolenceStartDate;
 
   return (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="text-center mb-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 text-primary mb-4">
-          <CheckCircle2 className="w-8 h-8" />
+    <div className="space-y-5 animate-in fade-in duration-300 w-full max-w-full box-border overflow-hidden">
+      <div className="text-center pb-3 border-b">
+        <div className="mx-auto w-10 h-10 sm:w-12 sm:h-12 bg-primary/10 rounded-full flex items-center justify-center mb-1.5">
+          <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-primary" />
         </div>
-        <h2 className="text-3xl font-bold text-primary mb-2">مراجعة الإعلان</h2>
-        <p className="text-muted-foreground">هذا هو النص الذي سيُنشر. ارجع إلى الخطوات السابقة لتعديل أي جزء.</p>
+        <h2 className="text-xl sm:text-2xl font-bold text-foreground">مراجعة بيانات إعلان الوفاة</h2>
+        <p className="text-muted-foreground text-xs sm:text-sm mt-0.5">تأكد من صحة وشمولية البيانات قبل الاعتماد والإرسال النهائي.</p>
       </div>
-      <AnnouncementPreview values={values} />
+
+      <AnnouncementPreview />
+
+      <div className="space-y-3.5 text-xs sm:text-sm w-full box-border">
+        {/* المتوفون */}
+        <Card className="border p-3 sm:p-4 bg-card space-y-2 w-full box-border">
+          <h3 className="font-bold text-primary flex items-center gap-1.5 border-b pb-1.5">
+            <User className="w-4 h-4 shrink-0" />
+            المتوفون ({deceased.length})
+          </h3>
+          <div className="space-y-2 pt-1">
+            {deceased.map((d, i) => (
+              <div key={i} className="flex flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Badge variant="outline" className="font-normal">{d.gender}</Badge>
+                  {d.title && d.title !== "none" && <Badge variant="secondary">{d.title}</Badge>}
+                  <span className="font-semibold">{d.fullName || "متوفاة (بدون ذكر اسم)"}</span>
+                  {d.age && <span className="text-muted-foreground text-xs">({d.age} سنة)</span>}
+                  {d.nationality && <span className="text-xs text-muted-foreground">• الجنسية: {d.nationality}</span>}
+                  {d.deathLocation && <span className="text-xs text-muted-foreground">• توفي في {d.deathLocation}</span>}
+                </div>
+                {d.femaleRelations && d.femaleRelations.length > 0 && (
+                  <div className="text-xs text-muted-foreground pr-2">
+                    {d.femaleRelations.map((fr, idx) => (
+                      <span key={idx} className="ml-2">
+                        {fr.relationType}: <span className="font-medium text-foreground">{fr.relatedName}</span> {fr.isHusbandDeceased ? "(رحمه الله)" : ""}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        {/* الأقارب */}
+        {relatives.length > 0 && (
+          <Card className="border p-3 sm:p-4 bg-card space-y-2 w-full box-border">
+            <h3 className="font-bold text-primary flex items-center gap-1.5 border-b pb-1.5">
+              <Users className="w-4 h-4 shrink-0" />
+              الأقارب
+            </h3>
+            <div className="space-y-1.5 pt-1">
+              {relatives.map((r, i) => (
+                <div key={i} className="text-xs">
+                  <span className="font-bold text-foreground">{r.relationType}: </span>
+                  <span className="text-muted-foreground">
+                    {r.persons?.map(p => `${p.name}${p.isDeceased ? " (رحمه الله)" : ""}${p.workplace ? ` - ${p.workplace}` : ""}`).join("، ")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {/* الصلاة والدفن */}
+        <Card className="border p-3 sm:p-4 bg-card space-y-2 w-full box-border">
+          <h3 className="font-bold text-primary flex items-center gap-1.5 border-b pb-1.5">
+            <Calendar className="w-4 h-4 shrink-0" />
+            الصلاة والدفن
+          </h3>
+          {burial?.status === "done" ? (
+            <div className="space-y-1.5 text-xs pt-1">
+              <div className="flex items-center gap-1.5">
+                <Badge variant="default" className="bg-primary text-primary-foreground font-semibold">
+                  تم الدفن
+                </Badge>
+              </div>
+              <div>
+                <span className="text-muted-foreground">ملاحظات الدفن:</span>{" "}
+                <span className="font-medium text-foreground">{burial?.notes || "تمت إجراءات الدفن مسبقاً"}</span>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
+              <div>
+                <span className="text-muted-foreground">الحالة:</span>{" "}
+                <span className="font-medium text-foreground">سيتم الدفن</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">المقبرة:</span>{" "}
+                <span className="font-medium text-foreground">{burial?.locationName || "غير محدد"}</span>
+              </div>
+              <div className="sm:col-span-2">
+                <span className="text-muted-foreground">الموعد:</span>{" "}
+                <span className="font-medium text-foreground">
+                  {[burial?.dateDescription, burial?.timeDescription].filter(Boolean).join(" - ") || "غير محدد"}
+                </span>
+              </div>
+              {prayer?.enabled && prayer?.locationName && prayer.locationName.trim() && (
+                <div className="sm:col-span-2 border-t pt-1.5 mt-1 space-y-0.5">
+                  <span className="text-muted-foreground font-semibold">جامع صلاة الجنازة (منفصل):</span>{" "}
+                  <span className="font-semibold text-foreground">{prayer.locationName.trim()}</span>
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+
+        {/* العزاء */}
+        <Card className="border p-3 sm:p-4 bg-card space-y-2.5 w-full box-border">
+          <h3 className="font-bold text-primary flex items-center gap-1.5 border-b pb-1.5">
+            <Heart className="w-4 h-4 shrink-0" />
+            العزاء ومقر الاستقبال
+          </h3>
+          <div className="text-xs space-y-2 pt-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-muted-foreground">نوع العزاء:</span>{" "}
+              <Badge variant="outline" className="font-medium">
+                {condolences?.type === "full" ? "رجال ونساء" :
+                 condolences?.type === "men_only" ? "رجال فقط" :
+                 condolences?.type === "women_only" ? "نساء فقط" :
+                 condolences?.type === "phone_only" ? "هاتف فقط" : "يقتصر على المقبرة"}
+              </Badge>
+            </div>
+
+            {condolences?.type === "none" && (
+              <p className="text-muted-foreground text-xs">يقتصر العزاء على المقبرة تنفيذاً للوصية أو الظروف.</p>
+            )}
+
+            {(startDate || data.condolenceStartTime) && (
+              <div>
+                <span className="text-muted-foreground">ابتداء العزاء:</span>{" "}
+                <span className="font-semibold text-primary">
+                  {[getRelativeDateLabel(startDate || ""), data.condolenceStartTime].filter(Boolean).join(" - ")}
+                </span>
+              </div>
+            )}
+
+            {/* عزاء الرجال */}
+            {(condolences?.type === "full" || condolences?.type === "men_only") && (
+              <div className="p-2.5 rounded-lg bg-muted/30 border space-y-1">
+                <div className="font-bold text-primary text-xs flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 shrink-0" />
+                  مقر عزاء الرجال
+                </div>
+                {(() => {
+                  const card = condolences?.men;
+                  const venue = card?.locationName?.trim() || "";
+                  const duration = card?.durationDays ? `${card.durationDays} أيام` : "";
+                  const mapsLink = card?.mapsLink?.trim() || "";
+                  const schedule = card?.schedule;
+                  const hasSchedule = schedule?.enabled;
+                  
+                  const morningTime = (schedule?.morningFrom || schedule?.morningTo)
+                    ? `من ${formatTime12h(schedule?.morningFrom || "")} إلى ${formatTime12h(schedule?.morningTo || "")}`
+                    : "";
+                  const eveningTime = (schedule?.eveningFrom || schedule?.eveningTo)
+                    ? `من ${formatTime12h(schedule?.eveningFrom || "")} إلى ${formatTime12h(schedule?.eveningTo || "")}`
+                    : "";
+                  const fridayTime = schedule?.fridayNote?.trim() || "";
+
+                  if (!venue && !duration && !hasSchedule && !mapsLink) {
+                    return <p className="text-muted-foreground text-[11px]">لم يتم إدخال تفاصيل إضافية للمقر</p>;
+                  }
+
+                  return (
+                    <div className="space-y-1 text-xs">
+                      {venue && (
+                        <div><span className="text-muted-foreground">المقر:</span> <span className="font-semibold text-foreground">{venue}</span></div>
+                      )}
+                      {duration && (
+                        <div><span className="text-muted-foreground">المدة:</span> <span className="font-medium text-foreground">{duration}</span></div>
+                      )}
+                      {hasSchedule && (morningTime || eveningTime || fridayTime) && (
+                        <div className="space-y-0.5 border-t pt-1.5 mt-1 text-[11px]">
+                          <span className="font-bold text-foreground">أوقات استقبال المعزين:</span>
+                          {morningTime && <div>• الفترة الصباحية: <span className="font-medium text-foreground">{morningTime}</span></div>}
+                          {eveningTime && <div>• الفترة المسائية: <span className="font-medium text-foreground">{eveningTime}</span></div>}
+                          {fridayTime && <div>• يوم الجمعة: <span className="font-medium text-foreground">{fridayTime}</span></div>}
+                        </div>
+                      )}
+                      {mapsLink && (
+                        <div>
+                          <span className="text-muted-foreground">الموقع:</span>{" "}
+                          <a href={mapsLink} target="_blank" rel="noreferrer" className="text-primary underline text-[11px] inline-flex items-center gap-1 font-mono">
+                            <LinkIcon className="w-3 h-3" /> رابط الخريطة
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* عزاء النساء */}
+            {(condolences?.type === "full" || condolences?.type === "women_only") && (
+              <div className="p-2.5 rounded-lg bg-muted/30 border space-y-1">
+                <div className="font-bold text-primary text-xs flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5 shrink-0" />
+                  مقر عزاء النساء
+                </div>
+                {(() => {
+                  const card = condolences?.women;
+                  const venue = card?.locationName?.trim() || "";
+                  const duration = card?.durationDays ? `${card.durationDays} أيام` : "";
+                  const mapsLink = card?.mapsLink?.trim() || "";
+                  const schedule = card?.schedule;
+                  const hasSchedule = schedule?.enabled;
+                  
+                  const morningTime = (schedule?.morningFrom || schedule?.morningTo)
+                    ? `من ${formatTime12h(schedule?.morningFrom || "")} إلى ${formatTime12h(schedule?.morningTo || "")}`
+                    : "";
+                  const eveningTime = (schedule?.eveningFrom || schedule?.eveningTo)
+                    ? `من ${formatTime12h(schedule?.eveningFrom || "")} إلى ${formatTime12h(schedule?.eveningTo || "")}`
+                    : "";
+                  const fridayTime = schedule?.fridayNote?.trim() || "";
+
+                  if (!venue && !duration && !hasSchedule && !mapsLink) {
+                    return <p className="text-muted-foreground text-[11px]">لم يتم إدخال تفاصيل إضافية للمقر</p>;
+                  }
+
+                  return (
+                    <div className="space-y-1 text-xs">
+                      {venue && (
+                        <div><span className="text-muted-foreground">المقر:</span> <span className="font-semibold text-foreground">{venue}</span></div>
+                      )}
+                      {duration && (
+                        <div><span className="text-muted-foreground">المدة:</span> <span className="font-medium text-foreground">{duration}</span></div>
+                      )}
+                      {hasSchedule && (morningTime || eveningTime || fridayTime) && (
+                        <div className="space-y-0.5 border-t pt-1.5 mt-1 text-[11px]">
+                          <span className="font-bold text-foreground">أوقات استقبال المعزين:</span>
+                          {morningTime && <div>• الفترة الصباحية: <span className="font-medium text-foreground">{morningTime}</span></div>}
+                          {eveningTime && <div>• الفترة المسائية: <span className="font-medium text-foreground">{eveningTime}</span></div>}
+                          {fridayTime && <div>• يوم الجمعة: <span className="font-medium text-foreground">{fridayTime}</span></div>}
+                        </div>
+                      )}
+                      {mapsLink && (
+                        <div>
+                          <span className="text-muted-foreground">الموقع:</span>{" "}
+                          <a href={mapsLink} target="_blank" rel="noreferrer" className="text-primary underline text-[11px] inline-flex items-center gap-1 font-mono">
+                            <LinkIcon className="w-3 h-3" /> رابط الخريطة
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
+            {/* هواتف التعزية (تظهر فقط عند هاتف فقط) */}
+            {condolences?.type === "phone_only" && condolences?.phones && condolences.phones.length > 0 && (
+              <div className="p-2.5 rounded-lg bg-muted/30 border space-y-1">
+                <span className="text-muted-foreground font-semibold">هواتف التعزية:</span>{" "}
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {condolences.phones.map((phone, idx) => (
+                    <Badge key={idx} variant="outline" className="font-mono text-xs" dir="ltr">
+                      {phone}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }

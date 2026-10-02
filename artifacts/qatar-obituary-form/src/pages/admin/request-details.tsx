@@ -262,7 +262,7 @@ export default function AdminRequestDetailsPage() {
                 <div className="font-bold mb-3 flex items-center gap-2"><Badge className={req.burial.status === "completed" ? "bg-green-600" : req.burial.status === "postponed" ? "bg-amber-600" : "bg-blue-600"}>{burialStatusLabels[req.burial.status]}</Badge></div>
                 <div className="space-y-2 text-sm">
                   {req.burial.day && <p><span className="text-muted-foreground">يوم الدفن:</span> {[req.burial.day, req.burial.weekday].filter(Boolean).join(" ")}</p>}
-                  {req.burial.postponeNote && <p><span className="text-muted-foreground">ملاحظة التأجيل:</span> {req.burial.postponeNote}</p>}
+                  {req.burial.note && <p><span className="text-muted-foreground">ملاحظة الدفن:</span> {req.burial.note}</p>}
                   {req.burial.time && <p><span className="text-muted-foreground">الوقت:</span> {req.burial.time}</p>}
                   {req.burial.outsideQatar ? (
                     <p><span className="text-muted-foreground">مكان الدفن:</span> خارج قطر - {req.burial.outsideLocation}</p>

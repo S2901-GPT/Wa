@@ -41,6 +41,8 @@ export type Announcement = {
   posterNames: string;
   /** أسطر قسم «بيانات المتوفى» في الصورة: الاسم/التعريف أولاً (القالب الرسمي لا يعرض الأسماء في الرأس) ثم التفاصيل. */
   posterDetails: string[];
+  /** مجموعات الأقارب بصيغتها النهائية (للقوالب البصرية). */
+  relativeBlocks: RelativeBlock[];
   sections: AnnouncementSection[];
   closing: string;
   warnings: string[];
@@ -117,13 +119,39 @@ function isQatari(nationality: string): boolean {
 const WEEKDAYS = ["السبت", "الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"];
 const RELATIVE_DAYS = ["اليوم", "غداً", "غدا", "الليلة", "أمس", "امس"];
 
+const WEEKDAYS_BY_INDEX = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+const MONTH_NAMES = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})(?:\s+(.*))?$/u;
+
+/**
+ * تاريخ من منتقي التاريخ («2026-10-02») بصيغة الإعلان نسبةً إلى يوم النشر:
+ * «اليوم الجمعة»، «غداً السبت»، «أمس الخميس»، أو «يوم الأحد 12 أكتوبر». أي نص بعد التاريخ يُلحق كما هو.
+ */
+export function formatIsoDay(value: string | undefined, now: Date = new Date()): string | null {
+  const match = ISO_DATE.exec(clean(value));
+  if (!match) return null;
+  const [, year, month, day, rest] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  if (Number.isNaN(date.getTime())) return null;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = Math.round((date.getTime() - today.getTime()) / 86_400_000);
+  const weekday = WEEKDAYS_BY_INDEX[date.getDay()];
+  const text = diff === 0 ? `اليوم ${weekday}`
+    : diff === 1 ? `غداً ${weekday}`
+    : diff === -1 ? `أمس ${weekday}`
+    : `يوم ${weekday} ${date.getDate()} ${MONTH_NAMES[date.getMonth()]}`;
+  return rest ? `${text} ${clean(rest)}` : text;
+}
+
 /** «اليوم السبت بعد صلاة العصر»، «يوم الخميس»، دون «يوم اليوم». */
-export function dayTimePhrase(day?: string, weekday?: string, time?: string): string {
+export function dayTimePhrase(day?: string, weekday?: string, time?: string, now?: Date): string {
   const dayText = clean(day);
   const weekdayText = clean(weekday);
   const timeText = clean(time);
   let when = "";
-  if (dayText && weekdayText && RELATIVE_DAYS.includes(dayText)) when = `${dayText} ${weekdayText}`;
+  const isoDay = formatIsoDay(dayText, now);
+  if (isoDay) when = isoDay;
+  else if (dayText && weekdayText && RELATIVE_DAYS.includes(dayText)) when = `${dayText} ${weekdayText}`;
   else if (dayText && WEEKDAYS.includes(dayText)) when = `يوم ${dayText}`;
   else if (dayText) when = dayText;
   else if (weekdayText) when = `يوم ${weekdayText}`;
@@ -209,6 +237,13 @@ const LEGACY_RELATIONS: Record<string, RelationKey> = {
   "عم": "paternal_uncles", "أعمام": "paternal_uncles", "الأعمام": "paternal_uncles",
   "خال": "maternal_uncles", "أخوال": "maternal_uncles", "الأخوال": "maternal_uncles",
   "حفيد": "grandchildren", "أحفاد": "grandchildren", "الأحفاد": "grandchildren",
+  // عناوين نسخة AI Studio السابقة (بضمير الغائب).
+  "أبناؤه": "children", "أبناؤها": "children",
+  "أخوانه": "siblings", "أخوانها": "siblings", "إخوانه": "siblings", "إخوانها": "siblings", "إخوته": "siblings", "إخوتها": "siblings",
+  "أعمامه": "paternal_uncles", "أعمامها": "paternal_uncles",
+  "أخواله": "maternal_uncles", "أخوالها": "maternal_uncles",
+  "أحفاده": "grandchildren", "أحفادها": "grandchildren",
+  "أصهاره": "daughters_husbands", "أصهارها": "daughters_husbands",
 };
 
 /** الطلبات القديمة خزّنت الصلة نصاً («ابن»، «أخ»…)؛ نحوّلها إلى مفتاح، وما لا يُعرف يبقى عنواناً حراً. */
@@ -261,22 +296,38 @@ function referenceLine(person: LinkedPerson): string {
   return [linkedPhrase("أبناء", person), person.deceased ? mercyForMen(1) : ""].filter(Boolean).join(" ");
 }
 
-function renderRole(
+/** مجموعة أقارب بعد الصياغة: يستعملها النص (أسطر) والقوالب البصرية («العنوان: الأسماء»). */
+export type RelativeBlock = {
+  /** «والدة كل من» أو «والدة» عند شخص واحد. */
+  heading: string;
+  /** الأسماء دون واو العطف، والترحّم ملحق بها. */
+  members: string[];
+  /** سطر «أبناء الوالد / …» أو السطر الحر بعد القائمة. */
+  reference?: string;
+  single: boolean;
+};
+
+function roleBlock(
   group: RelativeGroup,
   perspective: { gender?: Gender } | { groupSuffix: "هم" | "هن" },
   fallbackReference?: LinkedPerson,
-): string[] {
+): RelativeBlock | null {
   const key = relationKeyOf(group);
   const names = relativeNameLines(group.people, group.deceasedPlacement);
-  if (!names.length) return [];
+  if (!names.length) return null;
   const namedCount = group.people.filter((person) => clean(person.name)).length;
+  const single = names.length === 1 && namedCount === 1;
   const heading = roleHeading(group, key, namedCount, perspective);
-  const lines = names.length === 1 && namedCount === 1
-    ? [`${heading} / ${names[0]}`]
-    : [`${heading} كل من`, ...prefixAnd(names)];
-  const reference = clean(group.reference?.name) ? group.reference : fallbackReference;
-  if (reference && clean(reference.name) && relationTakesReference(key)) lines.push(referenceLine(reference));
-  else if (clean(group.familyReference)) lines.push(clean(group.familyReference));
+  const referencePerson = clean(group.reference?.name) ? group.reference : fallbackReference;
+  const reference = referencePerson && clean(referencePerson.name) && relationTakesReference(key)
+    ? referenceLine(referencePerson)
+    : clean(group.familyReference) || undefined;
+  return { heading: single ? heading : `${heading} كل من`, members: names, reference, single };
+}
+
+function blockLines(block: RelativeBlock): string[] {
+  const lines = block.single ? [`${block.heading} / ${block.members[0]}`] : [block.heading, ...prefixAnd(block.members)];
+  if (block.reference) lines.push(block.reference);
   return lines;
 }
 
@@ -528,6 +579,7 @@ function sharedParentLine(request: ObituaryRequestInput): string {
 type IdentityComposition = {
   identityLines: string[];
   relativesLines: string[];
+  relativeBlocks: RelativeBlock[];
   posterNames: string;
   posterDetails: string[];
   shortIdentity: string;
@@ -552,6 +604,18 @@ function composeIdentity(request: ObituaryRequestInput, warnings: string[]): Ide
       warnings.push(`طريقة التعريف المختارة للمتوفى ${people.length > 1 ? `رقم ${index + 1} ` : ""}تنقصها بيانات؛ استُخدم بديل متاح.`);
     }
   });
+
+  const relativeBlocks: RelativeBlock[] = [];
+  const renderRole = (
+    group: RelativeGroup,
+    perspective: { gender?: Gender } | { groupSuffix: "هم" | "هن" },
+    fallbackReference?: LinkedPerson,
+  ) => {
+    const block = roleBlock(group, perspective, fallbackReference);
+    if (!block) return [];
+    relativeBlocks.push(block);
+    return blockLines(block);
+  };
 
   const rolesLinesFor = (index: number, identity: IdentityResult, gender?: Gender) => {
     const person = people[index];
@@ -580,6 +644,7 @@ function composeIdentity(request: ObituaryRequestInput, warnings: string[]): Ide
     return {
       identityLines: [`${singleVerb(person.gender)} ${first}${placeSuffix}`.trim(), ...rest, ...details],
       relativesLines,
+      relativeBlocks,
       posterNames: identity.plain,
       posterDetails: [identity.plain, ...rest, ...(placeSuffix ? [`وكانت الوفاة${placeSuffix}`] : []), ...details].filter(Boolean),
       shortIdentity: first,
@@ -615,6 +680,7 @@ function composeIdentity(request: ObituaryRequestInput, warnings: string[]): Ide
     return {
       identityLines,
       relativesLines: groupRoleLines,
+      relativeBlocks,
       posterNames: joinWithAnd(names),
       posterDetails,
       shortIdentity: `${joinWithAnd(names)}${parentLine ? ` ${parentLine}` : ""}`,
@@ -650,6 +716,7 @@ function composeIdentity(request: ObituaryRequestInput, warnings: string[]): Ide
     return {
       identityLines: lines,
       relativesLines: parentRoleLines,
+      relativeBlocks,
       posterNames: joinWithAnd(posterParts),
       posterDetails: [parentIdentity.plain, ...(placeSuffix ? [`وكانت الوفاة${placeSuffix}`] : []), ...lines.slice(1)].filter(Boolean),
       shortIdentity: `${first} و${posterParts.slice(1).join(" و")}`,
@@ -666,6 +733,7 @@ function composeIdentity(request: ObituaryRequestInput, warnings: string[]): Ide
   return {
     identityLines: [groupVerb(people), ...flattened],
     relativesLines: groupRoleLines,
+    relativeBlocks,
     posterNames: joinWithAnd(identities.map((identity) => identity.plain)),
     posterDetails: flattened,
     shortIdentity: joinWithAnd(identities.map((identity) => identity.lines[0] ?? "")),
@@ -690,16 +758,21 @@ function sentence(parts: Array<string | undefined>): string {
   return parts.map((part) => clean(part)).filter(Boolean).join(" ");
 }
 
-function prayerAndBurial(request: ObituaryRequestInput, warnings: string[]): { prayer: AnnouncementSection; burial: AnnouncementSection } {
+function prayerAndBurial(
+  request: ObituaryRequestInput,
+  warnings: string[],
+  now?: Date,
+): { prayer: AnnouncementSection; burial: AnnouncementSection } {
   const { prayer, burial } = request;
   const status = burial.status;
   const prayerLines: string[] = [];
   const burialLines: string[] = [];
   const place = burialPlace(request);
-  const burialWhen = dayTimePhrase(burial.day, burial.weekday, burial.time);
+  const burialWhen = dayTimePhrase(burial.day, burial.weekday, burial.time, now);
   const prayerEnabled = prayer.enabled && status !== "postponed";
+  const note = clean(burial.note);
 
-  const prayerWhen = prayerEnabled ? dayTimePhrase(prayer.day, prayer.weekday, prayer.time) : "";
+  const prayerWhen = prayerEnabled ? dayTimePhrase(prayer.day, prayer.weekday, prayer.time, now) : "";
   if (prayerEnabled) {
     const prayerPlace = clean(prayer.place);
     prayerLines.push(sentence([
@@ -711,7 +784,10 @@ function prayerAndBurial(request: ObituaryRequestInput, warnings: string[]): { p
 
   if (status === "postponed") {
     burialLines.push("تأجيل الدفن حتى إشعار آخر");
-    if (clean(burial.postponeNote)) burialLines.push(clean(burial.postponeNote));
+    if (note) burialLines.push(note);
+  } else if (status === "completed" && note && !burialWhen && !clean(burial.cemetery) && !clean(burial.outsideLocation)) {
+    // ملاحظة مثل «تم الدفن في مكة المكرمة» تصف الدفن كاملاً، فلا نضيف «تم الدفن» قبلها.
+    burialLines.push(/^(?:تم|تمت|وتم)\s/u.test(note) ? note : `تم الدفن ${note}`);
   } else {
     const verb = status === "completed"
       ? (prayerEnabled ? "وتم الدفن" : "تم الدفن")
@@ -719,6 +795,7 @@ function prayerAndBurial(request: ObituaryRequestInput, warnings: string[]): { p
     // الدفن يلي الصلاة مباشرة؛ لا نكرر الموعد إن كان هو نفسه.
     const when = prayerEnabled && burialWhen === prayerWhen ? "" : burialWhen;
     burialLines.push(sentence([verb, when, place ? `في ${place}` : ""]));
+    if (note) burialLines.push(note);
     if (status === "upcoming" && !burial.outsideQatar) {
       if (!clean(burial.day) && !clean(burial.weekday) && !(prayerEnabled && clean(prayer.day))) warnings.push("يوم الدفن غير محدد.");
       if (!clean(burial.time) && !(prayerEnabled && clean(prayer.time))) warnings.push("وقت الدفن غير محدد.");
@@ -736,9 +813,11 @@ function prayerAndBurial(request: ObituaryRequestInput, warnings: string[]): { p
 
 const ORDINALS = ["الأول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس"];
 
-function startPhrase(start?: string): string {
+function startPhrase(start?: string, now?: Date): string {
   const value = clean(start);
   if (!value) return "";
+  const isoDay = formatIsoDay(value, now);
+  if (isoDay) return `من ${isoDay}`;
   if (value === "اليوم") return "من اليوم";
   if (value === "غداً" || value === "غدا") return "من الغد";
   return withPrefix(value, "من", /^(?:من|بعد|حتى|ابتداءً|ابتداء)\s/u);
@@ -756,19 +835,19 @@ function addressPhrase(card: CondolenceCard): string {
 }
 
 /** أسطر بطاقة عزاء واحدة: «عزاء الرجال من اليوم في … لمدة ٣ أيام، الفترة المسائية». */
-export function condolenceCardLines(card: CondolenceCard, label: string): string[] {
+export function condolenceCardLines(card: CondolenceCard, label: string, now?: Date): string[] {
   const location = clean(card.location);
   const area = clean(card.area);
   const where = location
     ? `${withPrefix(location, "في", /^(?:في|ب)\s/u)}${area && !location.includes(area) ? ` بمنطقة ${area}` : ""}`
     : area ? `في ${area}` : "";
   const address = addressPhrase(card);
-  const opening = sentence([label, startPhrase(card.start), where]);
+  const opening = sentence([label, startPhrase(card.start, now), where]);
   const first = address ? `${opening}${where ? "، " : " "}${address}` : opening;
   const timing = [
     formatDurationDays(card.durationDays),
     clean(card.time),
-    clean(card.until) && withPrefix(card.until ?? "", "حتى", /^حتى/u),
+    clean(card.until) && withPrefix(formatIsoDay(card.until, now) ?? card.until ?? "", "حتى", /^حتى/u),
   ].filter(Boolean).join("، ");
   const schedule = (card.schedule ?? [])
     .map((entry) => sentence([entry.days, entry.time]))
@@ -789,11 +868,11 @@ function cardTargetLabel(request: ObituaryRequestInput, card: CondolenceCard): s
 }
 
 /** أسطر البطاقة في الصورة: عنوان القسم («عزاء النساء لـسعود رحمه الله») يظهر فوقها، فلا يُكرر داخل النص. */
-export function posterCardLines(_request: ObituaryRequestInput, card: CondolenceCard): string[] {
-  return condolenceCardLines(card, "");
+export function posterCardLines(_request: ObituaryRequestInput, card: CondolenceCard, now?: Date): string[] {
+  return condolenceCardLines(card, "", now);
 }
 
-function condolenceSections(request: ObituaryRequestInput, warnings: string[]): AnnouncementSection[] {
+function condolenceSections(request: ObituaryRequestInput, warnings: string[], now?: Date): AnnouncementSection[] {
   const options = request.condolenceOptions ?? [];
   const cards = request.condolences ?? [];
   const people = request.deceasedPeople ?? [];
@@ -818,7 +897,7 @@ function condolenceSections(request: ObituaryRequestInput, warnings: string[]): 
       } else if (audience === "women" && hasMenVenue) {
         label = "والنساء";
       }
-      const lines = condolenceCardLines(card, label);
+      const lines = condolenceCardLines(card, label, now);
       if (!clean(card.location) && !clean(card.area) && !addressPhrase(card) && !clean(card.mapLink)) {
         warnings.push(`مكان ${base}${audienceCards.length > 1 ? ` (${position + 1})` : ""} غير محدد.`);
       }
@@ -897,7 +976,13 @@ function joinSections(blocks: string[][]): string {
     .join("\n\n");
 }
 
-export function buildAnnouncement(request: ObituaryRequestInput): Announcement {
+export type AnnouncementOptions = {
+  /** يوم النشر الذي تُحسب منه «اليوم/غداً» لتواريخ منتقي التاريخ (الافتراضي: الآن). */
+  now?: Date;
+};
+
+export function buildAnnouncement(request: ObituaryRequestInput, options: AnnouncementOptions = {}): Announcement {
+  const { now } = options;
   const warnings: string[] = [];
   const people = request.deceasedPeople ?? [];
   const messageType = request.messageType ?? "announcement";
@@ -907,7 +992,7 @@ export function buildAnnouncement(request: ObituaryRequestInput): Announcement {
 
   if (messageType === "postponement") {
     const lines = [`تأجيل دفن ${sentence([identity.shortIdentity, mercyForDeceased(people)])} حتى إشعار آخر`];
-    if (clean(request.burial?.postponeNote)) lines.push(clean(request.burial.postponeNote));
+    if (clean(request.burial?.note)) lines.push(clean(request.burial.note));
     const notes = clean(request.notes) ? [clean(request.notes)] : [];
     const sections: AnnouncementSection[] = [
       { id: "notice", lines },
@@ -918,6 +1003,7 @@ export function buildAnnouncement(request: ObituaryRequestInput): Announcement {
       statement,
       posterNames: identity.posterNames,
       posterDetails: identity.posterDetails,
+      relativeBlocks: identity.relativeBlocks,
       sections,
       closing: "",
       warnings,
@@ -932,14 +1018,15 @@ export function buildAnnouncement(request: ObituaryRequestInput): Announcement {
       statement,
       posterNames: identity.posterNames,
       posterDetails: identity.posterDetails,
+      relativeBlocks: identity.relativeBlocks,
       sections: [{ id: "notice", lines }, ...(notes.length ? [{ id: "notes", label: "ملاحظات", lines: notes }] : [])],
       closing: "",
       warnings,
     };
   }
 
-  const { prayer, burial } = prayerAndBurial(request, warnings);
-  const condolences = condolenceSections(request, warnings);
+  const { prayer, burial } = prayerAndBurial(request, warnings, now);
+  const condolences = condolenceSections(request, warnings, now);
   const notes = clean(request.notes) ? [request.notes!.trim()] : [];
   if (!closing && people.length) warnings.push("لم يُكتب الدعاء الختامي لأن جنس أحد المتوفين غير محدد.");
 
@@ -969,6 +1056,7 @@ export function buildAnnouncement(request: ObituaryRequestInput): Announcement {
     statement,
     posterNames: identity.posterNames,
     posterDetails: identity.posterDetails,
+    relativeBlocks: identity.relativeBlocks,
     sections,
     closing,
     warnings: [...new Set(warnings)],

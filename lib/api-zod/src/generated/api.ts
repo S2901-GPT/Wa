@@ -90,7 +90,7 @@ export const ListObituaryRequestsResponseItem = zod.object({
   "mapLink": zod.string().optional(),
   "outsideQatar": zod.boolean(),
   "outsideLocation": zod.string().optional(),
-  "postponeNote": zod.string().optional()
+  "note": zod.string().optional().describe('ملاحظة الدفن (سبب التأجيل، أو وصف دفن تمّ مثل «تم الدفن في مكة المكرمة»)')
 }),
   "condolenceOptions": zod.array(zod.enum(['phone', 'men', 'women', 'men_cemetery', 'tbd'])),
   "phoneAudience": zod.enum(['all', 'men', 'women']).optional(),
@@ -208,7 +208,7 @@ export const CreateObituaryRequestBody = zod.object({
   "mapLink": zod.string().optional(),
   "outsideQatar": zod.boolean(),
   "outsideLocation": zod.string().optional(),
-  "postponeNote": zod.string().optional()
+  "note": zod.string().optional().describe('ملاحظة الدفن (سبب التأجيل، أو وصف دفن تمّ مثل «تم الدفن في مكة المكرمة»)')
 }),
   "condolenceOptions": zod.array(zod.enum(['phone', 'men', 'women', 'men_cemetery', 'tbd'])),
   "phoneAudience": zod.enum(['all', 'men', 'women']).optional(),
@@ -318,7 +318,7 @@ export const CreateObituaryRequestResponse = zod.object({
   "mapLink": zod.string().optional(),
   "outsideQatar": zod.boolean(),
   "outsideLocation": zod.string().optional(),
-  "postponeNote": zod.string().optional()
+  "note": zod.string().optional().describe('ملاحظة الدفن (سبب التأجيل، أو وصف دفن تمّ مثل «تم الدفن في مكة المكرمة»)')
 }),
   "condolenceOptions": zod.array(zod.enum(['phone', 'men', 'women', 'men_cemetery', 'tbd'])),
   "phoneAudience": zod.enum(['all', 'men', 'women']).optional(),
@@ -439,7 +439,7 @@ export const GetObituaryRequestResponse = zod.object({
   "mapLink": zod.string().optional(),
   "outsideQatar": zod.boolean(),
   "outsideLocation": zod.string().optional(),
-  "postponeNote": zod.string().optional()
+  "note": zod.string().optional().describe('ملاحظة الدفن (سبب التأجيل، أو وصف دفن تمّ مثل «تم الدفن في مكة المكرمة»)')
 }),
   "condolenceOptions": zod.array(zod.enum(['phone', 'men', 'women', 'men_cemetery', 'tbd'])),
   "phoneAudience": zod.enum(['all', 'men', 'women']).optional(),
@@ -560,7 +560,7 @@ export const UpdateObituaryRequestBody = zod.object({
   "mapLink": zod.string().optional(),
   "outsideQatar": zod.boolean(),
   "outsideLocation": zod.string().optional(),
-  "postponeNote": zod.string().optional()
+  "note": zod.string().optional().describe('ملاحظة الدفن (سبب التأجيل، أو وصف دفن تمّ مثل «تم الدفن في مكة المكرمة»)')
 }),
   "condolenceOptions": zod.array(zod.enum(['phone', 'men', 'women', 'men_cemetery', 'tbd'])),
   "phoneAudience": zod.enum(['all', 'men', 'women']).optional(),
@@ -672,7 +672,7 @@ export const UpdateObituaryRequestResponse = zod.object({
   "mapLink": zod.string().optional(),
   "outsideQatar": zod.boolean(),
   "outsideLocation": zod.string().optional(),
-  "postponeNote": zod.string().optional()
+  "note": zod.string().optional().describe('ملاحظة الدفن (سبب التأجيل، أو وصف دفن تمّ مثل «تم الدفن في مكة المكرمة»)')
 }),
   "condolenceOptions": zod.array(zod.enum(['phone', 'men', 'women', 'men_cemetery', 'tbd'])),
   "phoneAudience": zod.enum(['all', 'men', 'women']).optional(),

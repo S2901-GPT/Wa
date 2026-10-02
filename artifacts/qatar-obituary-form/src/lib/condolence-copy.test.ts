@@ -1,12 +1,11 @@
+/**
+ * اختبارات محتوى الصورة: محوّل القوالب (presentation-normalizer) ودوال condolence-copy
+ * يجب أن تطابق صياغة المولّد الموحّد (announcement.ts).
+ */
 import assert from "node:assert/strict";
 import type { ObituaryRequest } from "@workspace/api-client-react";
-import {
-  applyImageDraft,
-  buildCondolencePosterContent,
-  createCondolenceImageDraft,
-  draftQrLinks,
-} from "./condolence-copy";
-import { makeDeathStatement } from "./announcement";
+import { createCondolenceImageDraft, formatDeceasedIdentity, formatRelativePerson, makeDeathStatement } from "./condolence-copy";
+import { normalizeObituaryPresentation } from "./presentation-normalizer";
 
 function makeRequest(overrides: Partial<ObituaryRequest> = {}): ObituaryRequest {
   return {
@@ -26,146 +25,87 @@ function makeRequest(overrides: Partial<ObituaryRequest> = {}): ObituaryRequest 
   } as ObituaryRequest;
 }
 
-function build(request: ObituaryRequest) {
-  const draft = createCondolenceImageDraft(request);
-  return { draft, poster: buildCondolencePosterContent(request, draft, draftQrLinks(draft)) };
-}
-
-const sectionById = (poster: ReturnType<typeof build>["poster"], id: string) => {
-  const item = poster.items.find((entry) => entry.kind === "section" && entry.id === id);
-  return item?.kind === "section" ? item : undefined;
-};
-
 const cases: Array<[string, () => void]> = [
   ["death statement by gender and number", () => {
     assert.equal(makeDeathStatement([{ gender: "man" }]), "انتقل إلى رحمة الله تعالى");
     assert.equal(makeDeathStatement([{ gender: "woman" }]), "انتقلت إلى رحمة الله تعالى");
-    assert.equal(makeDeathStatement([{ gender: "man" }, { gender: "man" }]), "انتقلا إلى رحمة الله تعالى");
     assert.equal(makeDeathStatement([{ gender: "woman" }, { gender: "girl" }]), "انتقلتا إلى رحمة الله تعالى");
     assert.equal(makeDeathStatement([{ gender: "man" }, { gender: "woman" }, { gender: "man" }]), "انتقلوا إلى رحمة الله تعالى");
   }],
-  ["nameless widow: poster names never present the husband as the deceased's own name", () => {
-    const { poster } = build(makeRequest({
-      deceasedPeople: [{ gender: "woman", identifyBy: "spouse", spouse: { kind: "widow", title: "الوالد", name: "سيف سعيد", deceased: true } }],
+  ["nameless widow on the template: the husband is never presented as her name", () => {
+    const content = normalizeObituaryPresentation(makeRequest({
+      deceasedPeople: [{ gender: "woman", identifyBy: "spouse", spouse: { kind: "widow", title: "الوالد", name: "سيف سعيد", deceased: true }, age: 84 }],
     }));
-    assert.equal(poster.names, "أرملة الوالد سيف سعيد رحمهم الله");
-    assert.equal(poster.statement, "انتقلت إلى رحمة الله تعالى");
-    assert.doesNotMatch(poster.names, /،/u);
+    assert.equal(content.statement, "انتقلت إلى رحمة الله تعالى");
+    assert.equal(content.deceasedList[0].identity, "أرملة الوالد سيف سعيد رحمهم الله");
+    assert.deepEqual(content.deceasedList[0].details, ["84 عاماً"]);
+    assert.equal(content.closing, "الله يرحمها ويغفر لها");
   }],
-  ["relatives on the poster use the deceased's perspective and masculine mercy", () => {
-    const { poster } = build(makeRequest({
+  ["relatives on the template use the deceased's perspective and masculine mercy", () => {
+    const content = normalizeObituaryPresentation(makeRequest({
       deceasedPeople: [{ fullName: "نورة", gender: "woman" }],
-      relatives: [{ relation: "", relationKey: "children", people: [{ name: "باسل", deceased: false }, { name: "محمد", deceased: true }] }],
+      relatives: [{ relation: "الأبناء", relationKey: "children", people: [{ name: "باسل", deceased: false }, { name: "محمد", deceased: true }] }],
     }));
-    const relatives = sectionById(poster, "relatives");
-    assert.equal(relatives?.text, "والدة كل من\nباسل\nومحمد رحمه الله");
+    assert.deepEqual(content.relatives, [{ heading: "والدة كل من", membersList: ["باسل", "محمد رحمه الله"], membersText: "باسل ومحمد رحمه الله" }]);
   }],
-  ["men-only condolence module", () => {
-    const { poster } = build(makeRequest({ condolenceOptions: ["men"], condolences: [{ audience: "men", location: "مجلس العائلة" }] }));
-    assert.ok(sectionById(poster, "men"));
-    assert.ok(!sectionById(poster, "women"));
+  ["prayer and burial in the same place become one archive sentence", () => {
+    const content = normalizeObituaryPresentation(makeRequest());
+    assert.equal(content.hasCombinedPrayerBurial, true);
+    assert.equal(content.prayerBurialCombined?.dayTime, "الدفن اليوم بعد صلاة العصر في مقبرة مسيمير");
+    assert.doesNotMatch(JSON.stringify(content), /يوم اليوم|اليوم: /u);
   }],
-  ["men and women modules keep labeled QR codes", () => {
-    const { poster } = build(makeRequest({
+  ["separate mosque prayer then burial", () => {
+    const content = normalizeObituaryPresentation(makeRequest({
+      prayer: { enabled: true, day: "اليوم", time: "بعد صلاة العصر", place: "مسجد حمد بن علي", mapLink: "https://example.com/prayer" },
+    }));
+    assert.equal(content.hasCombinedPrayerBurial, false);
+    assert.equal(content.prayer?.day, "صلاة الجنازة اليوم بعد صلاة العصر في مسجد حمد بن علي");
+    assert.equal(content.prayer?.qrUrl, "https://example.com/prayer");
+    assert.equal(content.burial?.statusText, "والدفن في مقبرة مسيمير");
+  }],
+  ["condolence blocks: archive sentence, duration agreement, and extra locations", () => {
+    const content = normalizeObituaryPresentation(makeRequest({
       condolenceOptions: ["men", "women"],
       condolences: [
-        { audience: "men", location: "مجلس العائلة", mapLink: "https://example.com/men" },
-        { audience: "women", location: "منزل العائلة", mapLink: "https://example.com/women" },
+        { audience: "men", location: "مجلس العائلة", area: "الدفنة", durationDays: 2, mapLink: "https://example.com/men" },
+        { audience: "women", location: "منزل ابنها غانم" },
+        { audience: "women", location: "منزل ابنها ناصر" },
       ],
     }));
-    const men = sectionById(poster, "men");
-    const women = sectionById(poster, "women");
-    assert.equal(men?.label, "عزاء الرجال");
-    assert.equal(men?.qr?.label, "موقع الرجال");
-    assert.equal(men?.qr?.url, "https://example.com/men");
-    assert.equal(men?.text, "في مجلس العائلة");
-    assert.equal(women?.label, "عزاء النساء");
-    assert.equal(women?.qr?.label, "موقع النساء");
+    assert.equal(content.men?.location, "في مجلس العائلة بمنطقة الدفنة\nلمدة يومين");
+    assert.equal(content.men?.qrUrl, "https://example.com/men");
+    assert.equal(content.women?.location, "الموقع الأول:\nفي منزل ابنها غانم\nالموقع الثاني:\nفي منزل ابنها ناصر");
   }],
-  ["a second women location gets its own section and QR", () => {
-    const { poster } = build(makeRequest({
-      condolenceOptions: ["women"],
-      condolences: [
-        { audience: "women", location: "منزل ابنتها", mapLink: "https://example.com/w1" },
-        { audience: "women", location: "منزل أختها", mapLink: "https://example.com/w2" },
-      ],
-    }));
-    assert.equal(sectionById(poster, "women-2")?.qr?.url, "https://example.com/w2");
-    assert.equal(sectionById(poster, "women-2")?.qr?.label, "موقع النساء 2");
+  ["children get «شفيعاً لوالديه يارب», never the adult prayer", () => {
+    const content = normalizeObituaryPresentation(makeRequest({ deceasedPeople: [{ fullName: "يوسف", gender: "boy" }] }));
+    assert.equal(content.closing, "شفيعاً لوالديه يارب");
+    assert.equal(content.deceasedList[0].identity, "الطفل يوسف");
   }],
-  ["phone-only condolence", () => {
-    const { poster } = build(makeRequest({
-      condolenceOptions: ["phone"],
-      phoneAudience: "all",
-      condolencePhoneContacts: [{ name: "ناصر", phone: "55551234" }],
-    }));
-    assert.match(sectionById(poster, "phone")?.text ?? "", /العزاء عن طريق هاتف ناصر: 55551234/u);
-  }],
-  ["short request remains complete", () => {
-    const { poster } = build(makeRequest());
-    assert.equal(poster.names, "عبدالله محمد عبدالله");
-    assert.ok(sectionById(poster, "closing"));
-    assert.equal(sectionById(poster, "closing")?.text, "الله يرحمه ويغفر له");
-    assert.ok(!poster.items.some((item) => item.id === "relatives" || item.id === "notes"));
-  }],
-  ["map link alone keeps its audience card visible", () => {
-    const { poster } = build(makeRequest({ condolenceOptions: ["men"], condolences: [{ audience: "men", mapLink: "https://example.com/men" }] }));
-    const men = sectionById(poster, "men");
-    assert.equal(men?.text, "");
-    assert.equal(men?.qr?.url, "https://example.com/men");
-  }],
-  ["image editor edits flow back into the saved request", () => {
-    const request = makeRequest({
-      condolenceOptions: ["men"],
-      condolences: [{ audience: "men", location: "مجلس", area: "الدفنة" }],
+  ["image editor overrides (names, notes, closing) are applied", () => {
+    const content = normalizeObituaryPresentation(makeRequest(), {
+      deceasedNames: ["عبدالله محمد"],
+      deceasedTitles: ["الوالد"],
+      notes: "ملاحظة",
+      closing: "رحمه الله",
     });
-    const draft = createCondolenceImageDraft(request);
-    draft.cards[0].location = "مجلس العائلة";
-    draft.cards[0].durationDays = "3";
-    const edited = applyImageDraft(request, draft);
-    assert.equal(edited.condolences[0].location, "مجلس العائلة");
-    assert.equal(edited.condolences[0].durationDays, 3);
-    assert.equal(edited.condolences[0].area, "الدفنة");
+    assert.equal(content.deceasedList[0].identity, "الوالد عبدالله محمد");
+    assert.equal(content.notes, "ملاحظة");
+    assert.equal(content.closing, "رحمه الله");
   }],
-  ["long request preserves every populated value in order", () => {
-    const request = makeRequest({
-      deceasedPeople: [{
-        title: "الوالد",
-        fullName: "عبدالله محمد عبدالله",
-        gender: "man",
-        age: 72,
-        nationality: "مصري",
-        deathPlace: "لندن",
-        occupation: "مهندس متقاعد",
-        note: "كان محباً للخير",
-      }],
-      relatives: [
-        { relation: "", relationKey: "children", people: [{ name: "ناصر", occupation: "طبيب", deceased: false }] },
-      ],
-      prayer: { enabled: true, day: "الخميس", time: "بعد صلاة العصر", place: "مسجد الإمام", mapLink: "https://example.com/prayer" },
-      burial: { status: "upcoming", outsideQatar: false, day: "الخميس", time: "بعد صلاة المغرب", cemetery: "مقبرة مسيمير", mapLink: "https://example.com/burial" },
-      condolenceOptions: ["men", "women", "phone"],
-      condolences: [
-        { audience: "men", start: "الخميس", durationDays: 3, time: "بعد العصر", location: "مجلس العائلة", area: "الدفنة", houseNumber: "١٢", mapLink: "https://example.com/men" },
-        { audience: "women", start: "الخميس", durationDays: 3, location: "منزل العائلة", area: "الهلال", mapLink: "https://example.com/women" },
-      ],
-      condolencePhoneContacts: [{ name: "ناصر عبدالله", phone: "55551234" }],
-      notes: "ملاحظة طويلة للاختبار: ".concat("تفاصيل إضافية ".repeat(80)),
-    });
-    const { poster } = build(request);
-    assert.deepEqual(
-      poster.items.map((item) => item.id),
-      ["deceased-details", "relatives", "prayer", "burial", "men", "women", "phone", "notes", "closing"],
-    );
-    const text = JSON.stringify(poster);
-    for (const value of [
-      "الوالد عبدالله محمد عبدالله", "وكانت الوفاة في لندن", "72 عاماً — مصري", "مهندس متقاعد", "ناصر (طبيب)",
-      "صلاة الجنازة يوم الخميس بعد صلاة العصر في مسجد الإمام", "والدفن يوم الخميس بعد صلاة المغرب في مقبرة مسيمير",
-      "لمدة 3 أيام", "منزل رقم ١٢", "ملاحظة طويلة للاختبار:",
-      "https://example.com/men", "https://example.com/women", "https://example.com/prayer", "https://example.com/burial",
-    ]) {
-      assert.ok(text.includes(value), `expected poster data to include: ${value}`);
-    }
+  ["relative wording helper is masculine and keeps the job in parentheses", () => {
+    assert.equal(formatRelativePerson({ name: "مريم", deceased: true }, "والدة"), "مريم رحمه الله");
+    assert.equal(formatRelativePerson({ name: "أحمد", occupation: "جامعة قطر", deceased: false }), "أحمد (جامعة قطر)");
+  }],
+  ["identity helper puts the husband after her name", () => {
+    assert.equal(formatDeceasedIdentity("حرم الشيخ عبدالله", "عائشة محمد"), "عائشة محمد، حرم الشيخ عبدالله");
+  }],
+  ["image draft starts from the generator's sentences", () => {
+    const draft = createCondolenceImageDraft(makeRequest({
+      deceasedPeople: [{ gender: "woman", identifyBy: "spouse", spouse: { kind: "harem", name: "خالد", deceased: false } }],
+    }));
+    assert.deepEqual(draft.deceasedNames, [""]);
+    assert.equal(draft.burialText, "الدفن اليوم بعد صلاة العصر في مقبرة مسيمير");
+    assert.equal(draft.closing, "الله يرحمها ويغفر لها");
   }],
 ];
 

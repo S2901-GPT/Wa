@@ -12,6 +12,7 @@ import {
 import FormPage from '@/pages/form';
 import SuccessPage from '@/pages/success';
 import AdminPage from '@/pages/admin';
+import AdminTemplatesPage from '@/pages/admin/templates';
 import AdminRequestDetailsPage from '@/pages/admin/request-details';
 import AdminEditRequestPage from '@/pages/admin/edit-request';
 
@@ -24,6 +25,7 @@ function Router() {
         <Route path="/" component={FormPage} />
         <Route path="/success/:requestNumber" component={SuccessPage} />
         <Route path="/admin" component={AdminPage} />
+        <Route path="/admin/templates" component={AdminTemplatesPage} />
         <Route path="/admin/:requestNumber" component={AdminRequestDetailsPage} />
         <Route path="/admin/:requestNumber/edit" component={AdminEditRequestPage} />
         <Route component={NotFound} />
@@ -41,7 +43,7 @@ function App() {
   return (
     <div dir="rtl" className="min-h-[100dvh] flex flex-col font-sans antialiased text-foreground bg-background">
       <QueryClientProvider client={queryClient}>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+        <WouterRouter base={import.meta.env.BASE_URL && import.meta.env.BASE_URL !== '/' ? import.meta.env.BASE_URL.replace(/\/$/, '') : undefined}>
           <Router />
         </WouterRouter>
         <Toaster position="top-center" richColors />

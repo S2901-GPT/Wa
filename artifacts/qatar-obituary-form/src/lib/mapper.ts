@@ -1,43 +1,41 @@
 import type {
   CondolenceCard,
+  CondolenceScheduleEntry,
   DeceasedPerson,
-  LinkedPerson,
+  LinkedPerson as ApiLinkedPerson,
   ObituaryRequest,
   ObituaryRequestInput,
   RelativeGroup,
 } from "@workspace/api-client-react";
 import { RELATION_OPTIONS, relationKeyOf } from "./announcement";
 import {
-  emptyCondolenceCard,
+  CHILD_TITLES,
+  emptyCondolenceDetails,
   emptyDeceased,
-  type CondolenceCardFormValues,
+  emptyFormValues,
   type DeceasedFormValues,
   type ObituaryFormValues,
 } from "./schema";
 
-export const RELATIVE_DAYS = ["اليوم", "غداً", "الليلة", "أمس"];
-export const WEEKDAYS = ["السبت", "الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"];
-export const DAYS = [...RELATIVE_DAYS, ...WEEKDAYS];
-export const TIMES = [
-  "بعد صلاة الفجر", "بعد صلاة الظهر", "بعد صلاة العصر", "بعد صلاة المغرب", "بعد صلاة العشاء",
-  "بعد صلاة الجمعة", "بعد صلاة التراويح",
-];
-/** مقابر الأرشيف (مسيمير تُكتب أيضاً مسمير/ميسمير؛ المزروعة افتُتحت ٢٠٢٦). */
-export const CEMETERIES = [
-  "مقبرة مسيمير", "مقبرة الخور", "مقبرة الوكرة الجنوبية", "مقبرة أم صلال", "مقبرة الريان", "مقبرة الرويس",
-  "مقبرة مريخ", "مقبرة المزروعة", "مقبرة الوكير", "مقبرة الخريطيات", "مقبرة الكعبان", "مقبرة أبوظلوف",
-];
-export const CONDOLENCE_STARTS = ["اليوم", "غداً", "بعد الدفن"];
+/**
+ * جسر بين شكل بيانات النموذج (deceasedList، femaleRelations، condolences.type…)
+ * وعقد الـ API الذي يقبله الخادم (deceasedPeople، condolenceOptions، condolences[]…).
+ * الخادم لا يقبل إلا عقد الـ API، فلا يُرسل النموذج كما هو أبداً.
+ */
 
 const clean = (value?: string | null) => (value ?? "").replace(/\s+/gu, " ").trim();
 const optional = (value?: string | null) => clean(value) || undefined;
 
-const expandValue = (type?: string, other?: string) =>
-  type === "أخرى" || type === "وقت محدد" ? clean(other) : clean(type);
+type FormLinked = { title?: string; name?: string; isDeceased?: boolean } | undefined;
+type FormDetails = NonNullable<NonNullable<ObituaryFormValues["condolences"]>["men"]>;
 
-function linkedPayload(person?: { title?: string; name?: string; deceased?: boolean }): LinkedPerson | undefined {
+function linkedToApi(person: FormLinked): ApiLinkedPerson | undefined {
   if (!clean(person?.name)) return undefined;
-  return { ...(optional(person?.title) ? { title: clean(person?.title) } : {}), name: clean(person?.name), deceased: !!person?.deceased };
+  return { ...(optional(person?.title) ? { title: clean(person?.title) } : {}), name: clean(person?.name), deceased: !!person?.isDeceased };
+}
+
+function linkedToForm(person?: ApiLinkedPerson) {
+  return { title: person?.title ?? "", name: person?.name ?? "", isDeceased: !!person?.deceased };
 }
 
 function targetIndex(target: string | undefined, count: number): number | null {
@@ -46,279 +44,415 @@ function targetIndex(target: string | undefined, count: number): number | null {
   return Number.isInteger(index) && index >= 0 && index < count ? index : null;
 }
 
-function deceasedPayload(person: DeceasedFormValues): DeceasedPerson {
-  const spouse = linkedPayload(person.spouse);
+// ───────────────────────── المتوفون ─────────────────────────
+
+function apiGender(person: DeceasedFormValues): DeceasedPerson["gender"] {
+  const child = CHILD_TITLES.includes(person.title ?? "");
+  if (person.gender === "أنثى") return child ? "girl" : "woman";
+  if (person.gender === "ذكر") return child ? "boy" : "man";
+  return "other";
+}
+
+function inferIdentifyBy(person: DeceasedFormValues): NonNullable<DeceasedPerson["identifyBy"]> {
+  if (person.identifyBy && person.identifyBy !== "auto") return person.identifyBy;
+  if (clean(person.fullName)) return "name";
+  if (person.femaleRelations?.some((relation) => clean(relation.relatedName))) return "spouse";
+  if (clean(person.kunya)) return "kunya";
+  if (clean(person.father?.name)) return "father";
+  return "name";
+}
+
+function deceasedToApi(person: DeceasedFormValues): DeceasedPerson {
+  const [spouse, ...otherRelations] = (person.femaleRelations ?? []).filter((relation) => clean(relation.relatedName));
   const age = person.age && person.age > 0 ? person.age : undefined;
+  // «في لندن» في الخانة تُكتب «لندن»؛ المولّد يضيف «في».
+  const deathPlace = clean(person.deathLocation).replace(/^في\s+/u, "");
+  const extraRelationLines = otherRelations.map((relation) =>
+    `${relation.relationType} ${[clean(relation.relatedTitle), "/", clean(relation.relatedName)].filter(Boolean).join(" ")}`);
+  const note = [clean(person.notes), ...extraRelationLines].filter(Boolean).join("\n");
+  const father = linkedToApi(person.father);
   return {
-    gender: person.gender,
-    identifyBy: person.identifyBy,
+    gender: apiGender(person),
+    identifyBy: inferIdentifyBy(person),
     ...(optional(person.fullName) ? { fullName: clean(person.fullName) } : {}),
     ...(optional(person.kunya) ? { kunya: clean(person.kunya) } : {}),
-    ...(age ? { age, ageUnit: person.ageUnit } : {}),
+    ...(person.title && person.title !== "none" ? { title: clean(person.title) } : {}),
+    ...(age ? { age, ageUnit: person.ageUnit ?? "years" } : {}),
     ...(optional(person.nationality) ? { nationality: clean(person.nationality) } : {}),
-    ...(optional(person.deathPlace) ? { deathPlace: clean(person.deathPlace) } : {}),
-    ...(optional(person.title) ? { title: clean(person.title) } : {}),
-    ...(optional(person.occupation) ? { occupation: clean(person.occupation) } : {}),
-    ...(optional(person.note) ? { note: clean(person.note) } : {}),
+    ...(deathPlace ? { deathPlace } : {}),
+    ...(note ? { note } : {}),
     ...(person.noChildren ? { noChildren: true } : {}),
     ...(spouse ? {
       spouse: {
-        ...spouse,
-        kind: person.spouse.kind,
+        kind: spouse.relationType === "حرم" ? "harem" as const : "widow" as const,
+        ...(optional(spouse.relatedTitle) ? { title: clean(spouse.relatedTitle) } : {}),
+        name: clean(spouse.relatedName),
         // «أرملة» تعني أن الزوج متوفى.
-        deceased: person.spouse.kind === "widow" ? true : spouse.deceased,
+        deceased: spouse.relationType === "أرملة" || !!spouse.isHusbandDeceased,
       },
     } : {}),
-    ...(linkedPayload(person.father) ? { father: linkedPayload(person.father) } : {}),
+    ...(father ? { father } : {}),
   };
 }
 
-function cardPayload(card: CondolenceCardFormValues, deceasedCount: number): CondolenceCard {
-  const start = expandValue(card.startType, card.startOther);
-  const schedule = (card.schedule ?? [])
-    .map((entry) => ({ days: clean(entry.days), time: clean(entry.time) }))
-    .filter((entry) => entry.days || entry.time);
+// ───────────────────────── الأقارب ─────────────────────────
+
+function occupationText(workplace?: string, jobStatus?: string): string {
+  const place = clean(workplace);
+  if (jobStatus === "retired") return place ? `متقاعد من ${place}` : "متقاعد";
+  if (jobStatus === "former") return place ? `${place} سابقاً` : "";
+  return place;
+}
+
+function relationLabel(group: NonNullable<ObituaryFormValues["relatives"]>[number]): string {
+  if (!group.relationKey || group.relationKey === "other") return clean(group.relationType);
+  return RELATION_OPTIONS.find((option) => option.key === group.relationKey)?.label ?? clean(group.relationType);
+}
+
+function relativesToApi(groups: ObituaryFormValues["relatives"], count: number): RelativeGroup[] {
+  return (groups ?? []).map((group) => {
+    const relationKey = group.relationKey ?? relationKeyOf({ relation: clean(group.relationType) });
+    const reference = linkedToApi(group.reference);
+    return {
+      relation: relationLabel({ ...group, relationKey }),
+      relationKey,
+      ...(reference ? { reference } : {}),
+      deceasedPlacement: group.deceasedPlacement ?? "auto",
+      deceasedIndex: targetIndex(group.deceasedTarget, count),
+      people: (group.persons ?? [])
+        .filter((person) => clean(person.name))
+        .map((person) => {
+          const occupation = occupationText(person.workplace, person.jobStatus);
+          return { name: clean(person.name), deceased: !!person.isDeceased, ...(occupation ? { occupation } : {}) };
+        }),
+    };
+  }).filter((group) => group.people.length > 0);
+}
+
+// ───────────────────────── العزاء ─────────────────────────
+
+/** «16:00» → «4:00 مساءً». */
+export function formatTime12h(value?: string | null): string {
+  const text = clean(value);
+  const match = /^(\d{1,2}):(\d{2})$/u.exec(text);
+  if (!match) return text;
+  const hours = Number(match[1]);
+  const period = hours >= 12 ? "مساءً" : "صباحاً";
+  return `${hours % 12 || 12}:${match[2]} ${period}`;
+}
+
+/** «4:00 مساءً» → «16:00» (لإعادة الجدول إلى منتقي الوقت عند التعديل). */
+function parseTime12h(value: string): string {
+  const match = /^(\d{1,2}):(\d{2})\s*(صباحاً|مساءً)$/u.exec(clean(value));
+  if (!match) return "";
+  let hours = Number(match[1]) % 12;
+  if (match[3] === "مساءً") hours += 12;
+  return `${String(hours).padStart(2, "0")}:${match[2]}`;
+}
+
+const PERIOD_LABELS = { morning: "الفترة الصباحية", evening: "الفترة المسائية", friday: "يوم الجمعة" } as const;
+
+function rangeText(from?: string | null, to?: string | null): string {
+  const start = formatTime12h(from);
+  const end = formatTime12h(to);
+  if (start && end) return `من ${start} إلى ${end}`;
+  if (start) return `من ${start}`;
+  if (end) return `حتى ${end}`;
+  return "";
+}
+
+function scheduleToApi(details: FormDetails): CondolenceScheduleEntry[] {
+  const entries: CondolenceScheduleEntry[] = [];
+  const schedule = details.schedule;
+  if (schedule?.enabled) {
+    const morning = rangeText(schedule.morningFrom, schedule.morningTo);
+    const evening = rangeText(schedule.eveningFrom, schedule.eveningTo);
+    if (morning) entries.push({ days: PERIOD_LABELS.morning, time: morning });
+    if (evening) entries.push({ days: PERIOD_LABELS.evening, time: evening });
+    if (clean(schedule.fridayNote)) entries.push({ days: PERIOD_LABELS.friday, time: clean(schedule.fridayNote) });
+  }
+  for (const window of details.windows ?? []) {
+    const text = [clean(window.note), clean(window.timeString)].filter(Boolean).join(" ");
+    if (text && !entries.some((entry) => `${entry.days} ${entry.time}` === text)) entries.push({ days: "", time: text });
+  }
+  return entries;
+}
+
+function cardToApi(details: FormDetails | undefined, audience: "men" | "women", start: string, count: number): CondolenceCard | null {
+  if (!details) return null;
+  const schedule = scheduleToApi(details);
   return {
-    audience: card.audience,
-    deceasedIndex: targetIndex(card.deceasedTarget, deceasedCount),
-    ...(optional(card.location) ? { location: clean(card.location) } : {}),
-    ...(optional(card.mapLink) ? { mapLink: clean(card.mapLink) } : {}),
+    audience,
+    deceasedIndex: targetIndex(details.deceasedTarget ?? "all", count),
+    ...(optional(details.locationName) ? { location: clean(details.locationName) } : {}),
+    ...(optional(details.mapsLink) ? { mapLink: clean(details.mapsLink) } : {}),
     ...(start ? { start } : {}),
-    // التفاصيل تُحفظ دائماً، حتى لو طُوي قسمها في الواجهة.
-    ...(card.durationDays ? { durationDays: card.durationDays } : {}),
-    ...(optional(card.time) ? { time: clean(card.time) } : {}),
-    ...(optional(card.until) ? { until: clean(card.until) } : {}),
+    ...(details.durationDays ? { durationDays: details.durationDays } : {}),
+    ...(optional(details.until) ? { until: clean(details.until) } : {}),
     ...(schedule.length ? { schedule } : {}),
-    ...(optional(card.houseNumber) ? { houseNumber: clean(card.houseNumber) } : {}),
-    ...(optional(card.buildingNumber) ? { buildingNumber: clean(card.buildingNumber) } : {}),
-    ...(optional(card.street) ? { street: clean(card.street) } : {}),
-    ...(optional(card.area) ? { area: clean(card.area) } : {}),
-    ...(optional(card.floor) ? { floor: clean(card.floor) } : {}),
-    ...(optional(card.apartmentNumber) ? { apartmentNumber: clean(card.apartmentNumber) } : {}),
-    ...(optional(card.locationNotes) ? { locationNotes: clean(card.locationNotes) } : {}),
   };
 }
 
-function relationLabel(group: ObituaryFormValues["relatives"][number]): string {
-  if (group.relationKey === "other") return clean(group.relationOther);
-  return RELATION_OPTIONS.find((option) => option.key === group.relationKey)?.label ?? "";
+/** «ناصر (الأبناء): 5555» → { name: «ناصر», phone: «5555» }. */
+function parsePhone(entry: string): { name?: string; phone?: string } {
+  const text = clean(entry);
+  const separator = text.lastIndexOf(":");
+  if (separator < 0) return /\d/u.test(text) ? { phone: text } : { name: text };
+  const name = clean(text.slice(0, separator)).replace(/\s*\([^)]*\)$/u, "");
+  const phone = clean(text.slice(separator + 1));
+  return { ...(name ? { name } : {}), ...(phone ? { phone } : {}) };
 }
 
+// ───────────────────────── النموذج ← الـ API ─────────────────────────
+
+const BURIAL_STATUS_TO_API = { scheduled: "upcoming", done: "completed", pending: "postponed", cancelled: "postponed" } as const;
+
+/**
+ * mapFormToPayload: يحوّل قيم النموذج إلى عقد الـ API (ObituaryRequestInput) الذي يقبله الخادم.
+ */
 export function mapFormToPayload(data: ObituaryFormValues): ObituaryRequestInput {
-  const count = data.deceasedPeople.length;
+  const people = data.deceasedList ?? [];
+  const count = people.length;
   const mode = count > 1 ? (data.announcementMode === "single" ? "unrelated" : data.announcementMode) : "single";
-  const condolences = data.condolences;
-  const options = condolences.none
-    ? []
-    : [
-        ...(condolences.men && condolences.menMode === "venue" ? ["men" as const] : []),
-        ...(condolences.men && condolences.menMode === "cemetery" ? ["men_cemetery" as const] : []),
-        ...(condolences.women ? ["women" as const] : []),
-        ...(condolences.phone ? ["phone" as const] : []),
-        ...(condolences.tbd ? ["tbd" as const] : []),
-      ];
-  const sharedParent = mode === "siblings" || mode === "father_first" ? linkedPayload(data.sharedParent) : undefined;
-  const relativeDay = (day?: string) => RELATIVE_DAYS.includes(day ?? "");
+  const burial = data.burial;
+  const prayer = data.prayer;
+  const burialStatus = BURIAL_STATUS_TO_API[burial?.status ?? "scheduled"];
+  const outside = !!burial?.isOutsideQatar;
+  const prayerEnabled = !!prayer?.enabled && burialStatus !== "completed" && !!clean(prayer?.locationName);
+  // في النموذج: الصلاة المنفصلة لها مكان فقط، وموعدها هو موعد الدفن المُدخل.
+  const prayerDay = clean(prayer?.dateDescription) || clean(burial?.dateDescription);
+  const prayerTime = clean(prayer?.timeDescription) || clean(burial?.timeDescription);
+
+  const cond = data.condolences;
+  const type = cond?.type ?? "none";
+  const options: ObituaryRequestInput["condolenceOptions"] = [];
+  if (type === "full" || type === "men_only") options.push("men");
+  if (type === "full" || type === "women_only") options.push("women");
+  if (type === "cemetery_only") options.push("men_cemetery");
+  if (type === "tbd") options.push("tbd");
+  const phones = (cond?.phones ?? []).map(parsePhone).filter((contact) => contact.name || contact.phone);
+  if (type === "phone_only" || (cond?.withPhones && phones.length)) options.push("phone");
+
+  const start = [clean(data.condolenceStartDate), clean(data.condolenceStartTime)].filter(Boolean).join(" ");
+  const cards = [
+    options.includes("men") ? cardToApi(cond?.men, "men", start, count) : null,
+    options.includes("women") ? cardToApi(cond?.women, "women", start, count) : null,
+    ...(cond?.extraVenues ?? [])
+      .filter((venue) => options.includes(venue.audience))
+      .map((venue) => cardToApi(venue, venue.audience, start, count)),
+  ].filter((card): card is CondolenceCard => !!card);
+
+  const sharedParent = mode === "siblings" || mode === "father_first" ? linkedToApi(data.sharedParent) : undefined;
 
   return {
-    messageType: data.messageType,
+    messageType: data.messageType ?? "announcement",
     ...(data.messageType !== "announcement" && optional(data.relatedRequestNumber)
       ? { relatedRequestNumber: clean(data.relatedRequestNumber) }
       : {}),
     announcementMode: mode,
     ...(sharedParent ? { sharedParent } : {}),
-    ...(data.messageType === "condolence_cancellation" ? {
+    ...(data.messageType === "condolence_cancellation" && data.cancellation ? {
       cancellation: {
         audience: data.cancellation.audience,
         from: clean(data.cancellation.from),
         reason: clean(data.cancellation.reason),
-        phoneOnly: data.cancellation.phoneOnly,
+        phoneOnly: !!data.cancellation.phoneOnly,
       },
     } : {}),
-    deceasedPeople: data.deceasedPeople.map(deceasedPayload),
-    relatives: data.relatives.map((group): RelativeGroup => ({
-      relation: relationLabel(group),
-      relationKey: group.relationKey,
-      ...(optional(group.familyReference) ? { familyReference: clean(group.familyReference) } : {}),
-      ...(linkedPayload(group.reference) ? { reference: linkedPayload(group.reference) } : {}),
-      deceasedPlacement: group.deceasedPlacement,
-      deceasedIndex: targetIndex(group.deceasedTarget, count),
-      people: group.people.map((person) => ({
-        name: clean(person.name),
-        deceased: person.deceased,
-        ...(optional(person.occupation) ? { occupation: clean(person.occupation) } : {}),
-      })),
-    })),
+    deceasedPeople: people.map(deceasedToApi),
+    relatives: relativesToApi(data.relatives, count),
     prayer: {
-      enabled: data.prayer.enabled,
-      ...(data.prayer.enabled ? {
-        day: expandValue(data.prayer.dayType, data.prayer.dayOther),
-        ...(relativeDay(data.prayer.dayType) && optional(data.prayer.weekday) ? { weekday: clean(data.prayer.weekday) } : {}),
-        time: expandValue(data.prayer.timeType, data.prayer.timeOther),
-        place: clean(data.prayer.place),
-        mapLink: clean(data.prayer.mapLink),
-      } : {}),
+      enabled: prayerEnabled,
+      ...(prayerEnabled ? { day: prayerDay, time: prayerTime, place: clean(prayer?.locationName) } : {}),
     },
     burial: {
-      status: data.burial.status,
-      outsideQatar: data.burial.outsideQatar,
-      day: expandValue(data.burial.dayType, data.burial.dayOther),
-      ...(relativeDay(data.burial.dayType) && optional(data.burial.weekday) ? { weekday: clean(data.burial.weekday) } : {}),
-      time: expandValue(data.burial.timeType, data.burial.timeOther),
-      cemetery: !data.burial.outsideQatar ? expandValue(data.burial.cemeteryType, data.burial.cemeteryOther) || undefined : undefined,
-      outsideLocation: data.burial.outsideQatar ? clean(data.burial.outsideLocation) : undefined,
-      mapLink: clean(data.burial.mapLink),
-      ...(data.burial.status === "postponed" && optional(data.burial.postponeNote) ? { postponeNote: clean(data.burial.postponeNote) } : {}),
+      status: burialStatus,
+      outsideQatar: outside,
+      day: clean(burial?.dateDescription),
+      time: clean(burial?.timeDescription),
+      ...(outside ? { outsideLocation: clean(burial?.locationName) } : { cemetery: optional(burial?.locationName) }),
+      ...(optional(burial?.notes) ? { note: clean(burial?.notes) } : {}),
     },
     condolenceOptions: options,
-    ...(options.includes("phone") ? { phoneAudience: condolences.phoneAudience } : {}),
-    ...(optional(condolences.note) ? { condolenceNote: clean(condolences.note) } : {}),
-    condolences: condolences.cards
-      .filter((card) => (card.audience === "men" ? options.includes("men") : options.includes("women")))
-      .map((card) => cardPayload(card, count)),
-    condolencePhoneContacts: options.includes("phone")
-      ? condolences.phoneContacts
-          .filter((contact) => clean(contact.name) || clean(contact.phone))
-          .map((contact) => ({
-            ...(optional(contact.name) ? { name: clean(contact.name) } : {}),
-            ...(optional(contact.phone) ? { phone: clean(contact.phone) } : {}),
-          }))
-      : [],
+    ...(options.includes("phone") ? { phoneAudience: type === "phone_only" ? "all" : cond?.phoneAudience ?? "all" } : {}),
+    ...(optional(cond?.cancellationOrRestrictionReason) ? { condolenceNote: clean(cond?.cancellationOrRestrictionReason) } : {}),
+    condolences: cards,
+    condolencePhoneContacts: options.includes("phone") ? phones : [],
     ...(optional(data.notes) ? { notes: data.notes!.trim() } : {}),
   };
 }
 
-function splitChoice(value: string | undefined, choices: string[], otherLabel = "أخرى") {
-  const text = clean(value);
-  if (!text) return { type: "", other: "" };
-  return choices.includes(text) ? { type: text, other: "" } : { type: otherLabel, other: text };
-}
+// ───────────────────────── الـ API ← النموذج ─────────────────────────
 
-function linkedForm(person?: LinkedPerson) {
-  return { title: person?.title ?? "", name: person?.name ?? "", deceased: !!person?.deceased };
-}
+const PREFIX_TITLES = new Set([
+  "الوالد", "الوالدة", "الشاب", "الشابة", "الطفل", "الطفلة", "الرضيع", "الرضيعة", "المولودة",
+  "الشيخ", "الشيخة", "فضيلة الشيخ", "سعادة الشيخ", "سعادة", "سعادة السفير",
+  "الدكتور", "الدكتورة", "الأستاذ", "اللواء", "العميد", "النقيب", "شهيد الوطن",
+]);
 
-function cardForm(card: CondolenceCard): CondolenceCardFormValues {
-  const start = splitChoice(card.start, CONDOLENCE_STARTS);
-  const base = emptyCondolenceCard(card.audience);
+function deceasedToForm(person: DeceasedPerson): DeceasedFormValues {
+  const female = person.gender === "woman" || person.gender === "girl";
+  const known = person.gender !== "other";
+  const title = clean(person.title);
+  const childTitle = person.gender === "boy" ? "الطفل" : person.gender === "girl" ? "الطفلة" : "none";
+  const titleKnown = PREFIX_TITLES.has(title);
   return {
-    ...base,
-    deceasedTarget: card.deceasedIndex != null ? String(card.deceasedIndex) : "all",
-    location: card.location ?? "",
-    mapLink: card.mapLink ?? "",
-    startType: start.type,
-    startOther: start.other,
-    expanded: Boolean(
-      card.durationDays || card.time || card.until || card.schedule?.length || card.houseNumber || card.buildingNumber
-      || card.street || card.area || card.floor || card.apartmentNumber || card.locationNotes,
-    ),
-    durationDays: card.durationDays ?? null,
-    time: card.time ?? "",
-    until: card.until ?? "",
-    schedule: (card.schedule ?? []).map((entry) => ({ days: entry.days ?? "", time: entry.time ?? "" })),
-    houseNumber: card.houseNumber ?? "",
-    buildingNumber: card.buildingNumber ?? "",
-    street: card.street ?? "",
-    area: card.area ?? "",
-    floor: card.floor ?? "",
-    apartmentNumber: card.apartmentNumber ?? "",
-    locationNotes: card.locationNotes ?? "",
+    ...emptyDeceased(),
+    // «other» (سجلات قديمة) لا يُحوَّل إلى قيمة افتراضية؛ يُطلب اختيار الجنس من جديد.
+    gender: (known ? (female ? "أنثى" : "ذكر") : undefined) as DeceasedFormValues["gender"],
+    title: (titleKnown ? title : childTitle) as DeceasedFormValues["title"],
+    fullName: person.fullName ?? "",
+    identifyBy: person.identifyBy ?? "auto",
+    kunya: person.kunya ?? "",
+    age: person.age ?? null,
+    ageUnit: person.ageUnit ?? "years",
+    nationality: person.nationality ?? "",
+    deathLocation: person.deathPlace ?? "",
+    // لقب حر غير موجود في القائمة (مثل «الوالد اللواء متقاعد») والصفة لا يضيعان.
+    notes: [title && !titleKnown ? title : "", person.occupation ?? "", person.note ?? ""].filter(Boolean).join("\n"),
+    noChildren: !!person.noChildren,
+    femaleRelations: person.spouse?.name ? [{
+      relationType: person.spouse.kind === "harem" ? "حرم" : "أرملة",
+      relatedTitle: person.spouse.title ?? "",
+      relatedName: person.spouse.name,
+      isHusbandDeceased: person.spouse.kind === "widow" || !!person.spouse.deceased,
+    }] : [],
+    father: linkedToForm(person.father),
   };
 }
 
-export function mapPayloadToForm(payload: ObituaryRequest): ObituaryFormValues {
-  const options = payload.condolenceOptions || [];
-  const burialDay = splitChoice(payload.burial?.day, DAYS);
-  const burialTime = splitChoice(payload.burial?.time, TIMES);
-  const prayerDay = splitChoice(payload.prayer?.day, DAYS);
-  const prayerTime = splitChoice(payload.prayer?.time, TIMES);
-  const cemetery = splitChoice(payload.burial?.cemetery, CEMETERIES);
-  const count = payload.deceasedPeople.length;
+function scheduleToForm(entries: CondolenceScheduleEntry[] | undefined, fallbackTime?: string) {
+  const schedule = { ...emptyCondolenceDetails().schedule };
+  const windows: FormDetails["windows"] = [];
+  for (const entry of entries ?? []) {
+    const range = /^(?:من\s+(.+?))?(?:\s*(?:إلى|حتى)\s+(.+))?$/u.exec(clean(entry.time));
+    if (entry.days === PERIOD_LABELS.morning && range) {
+      schedule.enabled = true;
+      schedule.morningFrom = parseTime12h(range[1] ?? "");
+      schedule.morningTo = parseTime12h(range[2] ?? "");
+    } else if (entry.days === PERIOD_LABELS.evening && range) {
+      schedule.enabled = true;
+      schedule.eveningFrom = parseTime12h(range[1] ?? "");
+      schedule.eveningTo = parseTime12h(range[2] ?? "");
+    } else if (entry.days === PERIOD_LABELS.friday) {
+      schedule.enabled = true;
+      schedule.fridayNote = entry.time ?? "";
+    } else {
+      windows.push({ periodType: "exact_time", timeString: clean(`${entry.days ?? ""} ${entry.time ?? ""}`), note: "" });
+    }
+  }
+  if (clean(fallbackTime)) windows.push({ periodType: "exact_time", timeString: clean(fallbackTime), note: "" });
+  return { schedule, windows };
+}
+
+function cardToForm(card: CondolenceCard): FormDetails {
+  const location = [
+    card.location,
+    card.area && `منطقة ${card.area}`,
+    card.street && `شارع ${card.street}`,
+    card.buildingNumber && `بناية ${card.buildingNumber}`,
+    card.houseNumber && `منزل رقم ${card.houseNumber}`,
+    card.floor && `الطابق ${card.floor}`,
+    card.apartmentNumber && `شقة ${card.apartmentNumber}`,
+    card.locationNotes,
+  ].filter(Boolean).join(" - ");
+  const { schedule, windows } = scheduleToForm(card.schedule, card.time);
+  return {
+    ...emptyCondolenceDetails(),
+    locationName: location,
+    mapsLink: card.mapLink ?? "",
+    durationDays: card.durationDays ?? null,
+    schedule,
+    windows,
+    deceasedTarget: card.deceasedIndex != null ? String(card.deceasedIndex) : "all",
+    until: card.until ?? "",
+  };
+}
+
+const BURIAL_STATUS_TO_FORM = { upcoming: "scheduled", completed: "done", postponed: "pending" } as const;
+
+/**
+ * mapPayloadToForm: يحوّل طلباً محفوظاً (عقد الـ API) إلى قيم النموذج لصفحة التعديل.
+ */
+export function mapPayloadToForm(request: ObituaryRequest): ObituaryFormValues {
+  const base = emptyFormValues();
+  const options = request.condolenceOptions ?? [];
+  const cards = request.condolences ?? [];
+  const menCards = cards.filter((card) => card.audience === "men");
+  const womenCards = cards.filter((card) => card.audience === "women");
+  const hasMen = options.includes("men");
+  const hasWomen = options.includes("women");
+  const type = !options.length ? "none"
+    : options.includes("men_cemetery") ? "cemetery_only"
+    : options.includes("tbd") && !hasMen && !hasWomen ? "tbd"
+    : hasMen && hasWomen ? "full"
+    : hasMen ? "men_only"
+    : hasWomen ? "women_only"
+    : "phone_only";
+  const firstStart = clean(cards[0]?.start);
+  const startMatch = /^(\d{4}-\d{2}-\d{2})(?:\s+(.*))?$/u.exec(firstStart);
+  const burial = request.burial;
 
   return {
-    messageType: payload.messageType ?? "announcement",
-    relatedRequestNumber: payload.relatedRequestNumber ?? "",
-    announcementMode: payload.announcementMode ?? (count > 1 ? "unrelated" : "single"),
-    sharedParent: linkedForm(payload.sharedParent),
+    ...base,
+    messageType: request.messageType ?? "announcement",
+    relatedRequestNumber: request.relatedRequestNumber ?? "",
     cancellation: {
-      audience: payload.cancellation?.audience ?? "men",
-      from: payload.cancellation?.from ?? "",
-      reason: payload.cancellation?.reason ?? "",
-      phoneOnly: !!payload.cancellation?.phoneOnly,
+      audience: request.cancellation?.audience ?? "men",
+      from: request.cancellation?.from ?? "",
+      reason: request.cancellation?.reason ?? "",
+      phoneOnly: !!request.cancellation?.phoneOnly,
     },
-    deceasedPeople: payload.deceasedPeople.map((person) => ({
-      ...emptyDeceased(),
-      fullName: person.fullName ?? "",
-      // الجنس «other» (سجلات قديمة) لا يُحوَّل إلى قيمة افتراضية؛ يُطلب اختياره من جديد.
-      gender: (person.gender === "other" ? undefined : person.gender) as DeceasedFormValues["gender"],
-      identifyBy: person.identifyBy ?? "name",
-      kunya: person.kunya ?? "",
-      age: person.age ?? null,
-      ageUnit: person.ageUnit ?? "years",
-      nationality: person.nationality ?? "",
-      deathPlace: person.deathPlace ?? "",
-      title: person.title ?? "",
-      occupation: person.occupation ?? "",
-      note: person.note ?? "",
-      noChildren: !!person.noChildren,
-      spouse: { ...linkedForm(person.spouse), kind: person.spouse?.kind ?? "harem" },
-      father: linkedForm(person.father),
+    announcementMode: request.announcementMode ?? (request.deceasedPeople.length > 1 ? "unrelated" : "single"),
+    sharedParent: linkedToForm(request.sharedParent),
+    deceasedList: request.deceasedPeople.map(deceasedToForm),
+    relatives: (request.relatives ?? []).map((group) => ({
+      relationType: group.relation,
+      relationKey: relationKeyOf(group),
+      reference: linkedToForm(group.reference),
+      deceasedPlacement: group.deceasedPlacement ?? "auto",
+      deceasedTarget: group.deceasedIndex != null ? String(group.deceasedIndex) : "all",
+      persons: group.people.map((person) => ({
+        name: person.name,
+        isDeceased: person.deceased,
+        workplace: person.occupation ?? "",
+        jobStatus: "none" as const,
+      })),
     })),
-    relatives: (payload.relatives || []).map((group) => {
-      const key = relationKeyOf(group);
-      return {
-        relationKey: key,
-        relationOther: key === "other" ? group.relation : "",
-        familyReference: group.familyReference ?? "",
-        reference: linkedForm(group.reference),
-        deceasedPlacement: group.deceasedPlacement ?? "auto",
-        deceasedTarget: group.deceasedIndex != null ? String(group.deceasedIndex) : "all",
-        people: group.people.map((person) => ({
-          name: person.name,
-          occupation: person.occupation ?? "",
-          deceased: person.deceased,
-        })),
-      };
-    }),
-    prayer: {
-      enabled: payload.prayer?.enabled || false,
-      dayType: prayerDay.type,
-      dayOther: prayerDay.other,
-      weekday: payload.prayer?.weekday ?? "",
-      timeType: prayerTime.type,
-      timeOther: prayerTime.other,
-      place: payload.prayer?.place ?? "",
-      mapLink: payload.prayer?.mapLink ?? "",
-    },
     burial: {
-      status: payload.burial?.status || "upcoming",
-      outsideQatar: payload.burial?.outsideQatar || false,
-      dayType: burialDay.type,
-      dayOther: burialDay.other,
-      weekday: payload.burial?.weekday ?? "",
-      timeType: burialTime.type,
-      timeOther: burialTime.other,
-      cemeteryType: cemetery.type,
-      cemeteryOther: cemetery.other,
-      outsideLocation: payload.burial?.outsideLocation ?? "",
-      mapLink: payload.burial?.mapLink ?? "",
-      postponeNote: payload.burial?.postponeNote ?? "",
+      ...base.burial!,
+      status: BURIAL_STATUS_TO_FORM[burial?.status ?? "upcoming"],
+      isOutsideQatar: !!burial?.outsideQatar,
+      locationName: burial?.outsideQatar ? burial?.outsideLocation ?? "" : burial?.cemetery ?? "",
+      dateDescription: burial?.day ?? "",
+      timeDescription: burial?.time ?? "",
+      notes: burial?.note ?? "",
+    },
+    prayer: {
+      ...base.prayer!,
+      enabled: !!request.prayer?.enabled,
+      locationName: request.prayer?.place ?? "",
+      dateDescription: request.prayer?.day ?? "",
+      timeDescription: request.prayer?.time ?? "",
     },
     condolences: {
-      none: options.length === 0,
-      phone: options.includes("phone"),
-      men: options.includes("men") || options.includes("men_cemetery"),
-      menMode: options.includes("men_cemetery") && !options.includes("men") ? "cemetery" : "venue",
-      women: options.includes("women"),
-      tbd: options.includes("tbd"),
-      phoneAudience: payload.phoneAudience ?? "all",
-      note: payload.condolenceNote ?? "",
-      cards: (payload.condolences || []).map(cardForm),
-      phoneContacts: (payload.condolencePhoneContacts || []).map((contact) => ({
-        name: contact.name ?? "",
-        phone: contact.phone ?? "",
-      })),
+      ...base.condolences!,
+      type,
+      men: menCards[0] ? cardToForm(menCards[0]) : emptyCondolenceDetails(),
+      women: womenCards[0] ? cardToForm(womenCards[0]) : emptyCondolenceDetails(),
+      extraVenues: [
+        ...menCards.slice(1).map((card) => ({ ...cardToForm(card), audience: "men" as const })),
+        ...womenCards.slice(1).map((card) => ({ ...cardToForm(card), audience: "women" as const })),
+      ],
+      phones: (request.condolencePhoneContacts ?? [])
+        .map((contact) => [clean(contact.name), clean(contact.phone)].filter(Boolean).join(": "))
+        .filter(Boolean),
+      withPhones: options.includes("phone") && type !== "phone_only",
+      phoneAudience: request.phoneAudience ?? "all",
+      cancellationOrRestrictionReason: request.condolenceNote ?? "",
     },
-    notes: payload.notes ?? "",
+    condolenceStartDate: startMatch ? startMatch[1] : "",
+    condolenceStartTime: startMatch ? startMatch[2] ?? "" : firstStart,
+    notes: request.notes ?? "",
   };
 }

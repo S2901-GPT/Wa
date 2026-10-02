@@ -4,51 +4,43 @@
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `npm run dev` — runs unified backend and frontend on port 3000
+- `npm run typecheck` — full TypeScript build check across packages
+- `npm run build` — builds frontend applet
+- Database: Cloud Firestore (connected via `firebase-applet-config.json`, no `DATABASE_URL` required)
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
+- npm workspaces, Node.js 22, TypeScript
+- Frontend: Vite 7 + React 19 + Tailwind CSS + Lucide Icons
 - API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- DB: Google Cloud Firestore (Native integration via `@workspace/db`)
+- Validation: Zod schemas (`@workspace/api-zod`)
+- API Client: React Query hooks (`@workspace/api-client-react`)
 
 ## Where things live
 
 - واجهة التطبيق: `artifacts/qatar-obituary-form`
 - واجهة API: `artifacts/api-server/src/routes/obituary-requests.ts`
-- عقد API: `lib/api-spec/openapi.yaml`
-- مخطط قاعدة البيانات: `lib/db/src/schema/obituary-requests.ts`
-
-## Architecture decisions
-
-- نص الإعلان يُولَّد بقواعد ثابتة في `artifacts/qatar-obituary-form/src/lib/announcement.ts` (لا نموذج لغوي)، ويستخدمه نص «نسخ كنص للعرض» وصورة التعزية ومعاينة المراجعة معاً حتى لا تتباعد القواعد.
-- الصيغ مأخوذة من أرشيف «وفيات قطر»: «توفي/توفيت»، «والدة كل من»، «أبناء /»، «الله يرحمه ويغفر له»، «شفيعاً لوالديه يارب».
-- اسم المتوفاة اختياري؛ التعريف قد يكون بالكنية أو «حرم/أرملة فلان» أو «ابنة فلان» أو «والدة كل من». الزوج والأب كيانان مستقلان بحالة حياة.
-- صلة القرابة تُخزَّن من منظور الأقارب (`relationKey`) ويحوّلها المولّد إلى منظور المتوفى. جنس الأقارب لا يُسجَّل لأن العرف لا يذكر الإناث في خانة الأقارب، فالترحّم عليهم بالمذكر (رحمه/رحمهما/رحمهم).
+- طبقة قاعدة البيانات: `lib/db/src/index.ts`
+- قواعد أمان Firestore: `firestore.rules`
+- مخطط البيانات: `firebase-blueprint.json`
 
 ## Product
 
 - نموذج عربي متجاوب بصفحة مراجعة قبل الإرسال.
 - حقول ديناميكية للأقارب، صلاة الجنازة، وعزاء الرجال والنساء.
-- رقم طلب بعد الإرسال ولوحة داخلية لعرض الطلبات ونسخها.
+- رقم طلب بعد الإرسال ولوحة داخلية لعرض الطلبات وتعديل حالتها ونسخها.
 
-## User preferences
+## Architecture decisions
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- نص الإعلان يُولَّد بقواعد ثابتة في `artifacts/qatar-obituary-form/src/lib/announcement.ts` (لا نموذج لغوي)، ويستخدمه نص «نسخ كنص للعرض» وبيانات القوالب البصرية (`presentation-normalizer.ts`) ومعاينة المراجعة معاً حتى لا تتباعد القواعد.
+- النموذج يملك شكل بياناته الخاص (`deceasedList`…)، ويحوّله `mapper.ts` إلى عقد الـ API (`deceasedPeople`…) قبل الإرسال؛ الخادم لا يقبل إلا عقد الـ API.
+- الصيغ مأخوذة من أرشيف «وفيات قطر»: «توفي/توفيت»، «والدة كل من»، «أبناء /»، «الله يرحمه ويغفر له»، «شفيعاً لوالديه يارب».
+- اسم المتوفاة اختياري؛ التعريف قد يكون بالكنية أو «حرم/أرملة فلان» أو «ابنة فلان» أو «والدة كل من». الزوج والأب كيانان مستقلان بحالة حياة.
+- جنس الأقارب لا يُسجَّل لأن العرف لا يذكر الإناث في خانة الأقارب، فالترحّم عليهم بالمذكر (رحمه/رحمهما/رحمهم).
 
 ## Gotchas
 
 - `npm test` يشغّل اختبارات القبول المأخوذة من الأرشيف؛ شغّلها بعد أي تعديل على الصياغة.
 - بعد تعديل `lib/api-spec/openapi.yaml` أعد توليد الأنواع: `npx orval --config ./orval.config.ts` داخل `lib/api-spec`.
-
-## Pointers
-
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details

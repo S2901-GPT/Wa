@@ -1,290 +1,285 @@
 import { z } from "zod";
 
-const text = () => z.string().optional();
-const trimmed = (value?: string) => (value ?? "").trim();
+// 1. قاموس الألقاب
+export const PrefixTitleEnum = z.enum([
+  "الوالد", "الوالدة", "الشاب", "الشابة", "الطفل", "الطفلة", "الرضيع", "الرضيعة", "المولودة",
+  "الشيخ", "الشيخة", "فضيلة الشيخ", "سعادة الشيخ", "سعادة", "سعادة السفير",
+  "الدكتور", "الدكتورة", "الأستاذ", "اللواء", "العميد", "النقيب", "شهيد الوطن", "none"
+]);
+
+/** ألقاب الأطفال: تُبنى عليها صيغة «انتقل إلى رحمة الله تعالى الطفل /» و«شفيعاً لوالديه يارب». */
+export const CHILD_TITLES = ["الطفل", "الطفلة", "الرضيع", "الرضيعة", "المولودة"];
 
 export const RELATION_KEYS = [
   "children", "full_siblings", "siblings", "grandchildren", "brothers_children", "sisters_children",
   "father", "grandfather", "paternal_uncles", "maternal_uncles", "daughters_husbands", "sisters_husbands", "other",
 ] as const;
 
+const optionalText = () => z.string().optional().default("");
+const trimmed = (value?: string | null) => (value ?? "").trim();
+
+// شخص مرجعي (الأب، الأب المشترك، مرجع «أبناء /») مع حالته
 export const LinkedPersonSchema = z.object({
-  title: text(),
-  name: text(),
-  deceased: z.boolean().default(false),
+  title: optionalText(),
+  name: optionalText(),
+  isDeceased: z.boolean().default(false),
 });
 
-export const SpouseSchema = LinkedPersonSchema.extend({
-  kind: z.enum(["harem", "widow"]).default("harem"),
+// 2. علاقات المتوفاة (أرملة، حرم)
+export const FemaleRelationSchema = z.object({
+  relationType: z.enum(["أرملة", "حرم"]).default("أرملة"),
+  relatedTitle: optionalText(),
+  relatedName: z.string().optional().default(""),
+  isHusbandDeceased: z.boolean().default(false)
 });
 
+// 3. مخطط المتوفى (الجنس: ذكر أو أنثى؛ بلا قيمة افتراضية حتى يختاره المُدخِل صراحة)
 export const DeceasedPersonSchema = z.object({
-  fullName: text(),
-  // لا قيمة افتراضية للجنس: يجب أن يختاره المُدخِل صراحة.
-  gender: z.enum(["man", "woman", "boy", "girl"], {
+  id: z.string().optional(),
+  gender: z.enum(["ذكر", "أنثى"], {
     required_error: "يرجى تحديد الجنس",
     invalid_type_error: "يرجى تحديد الجنس",
   }),
-  identifyBy: z.enum(["name", "kunya", "spouse", "father", "children"]).default("name"),
-  kunya: text(),
+  title: PrefixTitleEnum.default("none"),
+  fullName: z.string().optional().default(""),
+  /** طريقة التعريف في رأس الإعلان؛ «auto» يستنتجها من البيانات المتاحة. */
+  identifyBy: z.enum(["auto", "name", "kunya", "spouse", "father", "children"]).default("auto"),
+  kunya: optionalText(),
   age: z.coerce.number().optional().nullable(),
   ageUnit: z.enum(["years", "months", "days"]).default("years"),
-  nationality: text(),
-  deathPlace: text(),
-  title: text(),
-  occupation: text(),
-  note: text(),
+  nationality: z.string().optional().default(""),
+  deathLocation: z.string().optional().default(""),
+  notes: z.string().nullish().or(z.literal("")),
   noChildren: z.boolean().default(false),
-  spouse: SpouseSchema.default({ kind: "harem", deceased: false }),
-  father: LinkedPersonSchema.default({ deceased: false }),
-}).superRefine((value, ctx) => {
-  if (value.identifyBy === "name" && trimmed(value.fullName).length < 2) {
-    ctx.addIssue({ code: "custom", path: ["fullName"], message: "الاسم مطلوب، أو اختر طريقة تعريف أخرى" });
-  }
-  if (value.identifyBy === "kunya" && !trimmed(value.kunya)) {
-    ctx.addIssue({ code: "custom", path: ["kunya"], message: "اكتب الكنية" });
-  }
-  if (value.identifyBy === "spouse" && !trimmed(value.spouse?.name)) {
-    ctx.addIssue({ code: "custom", path: ["spouse", "name"], message: "اكتب اسم الزوج" });
-  }
-  if (value.identifyBy === "father" && !trimmed(value.father?.name)) {
-    ctx.addIssue({ code: "custom", path: ["father", "name"], message: "اكتب اسم الأب" });
+  femaleRelations: z.array(FemaleRelationSchema).optional().default([]),
+  father: LinkedPersonSchema.optional(),
+}).superRefine((data, ctx) => {
+  const hasName = trimmed(data.fullName).length > 0;
+  const hasKunya = trimmed(data.kunya).length > 0;
+  const hasRelation = Array.isArray(data.femaleRelations) && data.femaleRelations.some((r) => trimmed(r.relatedName).length > 0);
+  const hasFather = trimmed(data.father?.name).length > 0;
+  const issue = (path: (string | number)[], message: string) => ctx.addIssue({ code: z.ZodIssueCode.custom, path, message });
+
+  switch (data.identifyBy) {
+    case "name":
+      if (!hasName) issue(["fullName"], "اسم المتوفى مطلوب");
+      break;
+    case "kunya":
+      if (!hasKunya) issue(["kunya"], "اكتب الكنية");
+      break;
+    case "spouse":
+      if (!hasRelation) issue(["femaleRelations"], "أضف الزوج (أرملة فلان / حرم فلان)");
+      break;
+    case "father":
+      if (!hasFather) issue(["father", "name"], "اكتب اسم الأب");
+      break;
+    case "children":
+      // يُتحقق منه على مستوى النموذج لأنه يحتاج مجموعات الأقارب.
+      break;
+    default:
+      if (data.gender === "أنثى") {
+        if (!hasName && !hasRelation && !hasKunya && !hasFather) {
+          issue(["fullName"], "يجب إدخال اسم المتوفاة أو التعريف بها (أرملة فلان، الكنية، أو الأب)");
+        }
+      } else if (!hasName && !hasKunya && !hasFather) {
+        issue(["fullName"], "اسم المتوفى مطلوب");
+      }
   }
 });
 
+// 4. مخطط الأقارب (يُذكر الذكور فقط حسب العرف، فلا يُسجَّل جنس القريب)
 export const RelativePersonSchema = z.object({
-  name: z.string().min(2, "الاسم مطلوب"),
-  occupation: text(),
-  deceased: z.boolean().default(false),
+  name: z.string().optional().default(""),
+  isDeceased: z.boolean().default(false),
+  workplace: z.string().optional().default(""),
+  jobStatus: z.enum(["active", "retired", "former", "none"]).default("none"),
 });
 
-export const RelativeGroupSchema = z.object({
-  relationKey: z.enum(RELATION_KEYS, {
-    required_error: "صلة القرابة مطلوبة",
-    invalid_type_error: "صلة القرابة مطلوبة",
-  }),
-  relationOther: text(),
-  familyReference: text(),
-  reference: LinkedPersonSchema.default({ deceased: false }),
+export const KinshipGroupSchema = z.object({
+  /** عنوان المجموعة كما يظهر في النموذج، أو العنوان الحر عند «أخرى». */
+  relationType: z.string().optional().default("أقارب"),
+  relationKey: z.enum(RELATION_KEYS).optional(),
+  reference: LinkedPersonSchema.optional(),
   deceasedPlacement: z.enum(["auto", "inline", "grouped"]).default("auto"),
-  /** «all» أو رقم المتوفى (عند تعدد المتوفين). */
+  /** «all» أو رقم المتوفى الذي تخصه المجموعة عند تعدد المتوفين. */
   deceasedTarget: z.string().default("all"),
-  people: z.array(RelativePersonSchema).min(1, "يجب إضافة شخص واحد على الأقل"),
-}).refine((value) => value.relationKey !== "other" || trimmed(value.relationOther).length > 0, {
-  message: "اكتب عنوان الصلة",
-  path: ["relationOther"],
+  persons: z.array(RelativePersonSchema).optional().default([]),
 });
 
-export const PrayerSchema = z.object({
-  enabled: z.boolean().default(false),
-  dayType: text(),
-  dayOther: text(),
-  weekday: text(),
-  timeType: text(),
-  timeOther: text(),
-  place: text(),
-  mapLink: text(),
-}).refine((value) => !(value.enabled && value.dayType === "أخرى" && !trimmed(value.dayOther)), {
-  message: "يرجى تحديد اليوم",
-  path: ["dayOther"],
-}).refine((value) => !(value.enabled && ["وقت محدد", "أخرى"].includes(value.timeType || "") && !trimmed(value.timeOther)), {
-  message: "يرجى تحديد الوقت",
-  path: ["timeOther"],
+// 5. اللوجستيات: الصلاة والدفن
+export const EventLocationSchema = z.object({
+  enabled: z.boolean().optional().default(false),
+  status: z.enum(["scheduled", "pending", "done", "cancelled"]).default("scheduled"),
+  isOutsideQatar: z.boolean().default(false),
+  locationName: z.string().nullish().or(z.literal("")),
+  timeDescription: z.string().nullish().or(z.literal("")),
+  dateDescription: z.string().nullish().or(z.literal("")),
+  notes: z.string().nullish().or(z.literal("")),
 });
 
-export const BurialSchema = z.object({
-  status: z.enum(["upcoming", "completed", "postponed"]),
-  outsideQatar: z.boolean().default(false),
-  dayType: text(),
-  dayOther: text(),
-  weekday: text(),
-  timeType: text(),
-  timeOther: text(),
-  cemeteryType: text(),
-  cemeteryOther: text(),
-  outsideLocation: text(),
-  mapLink: text(),
-  postponeNote: text(),
-}).refine((value) => !(value.dayType === "أخرى" && !trimmed(value.dayOther)), {
-  message: "يرجى تحديد اليوم",
-  path: ["dayOther"],
-}).refine((value) => !(["وقت محدد", "أخرى"].includes(value.timeType || "") && !trimmed(value.timeOther)), {
-  message: "يرجى تحديد الوقت",
-  path: ["timeOther"],
-}).refine((value) => !(!value.outsideQatar && value.cemeteryType === "أخرى" && !trimmed(value.cemeteryOther)), {
-  message: "يرجى تحديد المقبرة",
-  path: ["cemeteryOther"],
+// 6. هندسة العزاء
+export const CondolenceWindowSchema = z.object({
+  periodType: z.enum(["morning", "evening", "after_taraweeh", "exact_time", "open"]).optional().default("evening"),
+  timeString: z.string().nullish().or(z.literal("")),
+  note: z.string().nullish().or(z.literal("")),
 });
 
 export const CondolenceScheduleSchema = z.object({
-  days: text(),
-  time: text(),
+  enabled: z.boolean().default(false),
+  morningFrom: z.string().nullish().or(z.literal("")),
+  morningTo: z.string().nullish().or(z.literal("")),
+  eveningFrom: z.string().nullish().or(z.literal("")),
+  eveningTo: z.string().nullish().or(z.literal("")),
+  fridayNote: z.string().nullish().or(z.literal("")),
 });
 
-export const CondolenceCardSchema = z.object({
+export const CondolenceDetailsSchema = z.object({
+  locationName: z.string().nullish().or(z.literal("")),
+  mapsLink: z.string().nullish().or(z.literal("")),
+  durationDays: z.coerce.number().nullish(),
+  schedule: CondolenceScheduleSchema.optional(),
+  windows: z.array(CondolenceWindowSchema).optional().default([]),
+  /** «all» أو رقم المتوفى: «عزاء النساء لـسعود رحمه الله». */
+  deceasedTarget: z.string().optional().default("all"),
+  until: z.string().nullish().or(z.literal("")),
+});
+
+export const ExtraVenueSchema = CondolenceDetailsSchema.extend({
   audience: z.enum(["men", "women"]),
-  deceasedTarget: z.string().default("all"),
-  location: text(),
-  mapLink: text(),
-  startType: text(),
-  startOther: text(),
-  /** إظهار التفاصيل في الواجهة فقط؛ القيم تُحفظ حتى لو طُويت. */
-  expanded: z.boolean().default(false),
-  durationDays: z.coerce.number().optional().nullable(),
-  time: text(),
-  until: text(),
-  schedule: z.array(CondolenceScheduleSchema).default([]),
-  houseNumber: text(),
-  buildingNumber: text(),
-  street: text(),
-  area: text(),
-  floor: text(),
-  apartmentNumber: text(),
-  locationNotes: text(),
 });
 
-export const CondolencesSchema = z.object({
-  none: z.boolean().default(false),
-  phone: z.boolean().default(false),
-  men: z.boolean().default(false),
-  menMode: z.enum(["venue", "cemetery"]).default("venue"),
-  women: z.boolean().default(false),
-  tbd: z.boolean().default(false),
-  phoneAudience: z.enum(["all", "men", "women"]).default("all"),
-  note: text(),
-  cards: z.array(CondolenceCardSchema).default([]),
-  phoneContacts: z.array(z.object({
-    name: text(),
-    phone: text(),
-  })).default([]),
+export const CondolenceSchema = z.object({
+  type: z.enum(["full", "men_only", "women_only", "cemetery_only", "phone_only", "tbd", "none"]).default("full"),
+  men: CondolenceDetailsSchema.optional(),
+  women: CondolenceDetailsSchema.optional(),
+  /** مواقع إضافية: «عزاء النساء الأول / الثاني» أو عزاء منفصل لكل متوفى. */
+  extraVenues: z.array(ExtraVenueSchema).optional().default([]),
+  phones: z.array(z.string()).optional().default([]),
+  /** أرقام التعزية مع مقرات العزاء (في «هاتف فقط» تظهر دائماً). */
+  withPhones: z.boolean().optional().default(false),
+  phoneAudience: z.enum(["all", "men", "women"]).optional().default("all"),
+  cancellationOrRestrictionReason: z.string().nullish().or(z.literal(""))
+}).superRefine((data, ctx) => {
+  if (data.type === "full" || data.type === "men_only") {
+    if (!data.men?.locationName || data.men.locationName.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "اسم ووصف مقر عزاء الرجال مطلوب",
+        path: ["men", "locationName"],
+      });
+    }
+  }
+  if (data.type === "full" || data.type === "women_only") {
+    if (!data.women?.locationName || data.women.locationName.trim().length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "اسم ووصف مقر عزاء النساء مطلوب",
+        path: ["women", "locationName"],
+      });
+    }
+  }
+  (data.extraVenues ?? []).forEach((venue, index) => {
+    if (!trimmed(venue.locationName)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "اسم ووصف المقر مطلوب",
+        path: ["extraVenues", index, "locationName"],
+      });
+    }
+  });
 });
 
 export const CancellationSchema = z.object({
   audience: z.enum(["men", "women", "all"]).default("men"),
-  from: text(),
-  reason: text(),
+  from: optionalText(),
+  reason: optionalText(),
   phoneOnly: z.boolean().default(false),
 });
 
-export const ObituaryFormSchema = z.object({
+// 7. المخطط الجذري
+export const ObituaryPayloadSchema = z.object({
   messageType: z.enum(["announcement", "postponement", "amendment", "condolence_cancellation"]).default("announcement"),
-  relatedRequestNumber: text(),
+  relatedRequestNumber: optionalText(),
+  cancellation: CancellationSchema.optional(),
   announcementMode: z.enum(["single", "unrelated", "siblings", "father_first", "mother_child"]).default("single"),
-  sharedParent: LinkedPersonSchema.default({ deceased: false }),
-  cancellation: CancellationSchema.default({ audience: "men", phoneOnly: false }),
-  deceasedPeople: z.array(DeceasedPersonSchema).min(1, "متوفى واحد على الأقل"),
-  relatives: z.array(RelativeGroupSchema).default([]),
-  prayer: PrayerSchema,
-  burial: BurialSchema,
-  condolences: CondolencesSchema,
-  notes: text(),
-}).superRefine((value, ctx) => {
-  const multiple = value.deceasedPeople.length > 1;
-  const mode = multiple ? value.announcementMode : "single";
-
-  if ((mode === "siblings" || mode === "father_first") && !trimmed(value.sharedParent?.name)) {
-    ctx.addIssue({ code: "custom", path: ["sharedParent", "name"], message: "اكتب اسم الأب المشترك" });
+  sharedParent: LinkedPersonSchema.optional(),
+  deceasedList: z.array(DeceasedPersonSchema).min(1, "يجب إضافة متوفى واحد على الأقل"),
+  relatives: z.array(KinshipGroupSchema).optional().default([]),
+  prayer: EventLocationSchema.optional(),
+  burial: EventLocationSchema.optional(),
+  condolences: CondolenceSchema.optional(),
+  condolenceStartDate: z.string().nullish().or(z.literal("")),
+  condolenceStartTime: z.string().nullish().or(z.literal("")),
+  notes: z.string().nullish().or(z.literal("")),
+}).superRefine((data, ctx) => {
+  const multiple = data.deceasedList.length > 1;
+  const mode = multiple ? data.announcementMode : "single";
+  if ((mode === "siblings" || mode === "father_first") && !trimmed(data.sharedParent?.name)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["sharedParent", "name"], message: "اكتب اسم الأب المشترك" });
   }
   if (mode === "siblings" || mode === "father_first" || mode === "mother_child") {
-    value.deceasedPeople.forEach((person, index) => {
-      if ((mode !== "mother_child" || index > 0) && trimmed(person.fullName).length < 2) {
-        ctx.addIssue({ code: "custom", path: ["deceasedPeople", index, "fullName"], message: "الاسم مطلوب في هذه الصيغة" });
+    data.deceasedList.forEach((person, index) => {
+      if ((mode !== "mother_child" || index > 0) && !trimmed(person.fullName)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["deceasedList", index, "fullName"], message: "الاسم مطلوب في هذه الصيغة" });
       }
     });
   }
-
-  value.deceasedPeople.forEach((person, index) => {
+  data.deceasedList.forEach((person, index) => {
     if (person.identifyBy !== "children") return;
-    const hasChildren = value.relatives.some((group) =>
+    const hasChildren = (data.relatives ?? []).some((group) =>
       group.relationKey === "children"
       && (group.deceasedTarget === "all" || group.deceasedTarget === String(index))
-      && group.people.some((relative) => trimmed(relative.name)));
+      && (group.persons ?? []).some((relative) => trimmed(relative.name)));
     if (!hasChildren) {
       ctx.addIssue({
-        code: "custom",
+        code: z.ZodIssueCode.custom,
         path: ["relatives"],
         message: "اخترت التعريف بالمتوفى عبر أبنائه: أضف مجموعة «الأبناء» بأسمائهم.",
       });
     }
   });
-
-  const isAnnouncement = value.messageType === "announcement" || value.messageType === "amendment";
-  const prayerCoversSchedule = value.prayer.enabled && !!value.prayer.dayType && !!value.prayer.timeType;
-  if (isAnnouncement && value.burial.status === "upcoming" && !value.burial.outsideQatar) {
-    if (!value.burial.dayType && !prayerCoversSchedule) {
-      ctx.addIssue({ code: "custom", path: ["burial", "dayType"], message: "يرجى تحديد يوم الدفن" });
-    }
-    if (!value.burial.timeType && !prayerCoversSchedule) {
-      ctx.addIssue({ code: "custom", path: ["burial", "timeType"], message: "يرجى تحديد وقت الدفن" });
-    }
-    if (!value.burial.cemeteryType) {
-      ctx.addIssue({ code: "custom", path: ["burial", "cemeteryType"], message: "يرجى تحديد المقبرة" });
-    }
-  }
-  if (isAnnouncement && value.burial.outsideQatar && value.burial.status !== "postponed" && !trimmed(value.burial.outsideLocation)) {
-    ctx.addIssue({ code: "custom", path: ["burial", "outsideLocation"], message: "يرجى تحديد مكان الدفن الخارجي" });
-  }
 });
 
-export type ObituaryFormValues = z.infer<typeof ObituaryFormSchema>;
-export type DeceasedFormValues = ObituaryFormValues["deceasedPeople"][number];
-export type CondolenceCardFormValues = ObituaryFormValues["condolences"]["cards"][number];
+export type ObituaryPayload = z.infer<typeof ObituaryPayloadSchema>;
 
-/** يحدد ما إذا كان يوم الدفن ووقته ومقبرته مطلوبة (لإظهار علامة * بما يطابق التحقق الفعلي). */
-export function burialScheduleRequired(value: Pick<ObituaryFormValues, "messageType" | "burial" | "prayer">): {
-  day: boolean;
-  time: boolean;
-  cemetery: boolean;
-} {
-  const isAnnouncement = value.messageType === "announcement" || value.messageType === "amendment";
-  const upcomingInQatar = isAnnouncement && value.burial?.status === "upcoming" && !value.burial?.outsideQatar;
-  const prayerCoversSchedule = !!value.prayer?.enabled && !!value.prayer?.dayType && !!value.prayer?.timeType;
-  return {
-    day: upcomingInQatar && !prayerCoversSchedule,
-    time: upcomingInQatar && !prayerCoversSchedule,
-    cemetery: upcomingInQatar,
-  };
-}
+export const ObituaryFormSchema = ObituaryPayloadSchema;
+export type ObituaryFormValues = ObituaryPayload;
+export type DeceasedFormValues = ObituaryFormValues["deceasedList"][number];
 
 export function emptyDeceased(): DeceasedFormValues {
   return {
-    fullName: "",
     gender: undefined as unknown as DeceasedFormValues["gender"],
-    identifyBy: "name",
+    title: "none",
+    fullName: "",
+    identifyBy: "auto",
     kunya: "",
     age: null,
     ageUnit: "years",
     nationality: "",
-    deathPlace: "",
-    title: "",
-    occupation: "",
-    note: "",
+    deathLocation: "",
+    notes: "",
     noChildren: false,
-    spouse: { kind: "harem", title: "", name: "", deceased: false },
-    father: { title: "", name: "", deceased: false },
+    femaleRelations: [],
+    father: { title: "", name: "", isDeceased: false },
   };
 }
 
-export function emptyCondolenceCard(audience: "men" | "women"): CondolenceCardFormValues {
+export function emptyCondolenceDetails() {
   return {
-    audience,
-    deceasedTarget: "all",
-    location: "",
-    mapLink: "",
-    startType: "",
-    startOther: "",
-    expanded: false,
+    locationName: "",
+    mapsLink: "",
     durationDays: null,
-    time: "",
+    schedule: {
+      enabled: false,
+      morningFrom: "",
+      morningTo: "",
+      eveningFrom: "",
+      eveningTo: "",
+      fridayNote: "",
+    },
+    windows: [],
+    deceasedTarget: "all",
     until: "",
-    schedule: [],
-    houseNumber: "",
-    buildingNumber: "",
-    street: "",
-    area: "",
-    floor: "",
-    apartmentNumber: "",
-    locationNotes: "",
   };
 }
 
@@ -292,25 +287,41 @@ export function emptyFormValues(): ObituaryFormValues {
   return {
     messageType: "announcement",
     relatedRequestNumber: "",
-    announcementMode: "single",
-    sharedParent: { title: "", name: "", deceased: false },
     cancellation: { audience: "men", from: "", reason: "", phoneOnly: false },
-    deceasedPeople: [emptyDeceased()],
+    announcementMode: "single",
+    sharedParent: { title: "", name: "", isDeceased: false },
+    deceasedList: [emptyDeceased()],
     relatives: [],
-    prayer: { enabled: false },
-    burial: { status: "upcoming", outsideQatar: false },
-    condolences: {
-      none: true,
-      phone: false,
-      men: false,
-      menMode: "venue",
-      women: false,
-      tbd: false,
-      phoneAudience: "all",
-      note: "",
-      cards: [],
-      phoneContacts: [],
+    burial: {
+      enabled: false,
+      status: "scheduled",
+      isOutsideQatar: false,
+      locationName: "",
+      dateDescription: "",
+      timeDescription: "",
+      notes: "",
     },
+    prayer: {
+      enabled: false,
+      status: "scheduled",
+      isOutsideQatar: false,
+      locationName: "",
+      dateDescription: "",
+      timeDescription: "",
+      notes: "",
+    },
+    condolences: {
+      type: "full",
+      men: emptyCondolenceDetails(),
+      women: emptyCondolenceDetails(),
+      extraVenues: [],
+      phones: [],
+      withPhones: false,
+      phoneAudience: "all",
+      cancellationOrRestrictionReason: "",
+    },
+    condolenceStartDate: "",
+    condolenceStartTime: "",
     notes: "",
   };
 }

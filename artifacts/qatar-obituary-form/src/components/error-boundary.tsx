@@ -37,28 +37,39 @@ function toError(value: unknown): Error {
 
 function DefaultFallback({ error, resetError }: ErrorFallbackProps) {
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-gray-50 p-6">
-      <div className="max-w-lg w-full text-center">
-        <h1 className="text-xl font-semibold text-gray-900">
-          Something went wrong
+    <div dir="rtl" className="min-h-screen w-full flex items-center justify-center bg-muted/20 p-6 font-sans">
+      <div className="max-w-md w-full text-center bg-card p-8 rounded-xl shadow-lg border border-border">
+        <div className="w-14 h-14 rounded-full bg-destructive/10 text-destructive flex items-center justify-center mx-auto mb-4">
+          <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+        </div>
+        <h1 className="text-xl font-bold text-foreground">
+          حدث خطأ غير متوقع
         </h1>
-        <p className="mt-2 text-sm text-gray-600">
-          This part of the app hit an error. The rest of the app is still
-          running.
+        <p className="mt-2 text-sm text-muted-foreground">
+          واجه التطبيق خطأ أثناء عرض هذه الصفحة. يمكنك إعادة المحاولة أو الانتقال إلى الصفحة الرئيسية.
         </p>
-        {/* Dev only: messages can carry API responses and other internals. */}
-        {import.meta.env.DEV ? (
-          <pre className="mt-4 overflow-x-auto rounded bg-gray-100 p-3 text-left text-xs text-gray-800">
-            {error.message || String(error)}
+        {import.meta.env.DEV && error?.message ? (
+          <pre className="mt-4 overflow-x-auto rounded bg-muted/50 p-3 text-left text-xs text-muted-foreground border border-border/50 font-mono" dir="ltr">
+            {error.message}
           </pre>
         ) : null}
-        <button
-          type="button"
-          onClick={resetError}
-          className="mt-4 rounded bg-gray-900 px-4 py-2 text-sm text-white hover:bg-gray-700"
-        >
-          Try again
-        </button>
+        <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-3">
+          <button
+            type="button"
+            onClick={resetError}
+            className="w-full sm:w-auto rounded-lg bg-primary px-6 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 transition-colors"
+          >
+            إعادة المحاولة
+          </button>
+          <a
+            href="/"
+            className="w-full sm:w-auto rounded-lg border border-border bg-background px-6 py-2.5 text-sm font-semibold text-foreground hover:bg-muted/50 transition-colors"
+          >
+            الصفحة الرئيسية
+          </a>
+        </div>
       </div>
     </div>
   );
@@ -75,11 +86,25 @@ export class ErrorBoundary extends Component<
   }
 
   componentDidCatch(error: unknown, info: ErrorInfo): void {
+    const err = toError(error);
     console.error(
       'ErrorBoundary caught an error:',
-      toError(error),
+      err,
       info.componentStack,
     );
+    try {
+      fetch('/api/client-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: err.message,
+          stack: err.stack,
+          componentStack: info.componentStack,
+        }),
+      }).catch(() => {});
+    } catch {
+      // ignore
+    }
   }
 
   componentDidUpdate(prevProps: ErrorBoundaryProps): void {

@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidStatus(status) {
+      return status in ['new', 'reviewing', 'ready', 'completed'];
+    }
+
+    function isValidObituaryRequest(data) {
+      return data.keys().hasAll(['requestNumber', 'deceasedName', 'status', 'payload']) &&
+             data.requestNumber is string && data.requestNumber.size() <= 32 &&
+             data.deceasedName is string && data.deceasedName.size() <= 200 &&
+             isValidStatus(data.status) &&
+             data.payload is map;
+    }
+
+    match /obituary_requests/{requestId} {
+      allow get: if isValidId(requestId);
+      allow list: if true;
+      allow create: if isValidId(requestId) &&
+                       isValidObituaryRequest(incoming()) &&
+                       incoming().status == 'new';
+      allow update: if isValidId(requestId) &&
+                       isValidObituaryRequest(incoming()) &&
+                       incoming().requestNumber == existing().requestNumber;
+      allow delete: if false;
+    }
+
+    match /condolence_templates/{templateId} {
+      allow get, list: if true;
+      allow create, update: if isValidId(templateId);
+      allow delete: if isValidId(templateId);
+    }
+  }
+}

@@ -1,14 +1,22 @@
+/**
+ * اختبارات الجسر بين شكل بيانات النموذج (deceasedList…) وعقد الـ API (deceasedPeople…).
+ * أهمها: ما يرسله النموذج يقبله الخادم فعلاً (كان يُرفض بخطأ 400 قبل هذا الجسر).
+ */
 import assert from "node:assert/strict";
 import type { ObituaryRequest } from "@workspace/api-client-react";
+import { CreateObituaryRequestBody } from "@workspace/api-zod";
 import { buildAnnouncement } from "./announcement";
 import { mapFormToPayload, mapPayloadToForm } from "./mapper";
-import { ObituaryFormSchema, emptyCondolenceCard, emptyDeceased, emptyFormValues, type ObituaryFormValues } from "./schema";
+import { ObituaryFormSchema, emptyDeceased, emptyFormValues, type ObituaryFormValues } from "./schema";
 
-function form(overrides: (values: ObituaryFormValues) => void): ObituaryFormValues {
+const NOW = new Date(2026, 9, 2); // الجمعة 2 أكتوبر 2026
+
+function form(edit: (values: ObituaryFormValues) => void): ObituaryFormValues {
   const values = emptyFormValues();
-  values.deceasedPeople[0] = { ...emptyDeceased(), gender: "man", fullName: "محمد علي" };
-  values.burial = { status: "upcoming", outsideQatar: false, dayType: "اليوم", timeType: "بعد صلاة العصر", cemeteryType: "مقبرة مسيمير" };
-  overrides(values);
+  values.deceasedList[0] = { ...emptyDeceased(), gender: "ذكر", title: "الوالد", fullName: "محمد علي" };
+  values.burial = { ...values.burial!, status: "scheduled", locationName: "مقبرة مسيمير", dateDescription: "2026-10-02", timeDescription: "بعد صلاة العصر" };
+  values.condolences = { ...values.condolences!, type: "none" };
+  edit(values);
   return values;
 }
 
@@ -17,152 +25,184 @@ const issues = (values: ObituaryFormValues) => {
   return result.success ? [] : result.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`);
 };
 
+const text = (values: ObituaryFormValues) => buildAnnouncement(mapFormToPayload(values), { now: NOW }).text;
+
+function serverAccepts(values: ObituaryFormValues) {
+  const result = CreateObituaryRequestBody.safeParse(mapFormToPayload(values));
+  assert.ok(result.success, result.success ? "" : JSON.stringify(result.error.issues.slice(0, 5)));
+}
+
 const asRequest = (values: ObituaryFormValues): ObituaryRequest => ({
   ...mapFormToPayload(values),
   id: 1,
   requestNumber: "QTR-TEST",
-  createdAt: "2026-10-01T00:00:00.000Z",
-  updatedAt: "2026-10-01T00:00:00.000Z",
+  createdAt: "2026-10-02T00:00:00.000Z",
+  updatedAt: "2026-10-02T00:00:00.000Z",
   status: "new",
 });
 
 const cases: Array<[string, () => void]> = [
-  ["الجنس لا يُفترض: النموذج الفارغ يرفض المتابعة دون اختياره", () => {
+  ["الجنس لا يُفترض: النموذج الفارغ يطلب اختياره", () => {
     const values = emptyFormValues();
-    values.deceasedPeople[0].fullName = "محمد علي";
-    assert.ok(issues(values).some((issue) => issue.startsWith("deceasedPeople.0.gender")));
+    values.deceasedList[0].fullName = "محمد علي";
+    assert.ok(issues(values).some((issue) => issue.startsWith("deceasedList.0.gender")));
   }],
-  ["الاسم اختياري عند التعريف عبر الزوج، ومطلوب عند التعريف بالاسم", () => {
-    const nameless = form((values) => {
-      values.deceasedPeople[0] = {
-        ...emptyDeceased(),
-        gender: "woman",
-        identifyBy: "spouse",
-        spouse: { kind: "widow", title: "الوالد", name: "سيف سعيد", deceased: false },
-      };
-    });
-    assert.deepEqual(issues(nameless), []);
-    const payload = mapFormToPayload(nameless);
-    assert.equal(payload.deceasedPeople[0].fullName, undefined);
-    assert.equal(payload.deceasedPeople[0].spouse?.deceased, true, "«أرملة» تعني زوجاً متوفى");
-    const missing = form((values) => { values.deceasedPeople[0].fullName = ""; });
-    assert.ok(issues(missing).some((issue) => issue.startsWith("deceasedPeople.0.fullName")));
+  ["ما يرسله النموذج يقبله الخادم، والنص بصيغة الأرشيف", () => {
+    const values = form(() => {});
+    assert.deepEqual(issues(values), []);
+    serverAccepts(values);
+    assert.equal(text(values), "توفي الوالد / محمد علي\n\nالدفن اليوم الجمعة بعد صلاة العصر في مقبرة مسيمير\n\nلا يوجد عزاء\n\nالله يرحمه ويغفر له");
   }],
-  ["التعريف عبر الأبناء يتطلب مجموعة «الأبناء»", () => {
+  ["أرملة بلا اسم (معرّف القرابة) ← «أرملة الوالد / … رحمهم الله»", () => {
     const values = form((draft) => {
-      draft.deceasedPeople[0] = { ...emptyDeceased(), gender: "woman", identifyBy: "children" };
-    });
-    assert.ok(issues(values).some((issue) => issue.startsWith("relatives:")));
-    values.relatives.push({
-      relationKey: "children",
-      relationOther: "",
-      familyReference: "",
-      reference: { deceased: false },
-      deceasedPlacement: "auto",
-      deceasedTarget: "all",
-      people: [{ name: "غانم", deceased: false }],
+      draft.deceasedList[0] = {
+        ...emptyDeceased(),
+        gender: "أنثى",
+        femaleRelations: [{ relationType: "أرملة", relatedTitle: "الوالد", relatedName: "سيف سعيد ادغام النعيمي", isHusbandDeceased: true }],
+      };
+      draft.relatives = [{
+        relationType: "الأبناء", relationKey: "children", deceasedPlacement: "auto", deceasedTarget: "all",
+        persons: [{ name: "غانم", isDeceased: false, workplace: "", jobStatus: "none" }, { name: "ناصر", isDeceased: false, workplace: "", jobStatus: "none" }],
+      }];
     });
     assert.deepEqual(issues(values), []);
+    serverAccepts(values);
+    assert.ok(text(values).startsWith("توفيت أرملة الوالد / سيف سعيد ادغام النعيمي رحمهم الله\nوالدة كل من\nغانم\nوناصر"), text(values));
+    assert.ok(text(values).endsWith("الله يرحمها ويغفر لها"));
   }],
-  ["موعد الدفن لا يُطلب للدفن خارج قطر أو بعد إتمامه أو عند التأجيل", () => {
-    for (const burial of [
-      { status: "upcoming" as const, outsideQatar: true, outsideLocation: "مصر" },
-      { status: "completed" as const, outsideQatar: false, cemeteryType: "مقبرة مسيمير" },
-      { status: "postponed" as const, outsideQatar: false },
-    ]) {
-      assert.deepEqual(issues(form((values) => { values.burial = burial; })), [], JSON.stringify(burial));
-    }
-    const missing = form((values) => { values.burial = { status: "upcoming", outsideQatar: false }; });
-    assert.ok(issues(missing).some((issue) => issue.startsWith("burial.dayType")));
-  }],
-  ["تفاصيل العزاء تُحفظ حتى لو طُوي قسمها", () => {
+  ["الطفل يُعرف من اللقب: «انتقل إلى رحمة الله تعالى الطفل /» و«شفيعاً لوالديه يارب»", () => {
     const values = form((draft) => {
-      draft.condolences.none = false;
-      draft.condolences.men = true;
-      draft.condolences.cards = [{ ...emptyCondolenceCard("men"), location: "مجلس", expanded: false, durationDays: 3, time: "الفترة المسائية" }];
+      draft.deceasedList[0] = { ...emptyDeceased(), gender: "ذكر", title: "الطفل", fullName: "يوسف", age: 8, ageUnit: "months" };
     });
-    const card = mapFormToPayload(values).condolences[0];
-    assert.equal(card.durationDays, 3);
-    assert.equal(card.time, "الفترة المسائية");
+    const result = text(values);
+    assert.ok(result.startsWith("انتقل إلى رحمة الله تعالى الطفل / يوسف\n8 أشهر"), result);
+    assert.ok(result.endsWith("شفيعاً لوالديه يارب"));
   }],
-  ["عزاء الرجال في المقبرة فقط + عزاء النساء عبر الهاتف", () => {
+  ["الأقارب: العناوين القديمة («أبناؤه») والوظائف والترحّم المجمّع", () => {
     const values = form((draft) => {
-      draft.condolences.none = false;
-      draft.condolences.men = true;
-      draft.condolences.menMode = "cemetery";
-      draft.condolences.phone = true;
-      draft.condolences.phoneAudience = "women";
-      draft.condolences.cards = [emptyCondolenceCard("men")];
+      draft.relatives = [{
+        relationType: "أبناؤه", deceasedPlacement: "auto", deceasedTarget: "all",
+        persons: [
+          { name: "أحمد", isDeceased: false, workplace: "وزارة الداخلية", jobStatus: "retired" },
+          { name: "خالد", isDeceased: false, workplace: "قطر للطاقة", jobStatus: "former" },
+          { name: "سالم", isDeceased: true, workplace: "", jobStatus: "none" },
+          { name: "حمد", isDeceased: true, workplace: "", jobStatus: "none" },
+        ],
+      }];
     });
-    const payload = mapFormToPayload(values);
-    assert.deepEqual(payload.condolenceOptions, ["men_cemetery", "phone"]);
-    assert.deepEqual(payload.condolences, [], "بطاقة المجلس لا تُرسل عند اختيار المقبرة فقط");
+    assert.match(text(values), /والد كل من\nأحمد \(متقاعد من وزارة الداخلية\)\nوخالد \(قطر للطاقة سابقاً\)\nوسالم وحمد رحمهما الله/u);
   }],
-  ["ذهاباً وإياباً: النموذج ← الطلب ← النموذج يحفظ البيانات الجديدة", () => {
+  ["«تم الدفن» بملاحظة، و«مؤجل» حتى إشعار آخر", () => {
+    const done = form((draft) => { draft.burial = { ...draft.burial!, status: "done", locationName: "", dateDescription: "", timeDescription: "", notes: "تم الدفن في مكة المكرمة" }; });
+    assert.match(text(done), /^تم الدفن في مكة المكرمة$/mu);
+    const postponed = form((draft) => { draft.burial = { ...draft.burial!, status: "pending", notes: "لحين وصول الجثمان" }; });
+    assert.match(text(postponed), /تأجيل الدفن حتى إشعار آخر\nلحين وصول الجثمان/u);
+  }],
+  ["الصلاة في جامع منفصل بموعد الدفن ثم «والدفن في …»", () => {
+    const values = form((draft) => { draft.prayer = { ...draft.prayer!, enabled: true, locationName: "جامع الإمام محمد بن عبدالوهاب" }; });
+    assert.match(text(values), /صلاة الجنازة اليوم الجمعة بعد صلاة العصر في جامع الإمام محمد بن عبدالوهاب\nوالدفن في مقبرة مسيمير/u);
+  }],
+  ["أنواع العزاء: المقبرة فقط، الهاتف، سيُحدَّد لاحقاً، ومواقع إضافية", () => {
+    const cemetery = form((draft) => { draft.condolences = { ...draft.condolences!, type: "cemetery_only", cancellationOrRestrictionReason: "اتباعاً للسنة" }; });
+    assert.match(text(cemetery), /عزاء الرجال في المقبرة فقط اتباعاً للسنة/u);
+    const phone = form((draft) => { draft.condolences = { ...draft.condolences!, type: "phone_only", phones: ["ناصر (الأبناء): 55551234"] }; });
+    assert.match(text(phone), /العزاء عن طريق هاتف ناصر: 55551234/u);
+    serverAccepts(phone);
+    const tbd = form((draft) => { draft.condolences = { ...draft.condolences!, type: "tbd" }; });
+    assert.match(text(tbd), /سيُحدَّد لاحقاً/u);
+    const extra = form((draft) => {
+      draft.condolences = {
+        ...draft.condolences!,
+        type: "full",
+        men: { ...draft.condolences!.men!, locationName: "مجلس العائلة في الدفنة", durationDays: 3 },
+        women: { ...draft.condolences!.women!, locationName: "منزل ابنته في الوعب" },
+        extraVenues: [{ ...draft.condolences!.women!, audience: "women", locationName: "منزل ابنته في الخور" }],
+      };
+      draft.condolenceStartDate = "2026-10-03";
+      draft.condolenceStartTime = "بعد صلاة العصر";
+    });
+    assert.deepEqual(issues(extra), []);
+    serverAccepts(extra);
+    const result = text(extra);
+    assert.match(result, /عزاء الرجال من غداً السبت بعد صلاة العصر في مجلس العائلة في الدفنة\nلمدة 3 أيام/u);
+    assert.match(result, /عزاء النساء الأول من غداً السبت بعد صلاة العصر في منزل ابنته في الوعب/u);
+    assert.match(result, /عزاء النساء الثاني من غداً السبت بعد صلاة العصر في منزل ابنته في الخور/u);
+  }],
+  ["أوقات العزاء الصباحية والمسائية بصيغة 12 ساعة", () => {
+    const values = form((draft) => {
+      draft.condolences = {
+        ...draft.condolences!,
+        type: "men_only",
+        men: {
+          ...draft.condolences!.men!,
+          locationName: "مجلس العائلة",
+          schedule: { enabled: true, morningFrom: "", morningTo: "", eveningFrom: "16:00", eveningTo: "21:00", fridayNote: "بعد صلاة العصر" },
+        },
+      };
+    });
+    assert.match(text(values), /الفترة المسائية من 4:00 مساءً إلى 9:00 مساءً\nيوم الجمعة بعد صلاة العصر/u);
+  }],
+  ["ذهاباً وإياباً: النموذج ← الطلب ← النموذج (صفحة التعديل)", () => {
     const values = form((draft) => {
       draft.messageType = "amendment";
       draft.relatedRequestNumber = "QTR-1";
       draft.announcementMode = "siblings";
-      draft.sharedParent = { title: "", name: "فهد الشملان", deceased: true };
-      draft.deceasedPeople = [
-        { ...emptyDeceased(), gender: "man", fullName: "سعود", age: 22 },
-        { ...emptyDeceased(), gender: "boy", fullName: "جاسم", age: 8, ageUnit: "months" },
+      draft.sharedParent = { title: "", name: "فهد الشملان", isDeceased: true };
+      draft.deceasedList = [
+        { ...emptyDeceased(), gender: "ذكر", fullName: "سعود", age: 22 },
+        { ...emptyDeceased(), gender: "ذكر", title: "الطفل", fullName: "جاسم", age: 8, ageUnit: "months" },
       ];
-      draft.burial = { status: "upcoming", outsideQatar: false, dayType: "اليوم", weekday: "السبت", timeType: "بعد صلاة التراويح", cemeteryType: "مقبرة الكعبان" };
       draft.relatives = [{
-        relationKey: "paternal_uncles",
-        relationOther: "",
-        familyReference: "",
-        reference: { deceased: false },
-        deceasedPlacement: "grouped",
-        deceasedTarget: "all",
-        people: [{ name: "خالد", deceased: true }, { name: "حمد", deceased: true }],
+        relationType: "الأعمام", relationKey: "paternal_uncles", deceasedPlacement: "grouped", deceasedTarget: "all",
+        persons: [{ name: "خالد", isDeceased: true, workplace: "", jobStatus: "none" }, { name: "حمد", isDeceased: true, workplace: "", jobStatus: "none" }],
       }];
-      draft.condolences.none = false;
-      draft.condolences.women = true;
-      draft.condolences.cards = [
-        { ...emptyCondolenceCard("women"), deceasedTarget: "0", location: "منزل رقم ٥", schedule: [{ days: "الخميس", time: "بعد العشاء" }] },
-        { ...emptyCondolenceCard("women"), deceasedTarget: "1", location: "منزل رقم ٩" },
-      ];
+      draft.condolences = {
+        ...draft.condolences!,
+        type: "women_only",
+        women: {
+          ...draft.condolences!.women!,
+          locationName: "منزل رقم ٥",
+          deceasedTarget: "0",
+          schedule: { enabled: true, morningFrom: "09:00", morningTo: "12:00", eveningFrom: "", eveningTo: "", fridayNote: "" },
+        },
+        extraVenues: [{ ...draft.condolences!.women!, audience: "women", locationName: "منزل رقم ٩", deceasedTarget: "1" }],
+      };
+      draft.condolenceStartDate = "2026-10-02";
     });
     assert.deepEqual(issues(values), []);
     const back = mapPayloadToForm(asRequest(values));
     assert.equal(back.messageType, "amendment");
     assert.equal(back.announcementMode, "siblings");
-    assert.equal(back.sharedParent.name, "فهد الشملان");
-    assert.equal(back.deceasedPeople[1].ageUnit, "months");
-    assert.equal(back.burial.weekday, "السبت");
-    assert.equal(back.burial.timeType, "بعد صلاة التراويح");
-    assert.equal(back.burial.cemeteryType, "مقبرة الكعبان");
+    assert.equal(back.sharedParent?.name, "فهد الشملان");
+    assert.equal(back.deceasedList[1].gender, "ذكر");
+    assert.equal(back.deceasedList[1].title, "الطفل");
+    assert.equal(back.deceasedList[1].ageUnit, "months");
     assert.equal(back.relatives[0].relationKey, "paternal_uncles");
     assert.equal(back.relatives[0].deceasedPlacement, "grouped");
-    assert.equal(back.condolences.cards[1].deceasedTarget, "1");
-    assert.equal(back.condolences.cards[0].schedule[0].days, "الخميس");
-    const text = buildAnnouncement(mapFormToPayload(back)).text;
-    assert.match(text, /^تعديل \/\nتوفي كل من\nسعود — 22 عاماً\nالطفل جاسم — 8 أشهر\nأبناء \/ فهد الشملان رحمه الله\nأعمامهم كل من\nخالد وحمد رحمهما الله/u);
+    assert.equal(back.burial?.dateDescription, "2026-10-02");
+    assert.equal(back.condolences?.type, "women_only");
+    assert.equal(back.condolences?.women?.deceasedTarget, "0");
+    assert.equal(back.condolences?.women?.schedule?.morningFrom, "09:00");
+    assert.equal(back.condolences?.women?.schedule?.morningTo, "12:00");
+    assert.equal(back.condolences?.extraVenues?.[0]?.deceasedTarget, "1");
+    assert.equal(back.condolenceStartDate, "2026-10-02");
+    assert.equal(text(back), text(values));
+    assert.match(text(values), /^تعديل \/\nتوفي كل من\nسعود — 22 عاماً\nالطفل جاسم — 8 أشهر\nأبناء \/ فهد الشملان رحمه الله\nأعمامهم كل من\nخالد وحمد رحمهما الله/u);
   }],
-  ["طلب قديم: الصلة النصية والجنس «other» والمقبرة غير المدرجة", () => {
+  ["طلب قديم: «other» لا يصبح «ذكر»، واللقب الحر لا يضيع", () => {
     const legacy = {
-      id: 9,
-      requestNumber: "QTR-OLD",
-      createdAt: "2026-01-01T00:00:00.000Z",
-      updatedAt: "2026-01-01T00:00:00.000Z",
-      status: "new",
-      deceasedPeople: [{ fullName: "فلان", gender: "other" }],
+      id: 9, requestNumber: "QTR-OLD", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", status: "new",
+      deceasedPeople: [{ fullName: "فلان", gender: "other", title: "الوالد اللواء متقاعد" }],
       relatives: [{ relation: "أخ", familyReference: "", people: [{ name: "علي", deceased: false }] }],
       prayer: { enabled: false },
       burial: { status: "upcoming", outsideQatar: false, day: "اليوم", time: "الساعة 9", cemetery: "مقبرة الدحيل" },
-      condolenceOptions: [],
-      condolences: [],
-      condolencePhoneContacts: [],
+      condolenceOptions: [], condolences: [], condolencePhoneContacts: [],
     } as ObituaryRequest;
     const values = mapPayloadToForm(legacy);
-    assert.equal(values.deceasedPeople[0].gender, undefined, "يُطلب اختيار الجنس من جديد بدل افتراض «رجل»");
+    assert.equal(values.deceasedList[0].gender, undefined);
+    assert.equal(values.deceasedList[0].notes, "الوالد اللواء متقاعد");
     assert.equal(values.relatives[0].relationKey, "siblings");
-    assert.equal(values.burial.cemeteryType, "أخرى");
-    assert.equal(values.burial.cemeteryOther, "مقبرة الدحيل");
-    assert.equal(values.burial.timeType, "أخرى");
-    assert.equal(values.burial.timeOther, "الساعة 9");
+    assert.equal(values.burial?.locationName, "مقبرة الدحيل");
   }],
 ];
 
