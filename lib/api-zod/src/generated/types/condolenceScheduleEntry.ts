@@ -6,11 +6,7 @@
  * OpenAPI spec version: 0.3.0
  */
 
-export interface PrayerDetails {
-  enabled: boolean;
-  day?: string;
-  weekday?: string;
+export interface CondolenceScheduleEntry {
+  days?: string;
   time?: string;
-  place?: string;
-  mapLink?: string;
 }

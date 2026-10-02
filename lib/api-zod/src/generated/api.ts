@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * واجهة طلبات بيانات إعلانات الوفاة
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 import * as zod from 'zod';
 
@@ -13,25 +13,60 @@ export const HealthCheckResponse = zod.object({
 })
 
 
-export const listObituaryRequestsResponseOneDeceasedPeopleItemFullNameMin = 2;
-
 
 
 
 export const ListObituaryRequestsResponseItem = zod.object({
+  "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
+  "relatedRequestNumber": zod.string().optional(),
+  "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
+  "sharedParent": zod.object({
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته'),
+  "cancellation": zod.object({
+  "audience": zod.enum(['men', 'women', 'all']).optional(),
+  "from": zod.string().optional(),
+  "reason": zod.string().optional(),
+  "phoneOnly": zod.boolean().optional()
+}).optional(),
   "deceasedPeople": zod.array(zod.object({
-  "fullName": zod.string().min(listObituaryRequestsResponseOneDeceasedPeopleItemFullNameMin),
+  "fullName": zod.string().optional(),
   "gender": zod.enum(['man', 'woman', 'boy', 'girl', 'other']),
+  "identifyBy": zod.enum(['name', 'kunya', 'spouse', 'father', 'children']).optional().describe('طريقة التعريف بالمتوفى في رأس الإعلان'),
+  "kunya": zod.string().optional(),
   "age": zod.number().int().nullish(),
+  "ageUnit": zod.enum(['years', 'months', 'days']).optional(),
   "nationality": zod.string().optional(),
   "deathPlace": zod.string().optional(),
   "title": zod.string().optional(),
   "occupation": zod.string().optional(),
-  "note": zod.string().optional()
+  "note": zod.string().optional(),
+  "noChildren": zod.boolean().optional(),
+  "spouse": zod.object({
+  "kind": zod.enum(['harem', 'widow']).optional(),
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('زوج المتوفاة؛ النوع يحدد «حرم» أو «أرملة»'),
+  "father": zod.object({
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته')
 })).min(1),
   "relatives": zod.array(zod.object({
   "relation": zod.string(),
+  "relationKey": zod.enum(['children', 'full_siblings', 'siblings', 'grandchildren', 'brothers_children', 'sisters_children', 'father', 'grandfather', 'paternal_uncles', 'maternal_uncles', 'daughters_husbands', 'sisters_husbands', 'other']).optional().describe('صلة الأشخاص بالمتوفى؛ يُشتق منها عنوان الإعلان مثل «والدة كل من»'),
   "familyReference": zod.string().optional(),
+  "reference": zod.object({
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته'),
+  "deceasedPlacement": zod.enum(['auto', 'inline', 'grouped']).optional(),
+  "deceasedIndex": zod.number().int().nullish(),
   "people": zod.array(zod.object({
   "name": zod.string(),
   "occupation": zod.string().optional(),
@@ -41,20 +76,25 @@ export const ListObituaryRequestsResponseItem = zod.object({
   "prayer": zod.object({
   "enabled": zod.boolean(),
   "day": zod.string().optional(),
+  "weekday": zod.string().optional(),
   "time": zod.string().optional(),
   "place": zod.string().optional(),
   "mapLink": zod.string().optional()
 }),
   "burial": zod.object({
-  "status": zod.enum(['upcoming', 'completed']),
+  "status": zod.enum(['upcoming', 'completed', 'postponed']),
   "day": zod.string().optional(),
+  "weekday": zod.string().optional(),
   "time": zod.string().optional(),
   "cemetery": zod.string().optional(),
   "mapLink": zod.string().optional(),
   "outsideQatar": zod.boolean(),
-  "outsideLocation": zod.string().optional()
+  "outsideLocation": zod.string().optional(),
+  "note": zod.string().optional().describe('ملاحظة الدفن (سبب التأجيل، أو وصف دفن تمّ مثل «تم الدفن في مكة المكرمة»)')
 }),
-  "condolenceOptions": zod.array(zod.enum(['phone', 'men', 'women'])),
+  "condolenceOptions": zod.array(zod.enum(['phone', 'men', 'women', 'men_cemetery', 'tbd'])),
+  "phoneAudience": zod.enum(['all', 'men', 'women']).optional(),
+  "condolenceNote": zod.string().optional(),
   "condolences": zod.array(zod.object({
   "audience": zod.enum(['men', 'women']),
   "location": zod.string().optional(),
@@ -68,7 +108,13 @@ export const ListObituaryRequestsResponseItem = zod.object({
   "area": zod.string().optional(),
   "floor": zod.string().optional(),
   "apartmentNumber": zod.string().optional(),
-  "locationNotes": zod.string().optional()
+  "locationNotes": zod.string().optional(),
+  "until": zod.string().optional(),
+  "schedule": zod.array(zod.object({
+  "days": zod.string().optional(),
+  "time": zod.string().optional()
+})).optional(),
+  "deceasedIndex": zod.number().int().nullish()
 })),
   "condolencePhoneContacts": zod.array(zod.object({
   "name": zod.string().optional(),
@@ -85,25 +131,60 @@ export const ListObituaryRequestsResponseItem = zod.object({
 export const ListObituaryRequestsResponse = zod.array(ListObituaryRequestsResponseItem)
 
 
-export const createObituaryRequestBodyDeceasedPeopleItemFullNameMin = 2;
-
 
 
 
 export const CreateObituaryRequestBody = zod.object({
+  "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
+  "relatedRequestNumber": zod.string().optional(),
+  "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
+  "sharedParent": zod.object({
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته'),
+  "cancellation": zod.object({
+  "audience": zod.enum(['men', 'women', 'all']).optional(),
+  "from": zod.string().optional(),
+  "reason": zod.string().optional(),
+  "phoneOnly": zod.boolean().optional()
+}).optional(),
   "deceasedPeople": zod.array(zod.object({
-  "fullName": zod.string().min(createObituaryRequestBodyDeceasedPeopleItemFullNameMin),
+  "fullName": zod.string().optional(),
   "gender": zod.enum(['man', 'woman', 'boy', 'girl', 'other']),
+  "identifyBy": zod.enum(['name', 'kunya', 'spouse', 'father', 'children']).optional().describe('طريقة التعريف بالمتوفى في رأس الإعلان'),
+  "kunya": zod.string().optional(),
   "age": zod.number().int().nullish(),
+  "ageUnit": zod.enum(['years', 'months', 'days']).optional(),
   "nationality": zod.string().optional(),
   "deathPlace": zod.string().optional(),
   "title": zod.string().optional(),
   "occupation": zod.string().optional(),
-  "note": zod.string().optional()
+  "note": zod.string().optional(),
+  "noChildren": zod.boolean().optional(),
+  "spouse": zod.object({
+  "kind": zod.enum(['harem', 'widow']).optional(),
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('زوج المتوفاة؛ النوع يحدد «حرم» أو «أرملة»'),
+  "father": zod.object({
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته')
 })).min(1),
   "relatives": zod.array(zod.object({
   "relation": zod.string(),
+  "relationKey": zod.enum(['children', 'full_siblings', 'siblings', 'grandchildren', 'brothers_children', 'sisters_children', 'father', 'grandfather', 'paternal_uncles', 'maternal_uncles', 'daughters_husbands', 'sisters_husbands', 'other']).optional().describe('صلة الأشخاص بالمتوفى؛ يُشتق منها عنوان الإعلان مثل «والدة كل من»'),
   "familyReference": zod.string().optional(),
+  "reference": zod.object({
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته'),
+  "deceasedPlacement": zod.enum(['auto', 'inline', 'grouped']).optional(),
+  "deceasedIndex": zod.number().int().nullish(),
   "people": zod.array(zod.object({
   "name": zod.string(),
   "occupation": zod.string().optional(),
@@ -113,20 +194,25 @@ export const CreateObituaryRequestBody = zod.object({
   "prayer": zod.object({
   "enabled": zod.boolean(),
   "day": zod.string().optional(),
+  "weekday": zod.string().optional(),
   "time": zod.string().optional(),
   "place": zod.string().optional(),
   "mapLink": zod.string().optional()
 }),
   "burial": zod.object({
-  "status": zod.enum(['upcoming', 'completed']),
+  "status": zod.enum(['upcoming', 'completed', 'postponed']),
   "day": zod.string().optional(),
+  "weekday": zod.string().optional(),
   "time": zod.string().optional(),
   "cemetery": zod.string().optional(),
   "mapLink": zod.string().optional(),
   "outsideQatar": zod.boolean(),
-  "outsideLocation": zod.string().optional()
+  "outsideLocation": zod.string().optional(),
+  "note": zod.string().optional().describe('ملاحظة الدفن (سبب التأجيل، أو وصف دفن تمّ مثل «تم الدفن في مكة المكرمة»)')
 }),
-  "condolenceOptions": zod.array(zod.enum(['phone', 'men', 'women'])),
+  "condolenceOptions": zod.array(zod.enum(['phone', 'men', 'women', 'men_cemetery', 'tbd'])),
+  "phoneAudience": zod.enum(['all', 'men', 'women']).optional(),
+  "condolenceNote": zod.string().optional(),
   "condolences": zod.array(zod.object({
   "audience": zod.enum(['men', 'women']),
   "location": zod.string().optional(),
@@ -140,7 +226,13 @@ export const CreateObituaryRequestBody = zod.object({
   "area": zod.string().optional(),
   "floor": zod.string().optional(),
   "apartmentNumber": zod.string().optional(),
-  "locationNotes": zod.string().optional()
+  "locationNotes": zod.string().optional(),
+  "until": zod.string().optional(),
+  "schedule": zod.array(zod.object({
+  "days": zod.string().optional(),
+  "time": zod.string().optional()
+})).optional(),
+  "deceasedIndex": zod.number().int().nullish()
 })),
   "condolencePhoneContacts": zod.array(zod.object({
   "name": zod.string().optional(),
@@ -149,25 +241,60 @@ export const CreateObituaryRequestBody = zod.object({
   "notes": zod.string().optional()
 })
 
-export const createObituaryRequestResponseOneDeceasedPeopleItemFullNameMin = 2;
-
 
 
 
 export const CreateObituaryRequestResponse = zod.object({
+  "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
+  "relatedRequestNumber": zod.string().optional(),
+  "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
+  "sharedParent": zod.object({
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته'),
+  "cancellation": zod.object({
+  "audience": zod.enum(['men', 'women', 'all']).optional(),
+  "from": zod.string().optional(),
+  "reason": zod.string().optional(),
+  "phoneOnly": zod.boolean().optional()
+}).optional(),
   "deceasedPeople": zod.array(zod.object({
-  "fullName": zod.string().min(createObituaryRequestResponseOneDeceasedPeopleItemFullNameMin),
+  "fullName": zod.string().optional(),
   "gender": zod.enum(['man', 'woman', 'boy', 'girl', 'other']),
+  "identifyBy": zod.enum(['name', 'kunya', 'spouse', 'father', 'children']).optional().describe('طريقة التعريف بالمتوفى في رأس الإعلان'),
+  "kunya": zod.string().optional(),
   "age": zod.number().int().nullish(),
+  "ageUnit": zod.enum(['years', 'months', 'days']).optional(),
   "nationality": zod.string().optional(),
   "deathPlace": zod.string().optional(),
   "title": zod.string().optional(),
   "occupation": zod.string().optional(),
-  "note": zod.string().optional()
+  "note": zod.string().optional(),
+  "noChildren": zod.boolean().optional(),
+  "spouse": zod.object({
+  "kind": zod.enum(['harem', 'widow']).optional(),
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('زوج المتوفاة؛ النوع يحدد «حرم» أو «أرملة»'),
+  "father": zod.object({
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته')
 })).min(1),
   "relatives": zod.array(zod.object({
   "relation": zod.string(),
+  "relationKey": zod.enum(['children', 'full_siblings', 'siblings', 'grandchildren', 'brothers_children', 'sisters_children', 'father', 'grandfather', 'paternal_uncles', 'maternal_uncles', 'daughters_husbands', 'sisters_husbands', 'other']).optional().describe('صلة الأشخاص بالمتوفى؛ يُشتق منها عنوان الإعلان مثل «والدة كل من»'),
   "familyReference": zod.string().optional(),
+  "reference": zod.object({
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته'),
+  "deceasedPlacement": zod.enum(['auto', 'inline', 'grouped']).optional(),
+  "deceasedIndex": zod.number().int().nullish(),
   "people": zod.array(zod.object({
   "name": zod.string(),
   "occupation": zod.string().optional(),
@@ -177,20 +304,25 @@ export const CreateObituaryRequestResponse = zod.object({
   "prayer": zod.object({
   "enabled": zod.boolean(),
   "day": zod.string().optional(),
+  "weekday": zod.string().optional(),
   "time": zod.string().optional(),
   "place": zod.string().optional(),
   "mapLink": zod.string().optional()
 }),
   "burial": zod.object({
-  "status": zod.enum(['upcoming', 'completed']),
+  "status": zod.enum(['upcoming', 'completed', 'postponed']),
   "day": zod.string().optional(),
+  "weekday": zod.string().optional(),
   "time": zod.string().optional(),
   "cemetery": zod.string().optional(),
   "mapLink": zod.string().optional(),
   "outsideQatar": zod.boolean(),
-  "outsideLocation": zod.string().optional()
+  "outsideLocation": zod.string().optional(),
+  "note": zod.string().optional().describe('ملاحظة الدفن (سبب التأجيل، أو وصف دفن تمّ مثل «تم الدفن في مكة المكرمة»)')
 }),
-  "condolenceOptions": zod.array(zod.enum(['phone', 'men', 'women'])),
+  "condolenceOptions": zod.array(zod.enum(['phone', 'men', 'women', 'men_cemetery', 'tbd'])),
+  "phoneAudience": zod.enum(['all', 'men', 'women']).optional(),
+  "condolenceNote": zod.string().optional(),
   "condolences": zod.array(zod.object({
   "audience": zod.enum(['men', 'women']),
   "location": zod.string().optional(),
@@ -204,7 +336,13 @@ export const CreateObituaryRequestResponse = zod.object({
   "area": zod.string().optional(),
   "floor": zod.string().optional(),
   "apartmentNumber": zod.string().optional(),
-  "locationNotes": zod.string().optional()
+  "locationNotes": zod.string().optional(),
+  "until": zod.string().optional(),
+  "schedule": zod.array(zod.object({
+  "days": zod.string().optional(),
+  "time": zod.string().optional()
+})).optional(),
+  "deceasedIndex": zod.number().int().nullish()
 })),
   "condolencePhoneContacts": zod.array(zod.object({
   "name": zod.string().optional(),
@@ -224,25 +362,60 @@ export const GetObituaryRequestParams = zod.object({
   "requestNumber": zod.coerce.string()
 })
 
-export const getObituaryRequestResponseOneDeceasedPeopleItemFullNameMin = 2;
-
 
 
 
 export const GetObituaryRequestResponse = zod.object({
+  "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
+  "relatedRequestNumber": zod.string().optional(),
+  "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
+  "sharedParent": zod.object({
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته'),
+  "cancellation": zod.object({
+  "audience": zod.enum(['men', 'women', 'all']).optional(),
+  "from": zod.string().optional(),
+  "reason": zod.string().optional(),
+  "phoneOnly": zod.boolean().optional()
+}).optional(),
   "deceasedPeople": zod.array(zod.object({
-  "fullName": zod.string().min(getObituaryRequestResponseOneDeceasedPeopleItemFullNameMin),
+  "fullName": zod.string().optional(),
   "gender": zod.enum(['man', 'woman', 'boy', 'girl', 'other']),
+  "identifyBy": zod.enum(['name', 'kunya', 'spouse', 'father', 'children']).optional().describe('طريقة التعريف بالمتوفى في رأس الإعلان'),
+  "kunya": zod.string().optional(),
   "age": zod.number().int().nullish(),
+  "ageUnit": zod.enum(['years', 'months', 'days']).optional(),
   "nationality": zod.string().optional(),
   "deathPlace": zod.string().optional(),
   "title": zod.string().optional(),
   "occupation": zod.string().optional(),
-  "note": zod.string().optional()
+  "note": zod.string().optional(),
+  "noChildren": zod.boolean().optional(),
+  "spouse": zod.object({
+  "kind": zod.enum(['harem', 'widow']).optional(),
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('زوج المتوفاة؛ النوع يحدد «حرم» أو «أرملة»'),
+  "father": zod.object({
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته')
 })).min(1),
   "relatives": zod.array(zod.object({
   "relation": zod.string(),
+  "relationKey": zod.enum(['children', 'full_siblings', 'siblings', 'grandchildren', 'brothers_children', 'sisters_children', 'father', 'grandfather', 'paternal_uncles', 'maternal_uncles', 'daughters_husbands', 'sisters_husbands', 'other']).optional().describe('صلة الأشخاص بالمتوفى؛ يُشتق منها عنوان الإعلان مثل «والدة كل من»'),
   "familyReference": zod.string().optional(),
+  "reference": zod.object({
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته'),
+  "deceasedPlacement": zod.enum(['auto', 'inline', 'grouped']).optional(),
+  "deceasedIndex": zod.number().int().nullish(),
   "people": zod.array(zod.object({
   "name": zod.string(),
   "occupation": zod.string().optional(),
@@ -252,20 +425,25 @@ export const GetObituaryRequestResponse = zod.object({
   "prayer": zod.object({
   "enabled": zod.boolean(),
   "day": zod.string().optional(),
+  "weekday": zod.string().optional(),
   "time": zod.string().optional(),
   "place": zod.string().optional(),
   "mapLink": zod.string().optional()
 }),
   "burial": zod.object({
-  "status": zod.enum(['upcoming', 'completed']),
+  "status": zod.enum(['upcoming', 'completed', 'postponed']),
   "day": zod.string().optional(),
+  "weekday": zod.string().optional(),
   "time": zod.string().optional(),
   "cemetery": zod.string().optional(),
   "mapLink": zod.string().optional(),
   "outsideQatar": zod.boolean(),
-  "outsideLocation": zod.string().optional()
+  "outsideLocation": zod.string().optional(),
+  "note": zod.string().optional().describe('ملاحظة الدفن (سبب التأجيل، أو وصف دفن تمّ مثل «تم الدفن في مكة المكرمة»)')
 }),
-  "condolenceOptions": zod.array(zod.enum(['phone', 'men', 'women'])),
+  "condolenceOptions": zod.array(zod.enum(['phone', 'men', 'women', 'men_cemetery', 'tbd'])),
+  "phoneAudience": zod.enum(['all', 'men', 'women']).optional(),
+  "condolenceNote": zod.string().optional(),
   "condolences": zod.array(zod.object({
   "audience": zod.enum(['men', 'women']),
   "location": zod.string().optional(),
@@ -279,7 +457,13 @@ export const GetObituaryRequestResponse = zod.object({
   "area": zod.string().optional(),
   "floor": zod.string().optional(),
   "apartmentNumber": zod.string().optional(),
-  "locationNotes": zod.string().optional()
+  "locationNotes": zod.string().optional(),
+  "until": zod.string().optional(),
+  "schedule": zod.array(zod.object({
+  "days": zod.string().optional(),
+  "time": zod.string().optional()
+})).optional(),
+  "deceasedIndex": zod.number().int().nullish()
 })),
   "condolencePhoneContacts": zod.array(zod.object({
   "name": zod.string().optional(),
@@ -299,25 +483,60 @@ export const UpdateObituaryRequestParams = zod.object({
   "requestNumber": zod.coerce.string()
 })
 
-export const updateObituaryRequestBodyOneDeceasedPeopleItemFullNameMin = 2;
-
 
 
 
 export const UpdateObituaryRequestBody = zod.object({
+  "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
+  "relatedRequestNumber": zod.string().optional(),
+  "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
+  "sharedParent": zod.object({
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته'),
+  "cancellation": zod.object({
+  "audience": zod.enum(['men', 'women', 'all']).optional(),
+  "from": zod.string().optional(),
+  "reason": zod.string().optional(),
+  "phoneOnly": zod.boolean().optional()
+}).optional(),
   "deceasedPeople": zod.array(zod.object({
-  "fullName": zod.string().min(updateObituaryRequestBodyOneDeceasedPeopleItemFullNameMin),
+  "fullName": zod.string().optional(),
   "gender": zod.enum(['man', 'woman', 'boy', 'girl', 'other']),
+  "identifyBy": zod.enum(['name', 'kunya', 'spouse', 'father', 'children']).optional().describe('طريقة التعريف بالمتوفى في رأس الإعلان'),
+  "kunya": zod.string().optional(),
   "age": zod.number().int().nullish(),
+  "ageUnit": zod.enum(['years', 'months', 'days']).optional(),
   "nationality": zod.string().optional(),
   "deathPlace": zod.string().optional(),
   "title": zod.string().optional(),
   "occupation": zod.string().optional(),
-  "note": zod.string().optional()
+  "note": zod.string().optional(),
+  "noChildren": zod.boolean().optional(),
+  "spouse": zod.object({
+  "kind": zod.enum(['harem', 'widow']).optional(),
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('زوج المتوفاة؛ النوع يحدد «حرم» أو «أرملة»'),
+  "father": zod.object({
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته')
 })).min(1),
   "relatives": zod.array(zod.object({
   "relation": zod.string(),
+  "relationKey": zod.enum(['children', 'full_siblings', 'siblings', 'grandchildren', 'brothers_children', 'sisters_children', 'father', 'grandfather', 'paternal_uncles', 'maternal_uncles', 'daughters_husbands', 'sisters_husbands', 'other']).optional().describe('صلة الأشخاص بالمتوفى؛ يُشتق منها عنوان الإعلان مثل «والدة كل من»'),
   "familyReference": zod.string().optional(),
+  "reference": zod.object({
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته'),
+  "deceasedPlacement": zod.enum(['auto', 'inline', 'grouped']).optional(),
+  "deceasedIndex": zod.number().int().nullish(),
   "people": zod.array(zod.object({
   "name": zod.string(),
   "occupation": zod.string().optional(),
@@ -327,20 +546,25 @@ export const UpdateObituaryRequestBody = zod.object({
   "prayer": zod.object({
   "enabled": zod.boolean(),
   "day": zod.string().optional(),
+  "weekday": zod.string().optional(),
   "time": zod.string().optional(),
   "place": zod.string().optional(),
   "mapLink": zod.string().optional()
 }),
   "burial": zod.object({
-  "status": zod.enum(['upcoming', 'completed']),
+  "status": zod.enum(['upcoming', 'completed', 'postponed']),
   "day": zod.string().optional(),
+  "weekday": zod.string().optional(),
   "time": zod.string().optional(),
   "cemetery": zod.string().optional(),
   "mapLink": zod.string().optional(),
   "outsideQatar": zod.boolean(),
-  "outsideLocation": zod.string().optional()
+  "outsideLocation": zod.string().optional(),
+  "note": zod.string().optional().describe('ملاحظة الدفن (سبب التأجيل، أو وصف دفن تمّ مثل «تم الدفن في مكة المكرمة»)')
 }),
-  "condolenceOptions": zod.array(zod.enum(['phone', 'men', 'women'])),
+  "condolenceOptions": zod.array(zod.enum(['phone', 'men', 'women', 'men_cemetery', 'tbd'])),
+  "phoneAudience": zod.enum(['all', 'men', 'women']).optional(),
+  "condolenceNote": zod.string().optional(),
   "condolences": zod.array(zod.object({
   "audience": zod.enum(['men', 'women']),
   "location": zod.string().optional(),
@@ -354,7 +578,13 @@ export const UpdateObituaryRequestBody = zod.object({
   "area": zod.string().optional(),
   "floor": zod.string().optional(),
   "apartmentNumber": zod.string().optional(),
-  "locationNotes": zod.string().optional()
+  "locationNotes": zod.string().optional(),
+  "until": zod.string().optional(),
+  "schedule": zod.array(zod.object({
+  "days": zod.string().optional(),
+  "time": zod.string().optional()
+})).optional(),
+  "deceasedIndex": zod.number().int().nullish()
 })),
   "condolencePhoneContacts": zod.array(zod.object({
   "name": zod.string().optional(),
@@ -365,25 +595,60 @@ export const UpdateObituaryRequestBody = zod.object({
   "status": zod.enum(['new', 'reviewing', 'ready', 'completed'])
 }))
 
-export const updateObituaryRequestResponseOneDeceasedPeopleItemFullNameMin = 2;
-
 
 
 
 export const UpdateObituaryRequestResponse = zod.object({
+  "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
+  "relatedRequestNumber": zod.string().optional(),
+  "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
+  "sharedParent": zod.object({
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته'),
+  "cancellation": zod.object({
+  "audience": zod.enum(['men', 'women', 'all']).optional(),
+  "from": zod.string().optional(),
+  "reason": zod.string().optional(),
+  "phoneOnly": zod.boolean().optional()
+}).optional(),
   "deceasedPeople": zod.array(zod.object({
-  "fullName": zod.string().min(updateObituaryRequestResponseOneDeceasedPeopleItemFullNameMin),
+  "fullName": zod.string().optional(),
   "gender": zod.enum(['man', 'woman', 'boy', 'girl', 'other']),
+  "identifyBy": zod.enum(['name', 'kunya', 'spouse', 'father', 'children']).optional().describe('طريقة التعريف بالمتوفى في رأس الإعلان'),
+  "kunya": zod.string().optional(),
   "age": zod.number().int().nullish(),
+  "ageUnit": zod.enum(['years', 'months', 'days']).optional(),
   "nationality": zod.string().optional(),
   "deathPlace": zod.string().optional(),
   "title": zod.string().optional(),
   "occupation": zod.string().optional(),
-  "note": zod.string().optional()
+  "note": zod.string().optional(),
+  "noChildren": zod.boolean().optional(),
+  "spouse": zod.object({
+  "kind": zod.enum(['harem', 'widow']).optional(),
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('زوج المتوفاة؛ النوع يحدد «حرم» أو «أرملة»'),
+  "father": zod.object({
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته')
 })).min(1),
   "relatives": zod.array(zod.object({
   "relation": zod.string(),
+  "relationKey": zod.enum(['children', 'full_siblings', 'siblings', 'grandchildren', 'brothers_children', 'sisters_children', 'father', 'grandfather', 'paternal_uncles', 'maternal_uncles', 'daughters_husbands', 'sisters_husbands', 'other']).optional().describe('صلة الأشخاص بالمتوفى؛ يُشتق منها عنوان الإعلان مثل «والدة كل من»'),
   "familyReference": zod.string().optional(),
+  "reference": zod.object({
+  "title": zod.string().optional(),
+  "name": zod.string().optional(),
+  "deceased": zod.boolean().optional()
+}).optional().describe('شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته'),
+  "deceasedPlacement": zod.enum(['auto', 'inline', 'grouped']).optional(),
+  "deceasedIndex": zod.number().int().nullish(),
   "people": zod.array(zod.object({
   "name": zod.string(),
   "occupation": zod.string().optional(),
@@ -393,20 +658,25 @@ export const UpdateObituaryRequestResponse = zod.object({
   "prayer": zod.object({
   "enabled": zod.boolean(),
   "day": zod.string().optional(),
+  "weekday": zod.string().optional(),
   "time": zod.string().optional(),
   "place": zod.string().optional(),
   "mapLink": zod.string().optional()
 }),
   "burial": zod.object({
-  "status": zod.enum(['upcoming', 'completed']),
+  "status": zod.enum(['upcoming', 'completed', 'postponed']),
   "day": zod.string().optional(),
+  "weekday": zod.string().optional(),
   "time": zod.string().optional(),
   "cemetery": zod.string().optional(),
   "mapLink": zod.string().optional(),
   "outsideQatar": zod.boolean(),
-  "outsideLocation": zod.string().optional()
+  "outsideLocation": zod.string().optional(),
+  "note": zod.string().optional().describe('ملاحظة الدفن (سبب التأجيل، أو وصف دفن تمّ مثل «تم الدفن في مكة المكرمة»)')
 }),
-  "condolenceOptions": zod.array(zod.enum(['phone', 'men', 'women'])),
+  "condolenceOptions": zod.array(zod.enum(['phone', 'men', 'women', 'men_cemetery', 'tbd'])),
+  "phoneAudience": zod.enum(['all', 'men', 'women']).optional(),
+  "condolenceNote": zod.string().optional(),
   "condolences": zod.array(zod.object({
   "audience": zod.enum(['men', 'women']),
   "location": zod.string().optional(),
@@ -420,7 +690,13 @@ export const UpdateObituaryRequestResponse = zod.object({
   "area": zod.string().optional(),
   "floor": zod.string().optional(),
   "apartmentNumber": zod.string().optional(),
-  "locationNotes": zod.string().optional()
+  "locationNotes": zod.string().optional(),
+  "until": zod.string().optional(),
+  "schedule": zod.array(zod.object({
+  "days": zod.string().optional(),
+  "time": zod.string().optional()
+})).optional(),
+  "deceasedIndex": zod.number().int().nullish()
 })),
   "condolencePhoneContacts": zod.array(zod.object({
   "name": zod.string().optional(),

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Api
-  version: 0.2.0
+  version: 0.3.0
   description: واجهة طلبات بيانات إعلانات الوفاة
 servers:
   - url: /api
@@ -100,18 +100,49 @@ components:
       properties:
         status:
           type: string
+    LinkedPerson:
+      type: object
+      description: شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته
+      properties:
+        title:
+          type: string
+        name:
+          type: string
+        deceased:
+          type: boolean
+    SpouseReference:
+      type: object
+      description: زوج المتوفاة؛ النوع يحدد «حرم» أو «أرملة»
+      properties:
+        kind:
+          type: string
+          enum: [harem, widow]
+        title:
+          type: string
+        name:
+          type: string
+        deceased:
+          type: boolean
     DeceasedPerson:
       type: object
-      required: [fullName, gender]
+      required: [gender]
       properties:
         fullName:
           type: string
-          minLength: 2
         gender:
           type: string
           enum: [man, woman, boy, girl, other]
+        identifyBy:
+          type: string
+          description: طريقة التعريف بالمتوفى في رأس الإعلان
+          enum: [name, kunya, spouse, father, children]
+        kunya:
+          type: string
         age:
           type: ["integer", "null"]
+        ageUnit:
+          type: string
+          enum: [years, months, days]
         nationality:
           type: string
         deathPlace:
@@ -122,6 +153,12 @@ components:
           type: string
         note:
           type: string
+        noChildren:
+          type: boolean
+        spouse:
+          $ref: "#/components/schemas/SpouseReference"
+        father:
+          $ref: "#/components/schemas/LinkedPerson"
     RelativePerson:
       type: object
       required: [name, deceased]
@@ -138,8 +175,32 @@ components:
       properties:
         relation:
           type: string
+        relationKey:
+          type: string
+          description: صلة الأشخاص بالمتوفى؛ يُشتق منها عنوان الإعلان مثل «والدة كل من»
+          enum:
+            - children
+            - full_siblings
+            - siblings
+            - grandchildren
+            - brothers_children
+            - sisters_children
+            - father
+            - grandfather
+            - paternal_uncles
+            - maternal_uncles
+            - daughters_husbands
+            - sisters_husbands
+            - other
         familyReference:
           type: string
+        reference:
+          $ref: "#/components/schemas/LinkedPerson"
+        deceasedPlacement:
+          type: string
+          enum: [auto, inline, grouped]
+        deceasedIndex:
+          type: ["integer", "null"]
         people:
           type: array
           items:
@@ -151,6 +212,8 @@ components:
         enabled:
           type: boolean
         day:
+          type: string
+        weekday:
           type: string
         time:
           type: string
@@ -164,8 +227,10 @@ components:
       properties:
         status:
           type: string
-          enum: [upcoming, completed]
+          enum: [upcoming, completed, postponed]
         day:
+          type: string
+        weekday:
           type: string
         time:
           type: string
@@ -176,6 +241,16 @@ components:
         outsideQatar:
           type: boolean
         outsideLocation:
+          type: string
+        note:
+          type: string
+          description: ملاحظة الدفن (سبب التأجيل، أو وصف دفن تمّ مثل «تم الدفن في مكة المكرمة»)
+    CondolenceScheduleEntry:
+      type: object
+      properties:
+        days:
+          type: string
+        time:
           type: string
     CondolenceCard:
       type: object
@@ -208,6 +283,14 @@ components:
           type: string
         locationNotes:
           type: string
+        until:
+          type: string
+        schedule:
+          type: array
+          items:
+            $ref: "#/components/schemas/CondolenceScheduleEntry"
+        deceasedIndex:
+          type: ["integer", "null"]
     CondolencePhoneContact:
       type: object
       properties:
@@ -215,6 +298,18 @@ components:
           type: string
         phone:
           type: string
+    CondolenceCancellation:
+      type: object
+      properties:
+        audience:
+          type: string
+          enum: [men, women, all]
+        from:
+          type: string
+        reason:
+          type: string
+        phoneOnly:
+          type: boolean
     ObituaryRequestInput:
       type: object
       required:
@@ -226,6 +321,20 @@ components:
         - condolences
         - condolencePhoneContacts
       properties:
+        messageType:
+          type: string
+          description: نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)
+          enum: [announcement, postponement, amendment, condolence_cancellation]
+        relatedRequestNumber:
+          type: string
+        announcementMode:
+          type: string
+          description: صيغة الإعلان عند تعدد المتوفين
+          enum: [single, unrelated, siblings, father_first, mother_child]
+        sharedParent:
+          $ref: "#/components/schemas/LinkedPerson"
+        cancellation:
+          $ref: "#/components/schemas/CondolenceCancellation"
         deceasedPeople:
           type: array
           minItems: 1
@@ -243,7 +352,12 @@ components:
           type: array
           items:
             type: string
-            enum: [phone, men, women]
+            enum: [phone, men, women, men_cemetery, tbd]
+        phoneAudience:
+          type: string
+          enum: [all, men, women]
+        condolenceNote:
+          type: string
         condolences:
           type: array
           items:

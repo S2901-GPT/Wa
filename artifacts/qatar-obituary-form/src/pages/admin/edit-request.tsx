@@ -8,7 +8,7 @@ import {
   getGetObituaryRequestQueryKey,
   getListObituaryRequestsQueryKey
 } from "@workspace/api-client-react";
-import { ObituaryFormSchema, type ObituaryFormValues } from "@/lib/schema";
+import { ObituaryFormSchema, emptyFormValues, type ObituaryFormValues } from "@/lib/schema";
 import { mapPayloadToForm, mapFormToPayload } from "@/lib/mapper";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -24,6 +24,7 @@ import {
   CondolencesStep, 
   ContactsNotesStep
 } from "@/components/form-steps";
+import { ExtrasOpenContext } from "@/components/form-steps-extras";
 
 const STEPS = [
   { id: 1, title: 'المتوفون' },
@@ -49,57 +50,7 @@ export default function AdminEditRequestPage() {
 
   const form = useForm<ObituaryFormValues>({
     resolver: zodResolver(ObituaryFormSchema),
-    defaultValues: {
-      deceasedList: [],
-      relatives: [],
-      burial: {
-        status: "scheduled",
-        isOutsideQatar: false,
-        locationName: "",
-        dateDescription: "",
-        timeDescription: "",
-      },
-      prayer: {
-        status: "scheduled",
-        isOutsideQatar: false,
-        locationName: "",
-        dateDescription: "",
-        timeDescription: "",
-      },
-      condolences: {
-        type: "full",
-        men: {
-          locationName: "",
-          mapsLink: "",
-          durationDays: 3,
-          schedule: {
-            enabled: false,
-            morningFrom: "",
-            morningTo: "",
-            eveningFrom: "",
-            eveningTo: "",
-            fridayNote: "",
-          },
-          windows: [],
-        },
-        women: {
-          locationName: "",
-          mapsLink: "",
-          durationDays: 3,
-          schedule: {
-            enabled: false,
-            morningFrom: "",
-            morningTo: "",
-            eveningFrom: "",
-            eveningTo: "",
-            fridayNote: "",
-          },
-          windows: [],
-        },
-        phones: [],
-      },
-      notes: ""
-    }
+    defaultValues: emptyFormValues(),
   });
 
   useEffect(() => {
@@ -132,7 +83,7 @@ export default function AdminEditRequestPage() {
         data: { 
           ...requestData, 
           status: req.status 
-        } as any
+        }
       },
       {
         onSuccess: () => {
@@ -192,13 +143,16 @@ export default function AdminEditRequestPage() {
 
         <Card className="border-none shadow-lg bg-card/80 backdrop-blur-sm overflow-hidden">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)}>
+            <form onSubmit={form.handleSubmit(onSubmit, () => toast.error("تعذر الحفظ: راجع الحقول المطلوبة في الخطوات (مثل الجنس)."))}>
               <CardContent className="pt-10 pb-4 px-6 md:px-10 min-h-[400px]">
-                {currentStep === 1 && <DeceasedStep />}
-                {currentStep === 2 && <RelativesStep />}
-                {currentStep === 3 && <BurialPrayerStep />}
-                {currentStep === 4 && <CondolencesStep />}
-                {currentStep === 5 && <ContactsNotesStep />}
+                {/* المسؤول يرى «الخيارات الإضافية» مفتوحة دائماً */}
+                <ExtrasOpenContext.Provider value={true}>
+                  {currentStep === 1 && <DeceasedStep />}
+                  {currentStep === 2 && <RelativesStep />}
+                  {currentStep === 3 && <BurialPrayerStep />}
+                  {currentStep === 4 && <CondolencesStep />}
+                  {currentStep === 5 && <ContactsNotesStep />}
+                </ExtrasOpenContext.Provider>
               </CardContent>
 
               <CardFooter className="flex justify-between border-t border-border/50 px-6 md:px-10 py-6 bg-muted/20">

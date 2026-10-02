@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation } from "wouter";
 import { useCreateObituaryRequest } from "@workspace/api-client-react";
-import { ObituaryFormValues, ObituaryFormSchema } from "@/lib/schema";
+import { ObituaryFormValues, ObituaryFormSchema, emptyFormValues } from "@/lib/schema";
 import { mapFormToPayload } from "@/lib/mapper";
 
 import { Form } from "@/components/ui/form";
@@ -21,7 +21,7 @@ import {
 } from "@/components/form-steps";
 
 const STEPS = [
-  { id: 1, title: 'المتوفون', fields: ['deceasedList'] },
+  { id: 1, title: 'المتوفون', fields: ['messageType', 'relatedRequestNumber', 'cancellation', 'announcementMode', 'sharedParent', 'deceasedList'] },
   { id: 2, title: 'الأقارب', fields: ['relatives'] },
   { id: 3, title: 'الدفن والصلاة', fields: ['burial', 'prayer'] },
   { id: 4, title: 'العزاء', fields: ['condolences'] },
@@ -35,71 +35,7 @@ export default function FormPage() {
   
   const form = useForm<ObituaryFormValues>({
     resolver: zodResolver(ObituaryFormSchema),
-    defaultValues: {
-      deceasedList: [
-        {
-          fullName: "",
-          gender: "ذكر",
-          title: "none",
-          nationality: "",
-          deathLocation: "",
-          femaleRelations: []
-        }
-      ],
-      relatives: [],
-      burial: {
-        status: "scheduled",
-        isOutsideQatar: false,
-        locationName: "",
-        dateDescription: "",
-        timeDescription: "",
-        notes: "",
-      },
-      prayer: {
-        enabled: false,
-        status: "scheduled",
-        isOutsideQatar: false,
-        locationName: "",
-        dateDescription: "",
-        timeDescription: "",
-        notes: "",
-      },
-      condolences: {
-        type: "full",
-        men: {
-          locationName: "",
-          mapsLink: "",
-          durationDays: null,
-          schedule: {
-            enabled: false,
-            morningFrom: "",
-            morningTo: "",
-            eveningFrom: "",
-            eveningTo: "",
-            fridayNote: "",
-          },
-          windows: [],
-        },
-        women: {
-          locationName: "",
-          mapsLink: "",
-          durationDays: null,
-          schedule: {
-            enabled: false,
-            morningFrom: "",
-            morningTo: "",
-            eveningFrom: "",
-            eveningTo: "",
-            fridayNote: "",
-          },
-          windows: [],
-        },
-        phones: [],
-      },
-      condolenceStartDate: "",
-      condolenceStartTime: "",
-      notes: ""
-    },
+    defaultValues: emptyFormValues(),
     mode: "onChange"
   });
 
@@ -129,10 +65,11 @@ export default function FormPage() {
   };
 
   const onSubmit = (data: ObituaryFormValues) => {
+    // النموذج له شكل بياناته الخاص؛ الخادم لا يقبل إلا عقد الـ API (deceasedPeople…).
     const requestData = mapFormToPayload(data);
 
     createRequest.mutate(
-      { data: requestData as any },
+      { data: requestData },
       {
         onSuccess: (res: any) => {
           toast.success("تم إرسال الطلب بنجاح");
@@ -210,13 +147,14 @@ export default function FormPage() {
                   السابق
                 </Button>
                 
+                {/* مفتاحان مختلفان حتى لا يعيد React استخدام زر «التالي» نفسه فيصبح submit أثناء النقر ويتخطى المراجعة. */}
                 {currentStep < STEPS.length ? (
-                  <Button type="button" onClick={handleNext} className="gap-1.5 sm:gap-2 px-4 sm:px-8 h-9 sm:h-10 text-xs sm:text-sm shrink-0">
+                  <Button key="next" type="button" onClick={handleNext} className="gap-1.5 sm:gap-2 px-4 sm:px-8 h-9 sm:h-10 text-xs sm:text-sm shrink-0">
                     التالي
                     <ChevronLeft className="w-4 h-4 rtl:rotate-180" />
                   </Button>
                 ) : (
-                  <Button type="submit" disabled={createRequest.isPending} className="gap-1.5 sm:gap-2 px-3 sm:px-8 h-9 sm:h-10 text-xs sm:text-sm bg-green-700 hover:bg-green-800 text-white font-bold shrink-0">
+                  <Button key="submit" type="submit" disabled={createRequest.isPending} className="gap-1.5 sm:gap-2 px-3 sm:px-8 h-9 sm:h-10 text-xs sm:text-sm bg-green-700 hover:bg-green-800 text-white font-bold shrink-0">
                     {createRequest.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckIcon className="w-4 h-4" />}
                     اعتماد وإرسال الطلب
                   </Button>

@@ -3,9 +3,10 @@
  * Do not edit manually.
  * Api
  * واجهة طلبات بيانات إعلانات الوفاة
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 import type { CondolenceCardAudience } from './condolenceCardAudience';
+import type { CondolenceScheduleEntry } from './condolenceScheduleEntry';
 
 export interface CondolenceCard {
   audience: CondolenceCardAudience;
@@ -22,4 +23,8 @@ export interface CondolenceCard {
   floor?: string;
   apartmentNumber?: string;
   locationNotes?: string;
+  until?: string;
+  schedule?: CondolenceScheduleEntry[];
+  /** @nullable */
+  deceasedIndex?: number | null;
 }

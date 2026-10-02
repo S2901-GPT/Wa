@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * واجهة طلبات بيانات إعلانات الوفاة
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 
 export type ObituaryRequestInputCondolenceOptionsItem = typeof ObituaryRequestInputCondolenceOptionsItem[keyof typeof ObituaryRequestInputCondolenceOptionsItem];
@@ -13,4 +13,6 @@ export const ObituaryRequestInputCondolenceOptionsItem = {
   phone: 'phone',
   men: 'men',
   women: 'women',
+  men_cemetery: 'men_cemetery',
+  tbd: 'tbd',
 } as const;

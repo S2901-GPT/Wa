@@ -1,12 +1,6 @@
-import type { ObituaryRequest } from "@workspace/api-client-react";
-import {
-  formatDeceasedIdentity,
-  makeDeathStatement,
-  makeClosingPrayer,
-  formatRelativePerson,
-  inferRelativeGender,
-  formatDuration,
-} from "./condolence-copy";
+import type { CondolenceCard, ObituaryRequest } from "@workspace/api-client-react";
+import { buildAnnouncement, describeDeceased, posterCardLines } from "./announcement";
+import { formatDuration } from "./condolence-copy";
 
 export type NormalizedContent = {
   opening: string;
@@ -275,7 +269,14 @@ export function formatStartAndDuration(start?: string, durationDays?: string | n
   return cleanStart || dur || "";
 }
 
+const LOCATION_ORDINALS = ["الأول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس"];
+
 // Main Presentation Normalizer entry point
+/**
+ * يبني محتوى القوالب البصرية من المولّد الموحّد (announcement.ts) حتى تطابق صياغة الصورة
+ * نص الإعلان المنسوخ: «انتقلت إلى رحمة الله تعالى»، «أرملة الوالد / فلان رحمهم الله»، «والدة كل من»،
+ * «الدفن اليوم بعد صلاة العصر في مقبرة مسيمير»، «شفيعاً لوالديه يارب»…
+ */
 export function normalizeObituaryPresentation(
   request: ObituaryRequest,
   draftOverrides?: {
@@ -290,204 +291,135 @@ export function normalizeObituaryPresentation(
     closing?: string;
   },
 ): NormalizedContent {
-  const people = request.deceasedPeople || [];
+  // تعديلات محرر الصورة تُطبَّق على نسخة من الطلب قبل الصياغة.
+  const edited: ObituaryRequest = {
+    ...request,
+    // الصورة تعرض الإعلان نفسه؛ رسائل التأجيل والإلغاء نصوص قصيرة لا قوالب.
+    messageType: request.messageType === "amendment" ? "amendment" : "announcement",
+    deceasedPeople: (request.deceasedPeople || []).map((person, index) => ({
+      ...person,
+      ...(draftOverrides?.deceasedNames?.[index] !== undefined ? { fullName: draftOverrides.deceasedNames[index] || undefined } : {}),
+      ...(draftOverrides?.deceasedTitles?.[index] !== undefined ? { title: draftOverrides.deceasedTitles[index] || undefined } : {}),
+    })),
+    notes: draftOverrides?.notes ?? request.notes,
+  };
+  const announcement = buildAnnouncement(edited);
+  const section = (id: string) => announcement.sections.find((item) => item.id === id);
+  const people = edited.deceasedPeople;
 
-  // 1. Process Deceased People
-  const deceasedList = people.map((person, index) => {
-    const title = draftOverrides?.deceasedTitles?.[index] ?? person.title;
-    const name = draftOverrides?.deceasedNames?.[index] ?? person.fullName;
-    const identity = formatDeceasedIdentity(title, name);
+  // 1. المتوفون: سطر التعريف، ثم التفاصيل (العمر، الجنسية لغير القطري، «حرم الشيخ / …»…)
+  const [, ...details] = announcement.posterDetails;
+  const deceasedList = people.length <= 1
+    ? people.map((person) => ({
+        fullName: person.fullName ?? "",
+        title: person.title || undefined,
+        identity: announcement.posterNames || describeDeceased(person, edited.relatives),
+        details,
+      }))
+    : [{
+        fullName: people.map((person) => person.fullName ?? "").filter(Boolean).join("، "),
+        title: undefined,
+        identity: announcement.posterNames,
+        details: announcement.posterDetails,
+      }];
+  const deceasedCombinedNames = announcement.posterNames;
 
-    const details: string[] = [];
-    if (person.age != null) details.push(`العمر: ${person.age} سنة`);
-    if (person.nationality && cleanText(person.nationality)) details.push(`الجنسية: ${cleanText(person.nationality)}`);
-    if (person.deathPlace && cleanText(person.deathPlace)) details.push(`مكان الوفاة: ${cleanText(person.deathPlace)}`);
-    if (person.occupation && cleanText(person.occupation)) details.push(cleanText(person.occupation));
-    if (person.note && cleanText(person.note)) details.push(cleanText(person.note));
-
-    return {
-      fullName: name,
-      title: title || undefined,
-      identity,
-      details,
-    };
-  });
-
-  const deceasedCombinedNames = deceasedList.map((d) => d.identity).join("، ");
-
-  // 2. Prayer & Burial Extraction
-  const prayerPlace = cleanText(request.prayer?.place);
-  const prayerDay = cleanText(request.prayer?.day);
-  const prayerTime = cleanText(request.prayer?.time);
+  // 2. الصلاة والدفن: جمل المولّد كما هي (دون «يوم اليوم» أو عناوين «اليوم: …»).
+  const prayerLines = section("prayer")?.lines ?? [];
+  const burialLines = section("burial")?.lines ?? [];
   const prayerMap = cleanText(draftOverrides?.prayerMapLink ?? request.prayer?.mapLink);
-
-  const burialCemetery = request.burial?.outsideQatar
-    ? `${cleanText(request.burial?.outsideLocation) || ""} (خارج قطر)`
-    : cleanText(request.burial?.cemetery);
-  const burialDay = cleanText(request.burial?.day);
-  const burialTime = cleanText(request.burial?.time);
-  const burialStatus = request.burial?.status === "completed" ? "تم الدفن" : "سيتم الدفن";
   const burialMap = cleanText(draftOverrides?.burialMapLink ?? request.burial?.mapLink);
-
-  const hasPrayer = Boolean(request.prayer?.enabled || prayerPlace || prayerDay || prayerTime || prayerMap);
-  const hasBurial = Boolean(request.burial && (burialCemetery || burialDay || burialTime || burialMap));
-
-  // 3. Check if Prayer & Burial are in the same place -> Combine them!
-  const isSameLocation = hasPrayer && hasBurial && areLocationsEquivalent(prayerPlace, prayerMap, burialCemetery, burialMap);
+  const burialPlaceText = request.burial?.outsideQatar ? cleanText(request.burial?.outsideLocation) : cleanText(request.burial?.cemetery);
+  const qrFor = (place: string, url: string) => (!isKnownLocationSuppressed(place) && url ? url : undefined);
 
   let hasCombinedPrayerBurial = false;
   let prayerBurialCombined: NormalizedContent["prayerBurialCombined"] = undefined;
   let prayer: NormalizedContent["prayer"] = undefined;
   let burial: NormalizedContent["burial"] = undefined;
 
-  if (isSameLocation) {
+  if (!prayerLines.length && burialLines.length) {
+    // لا صلاة منفصلة: الصلاة والدفن في الموقع نفسه.
     hasCombinedPrayerBurial = true;
-    const unifiedPlace = prayerPlace || burialCemetery;
-    const unifiedDay = prayerDay || burialDay;
-    const unifiedTime = prayerTime || burialTime;
-    const dayTime = [unifiedDay, unifiedTime].filter(Boolean).join(" — ");
-
-    // Suppress QR if famous landmark (like Mesaimeer Cemetery)
-    const suppress = isKnownLocationSuppressed(unifiedPlace);
-    const validQrUrl = !suppress && (prayerMap || burialMap) ? (prayerMap || burialMap) : undefined;
-
+    const qrUrl = qrFor(burialPlaceText, burialMap || prayerMap);
     prayerBurialCombined = {
       title: "صلاة الجنازة والدفن",
-      dayTime: dayTime || "سيتم الإعلان عن الموعد",
-      place: unifiedPlace,
-      qrUrl: validQrUrl,
-      qrLabel: validQrUrl ? "الموقع" : undefined,
+      dayTime: burialLines.join("\n"),
+      place: "",
+      qrUrl,
+      qrLabel: qrUrl ? "الموقع" : undefined,
     };
   } else {
-    if (hasPrayer) {
-      const suppress = isKnownLocationSuppressed(prayerPlace);
-      const validQr = !suppress && prayerMap ? prayerMap : undefined;
+    if (prayerLines.length) {
+      const qrUrl = qrFor(cleanText(request.prayer?.place), prayerMap);
       prayer = {
         title: "صلاة الجنازة",
-        day: prayerDay ? `اليوم: ${prayerDay}` : undefined,
-        time: prayerTime ? `الوقت: ${prayerTime}` : undefined,
-        place: prayerPlace ? `المسجد: ${prayerPlace}` : undefined,
-        qrUrl: validQr,
-        qrLabel: validQr ? "موقع الصلاة" : undefined,
+        day: prayerLines.join("\n"),
+        qrUrl,
+        qrLabel: qrUrl ? "موقع الصلاة" : undefined,
       };
     }
-    if (hasBurial) {
-      const suppress = isKnownLocationSuppressed(burialCemetery);
-      const validQr = !suppress && burialMap ? burialMap : undefined;
+    if (burialLines.length) {
+      const qrUrl = qrFor(burialPlaceText, burialMap);
       burial = {
         title: "الدفن",
-        statusText: burialStatus,
-        day: burialDay ? `اليوم: ${burialDay}` : undefined,
-        time: burialTime ? `الوقت: ${burialTime}` : undefined,
-        place: burialCemetery ? `المقبرة: ${burialCemetery}` : undefined,
-        qrUrl: validQr,
-        qrLabel: validQr ? "موقع الدفن" : undefined,
+        statusText: burialLines.join("\n"),
+        qrUrl,
+        qrLabel: qrUrl ? "موقع الدفن" : undefined,
       };
     }
   }
 
-  // 4. Men Condolence
-  const menCard = request.condolences?.find((c) => c.audience === "men");
-  let men: NormalizedContent["men"] = undefined;
-  if (menCard) {
-    const rawLoc = menCard.location;
-    const rawAddr = [
-      menCard.area && `المنطقة: ${menCard.area}`,
-      menCard.street && `الشارع: ${menCard.street}`,
-      menCard.houseNumber && `المنزل: ${menCard.houseNumber}`,
-      menCard.buildingNumber && `المبنى: ${menCard.buildingNumber}`,
-      menCard.floor && `الطابق: ${menCard.floor}`,
-      menCard.apartmentNumber && `الشقة: ${menCard.apartmentNumber}`,
-      menCard.locationNotes,
-    ].filter(Boolean).join("، ");
-
-    const { location: cleanLoc, address: cleanAddr } = deduplicateLocationAndAddress(rawLoc, rawAddr, menCard.area || undefined);
-    const menMap = cleanText(draftOverrides?.menMapLink ?? menCard.mapLink);
-    const suppress = isKnownLocationSuppressed(cleanLoc) || isKnownLocationSuppressed(cleanAddr);
-    const validQr = !suppress && menMap ? menMap : undefined;
-
-    men = {
-      title: "عزاء الرجال",
-      startAndDuration: formatStartAndDuration(menCard.start || undefined, menCard.durationDays),
-      time: menCard.time ? cleanText(menCard.time) : undefined,
-      location: cleanLoc || undefined,
-      address: cleanAddr || undefined,
-      qrUrl: validQr,
-      qrLabel: validQr ? "موقع المجلس" : undefined,
+  // 3. العزاء: كل جمهور في قسم واحد؛ المواقع الإضافية تُضاف أسطراً فيه.
+  const condolenceBlock = (audience: "men" | "women"): NormalizedContent["men"] => {
+    const blocks = announcement.sections.filter((item) => item.audience === audience);
+    if (!blocks.length) return undefined;
+    const lines = blocks.flatMap((block, index) => {
+      const card: CondolenceCard | undefined = typeof block.cardIndex === "number" ? edited.condolences?.[block.cardIndex] : undefined;
+      const body = card ? posterCardLines(edited, card) : block.lines;
+      const base = audience === "men" ? "عزاء الرجال" : "عزاء النساء";
+      // العنوان العام للقسم هو «عزاء النساء» أصلاً، فالمواقع المرقّمة تُسمّى «الموقع الأول/الثاني».
+      const numbered = block.label === `${base} (${index + 1})`;
+      const heading = numbered
+        ? `الموقع ${LOCATION_ORDINALS[index] ?? index + 1}:`
+        : blocks.length > 1 || block.label !== base ? `${block.label}:` : "";
+      return index === 0 && !heading ? body : [heading, ...body].filter(Boolean);
+    });
+    const firstCard = blocks[0]?.cardIndex != null ? edited.condolences?.[blocks[0].cardIndex!] : undefined;
+    const override = audience === "men" ? draftOverrides?.menMapLink : draftOverrides?.womenMapLink;
+    const map = cleanText(override ?? firstCard?.mapLink);
+    const qrUrl = qrFor(cleanText(firstCard?.location), map);
+    return {
+      title: audience === "men" ? "عزاء الرجال" : "عزاء النساء",
+      location: lines.join("\n"),
+      qrUrl,
+      qrLabel: qrUrl ? (audience === "men" ? "موقع المجلس" : "موقع العزاء") : undefined,
     };
-  }
+  };
+  const men = condolenceBlock("men");
+  const women = condolenceBlock("women");
 
-  // 5. Women Condolence
-  const womenCard = request.condolences?.find((c) => c.audience === "women");
-  let women: NormalizedContent["women"] = undefined;
-  if (womenCard) {
-    const rawLoc = womenCard.location;
-    const rawAddr = [
-      womenCard.area && `المنطقة: ${womenCard.area}`,
-      womenCard.street && `الشارع: ${womenCard.street}`,
-      womenCard.houseNumber && `المنزل: ${womenCard.houseNumber}`,
-      womenCard.buildingNumber && `المبنى: ${womenCard.buildingNumber}`,
-      womenCard.floor && `الطابق: ${womenCard.floor}`,
-      womenCard.apartmentNumber && `الشقة: ${womenCard.apartmentNumber}`,
-      womenCard.locationNotes,
-    ].filter(Boolean).join("، ");
-
-    const { location: cleanLoc, address: cleanAddr } = deduplicateLocationAndAddress(rawLoc, rawAddr, womenCard.area || undefined);
-    const womenMap = cleanText(draftOverrides?.womenMapLink ?? womenCard.mapLink);
-    const suppress = isKnownLocationSuppressed(cleanLoc) || isKnownLocationSuppressed(cleanAddr);
-    const validQr = !suppress && womenMap ? womenMap : undefined;
-
-    women = {
-      title: "عزاء النساء",
-      startAndDuration: formatStartAndDuration(womenCard.start || undefined, womenCard.durationDays),
-      time: womenCard.time ? cleanText(womenCard.time) : undefined,
-      location: cleanLoc || undefined,
-      address: cleanAddr || undefined,
-      qrUrl: validQr,
-      qrLabel: validQr ? "موقع العزاء" : undefined,
-    };
-  }
-
-  // 6. Phone Contacts with LTR isolated numbers
-  const phoneContacts = (request.condolencePhoneContacts || [])
+  // 4. أرقام الهاتف (الأرقام معزولة باتجاه LTR)
+  const phoneContacts = (edited.condolencePhoneContacts || [])
     .filter((c) => cleanText(c.phone))
     .map((c) => {
       const name = cleanText(c.name);
       const rawPhone = cleanText(c.phone);
       const ltrPhone = formatPhoneNumberLtr(rawPhone);
-      const formatted = name ? `${name}: ${ltrPhone}` : ltrPhone;
-      return {
-        name: name || undefined,
-        phone: rawPhone,
-        formatted,
-      };
+      return { name: name || undefined, phone: rawPhone, formatted: name ? `${name}: ${ltrPhone}` : ltrPhone };
     });
 
-  // 7. Relatives (Deduplicating relationship prefix)
-  const relatives = (request.relatives || [])
-    .filter((group) => group.people && group.people.length > 0)
-    .map((group) => {
-      const relLabel = cleanText(group.relation) || "الأقارب";
-      const familyRef = cleanText(group.familyReference);
-      const heading = [relLabel, familyRef].filter(Boolean).join(" — ");
+  // 5. الأقارب من منظور المتوفى، والترحّم عليهم بالمذكر (رحمه/رحمهما/رحمهم).
+  const relatives = announcement.relativeBlocks.map((block) => ({
+    heading: block.heading,
+    membersList: block.members,
+    membersText: [block.members.join(" و"), block.reference].filter(Boolean).join(" — "),
+  }));
 
-      const membersList = group.people
-        .map((p) => formatRelativePerson(p, group.relation))
-        .filter(Boolean);
-
-      return {
-        heading,
-        membersText: membersList.join("، "),
-        membersList,
-      };
-    })
-    .filter((g) => g.membersList.length > 0);
-
-  // 8. Notes & Closing
-  const notes = cleanText(draftOverrides?.notes ?? request.notes);
-  const closing = cleanText(draftOverrides?.closing) || makeClosingPrayer(people);
+  // 6. الملاحظات والختام
+  const notes = cleanText(edited.notes);
+  const closing = cleanText(draftOverrides?.closing) || announcement.closing;
   const opening = cleanText(draftOverrides?.opening) || "إنا لله وإنا إليه راجعون";
-  const statement = makeDeathStatement(people);
+  const statement = edited.messageType === "amendment" ? `تعديل / ${announcement.statement}` : announcement.statement;
 
   return {
     opening,

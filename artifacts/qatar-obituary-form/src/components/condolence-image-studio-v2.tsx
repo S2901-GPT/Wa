@@ -42,6 +42,7 @@ import {
   setDefaultTemplateId,
 } from "@/lib/template-storage";
 import { normalizeObituaryPresentation } from "@/lib/presentation-normalizer";
+import { buildAnnouncement } from "@/lib/announcement";
 import {
   compileAndRenderSinglePage,
   generateQrImages,
@@ -303,17 +304,24 @@ export function CondolenceImageStudio({
   };
 
   const saveToRequest = () => {
-    if (draft.deceasedNames.some((name) => name.trim().length < 2)) {
-      toast.error("أدخل اسم كل متوفى قبل الحفظ");
+    const updatedPeople = request.deceasedPeople.map((person, index) => ({
+      ...person,
+      // الاسم قد يكون فارغاً عمداً (أرملة فلان، الكنية…)؛ المولّد يتحقق من وجود تعريف بديل.
+      fullName: draft.deceasedNames[index]?.trim() || undefined,
+      title: draft.deceasedTitles[index]?.trim() || undefined,
+    }));
+    const identityProblem = buildAnnouncement({ ...request, deceasedPeople: updatedPeople }).warnings
+      .find((warning) => warning.startsWith("تعذر التعريف"));
+    if (identityProblem) {
+      toast.error(identityProblem);
       return;
     }
     setSaving(true);
-    const updatedPeople = request.deceasedPeople.map((person, index) => ({
-      ...person,
-      fullName: draft.deceasedNames[index]?.trim() ?? person.fullName,
-      title: draft.deceasedTitles[index]?.trim() || undefined,
-    }));
+    const editedAudiences = new Set<string>();
     const updatedCondolences = request.condolences.map((card) => {
+      // المحرر يعرض أول موقع لكل جمهور فقط؛ المواقع الإضافية تبقى كما هي.
+      if (editedAudiences.has(card.audience)) return card;
+      editedAudiences.add(card.audience);
       const edited = draft[card.audience];
       if (!edited) return card;
       const days = Number(edited.durationDays);

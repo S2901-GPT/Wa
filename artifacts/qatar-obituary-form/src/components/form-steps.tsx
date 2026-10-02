@@ -1,6 +1,18 @@
 import React, { useState, useMemo } from "react";
 import { useFormContext, useFieldArray } from "react-hook-form";
-import { ObituaryFormValues } from "@/lib/schema";
+import { ObituaryFormValues, emptyDeceased } from "@/lib/schema";
+import {
+  AnnouncementPreview,
+  CondolenceExtras,
+  DeceasedExtras,
+  ExtraVenuesSection,
+  MessageTypeCard,
+  MoreOptions,
+  MultipleDeceasedCard,
+  RelationSelect,
+  RelativeGroupExtras,
+  VenueExtras,
+} from "@/components/form-steps-extras";
 import { FormField, FormItem, FormLabel, FormControl, FormMessage, FormDescription } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -24,6 +36,7 @@ const PREFIX_TITLES = [
   { label: "الطفل", value: "الطفل" },
   { label: "الطفلة", value: "الطفلة" },
   { label: "الرضيع", value: "الرضيع" },
+  { label: "الرضيعة", value: "الرضيعة" },
   { label: "المولودة", value: "المولودة" },
   { label: "الشيخ", value: "الشيخ" },
   { label: "الشيخة", value: "الشيخة" },
@@ -50,9 +63,11 @@ const COMMON_RELATIONS = [
   "أبناؤه", "أخوانه", "أعمامه", "أخواله", "أبناء عمومته", "أصهاره", "أحفاده", "أخرى"
 ];
 
+// مقابر الأرشيف (مسيمير تُكتب أيضاً مسمير/ميسمير؛ المزروعة افتُتحت ٢٠٢٦)
 const QATAR_CEMETERIES = [
-  "مقبرة مسيمير", "مقبرة الخور", "مقبرة الوكرة الجنوبية", "مقبرة أم صلال علي", 
-  "مقبرة الرويس", "مقبرة الريان", "أخرى"
+  "مقبرة مسيمير", "مقبرة الخور", "مقبرة الوكرة الجنوبية", "مقبرة أم صلال",
+  "مقبرة الريان", "مقبرة الرويس", "مقبرة مريخ", "مقبرة المزروعة",
+  "مقبرة الوكير", "مقبرة الخريطيات", "مقبرة الكعبان", "مقبرة أبوظلوف", "أخرى"
 ];
 
 const PRAYER_TIMES_OPTIONS = [
@@ -61,6 +76,8 @@ const PRAYER_TIMES_OPTIONS = [
   "بعد صلاة العصر", 
   "بعد صلاة المغرب", 
   "بعد صلاة العشاء",
+  "بعد صلاة الجمعة",
+  "بعد صلاة التراويح",
   "وقت آخر..."
 ];
 
@@ -86,9 +103,19 @@ const CONDOLENCE_TYPES = [
     desc: "التعازي عبر الاتصال الهاتفي ورسائل WhatsApp" 
   },
   { 
-    id: "none", 
+    id: "cemetery_only", 
     title: "يقتصر على المقبرة", 
-    desc: "لا يوجد مقر عزاء تنفيذاً للوصية أو الظروف" 
+    desc: "«عزاء الرجال في المقبرة فقط» اتباعاً للسنة أو تنفيذاً للوصية" 
+  },
+  { 
+    id: "tbd", 
+    title: "سيُحدَّد لاحقاً", 
+    desc: "يُعلن مقر العزاء في رسالة لاحقة" 
+  },
+  { 
+    id: "none", 
+    title: "لا يوجد عزاء", 
+    desc: "يُكتب «لا يوجد عزاء» صراحة في الإعلان" 
   },
 ] as const;
 
@@ -132,6 +159,8 @@ export function DeceasedStep() {
         </p>
       </div>
 
+      <MessageTypeCard />
+
       {/* شريط تعدد المتوفين بالأزرار السريعة (Tabs) مع flex-wrap للجوال */}
       {fields.length > 1 && (
         <div className="flex flex-wrap items-center gap-1.5 p-1.5 sm:p-2 bg-muted/40 rounded-lg border w-full box-border">
@@ -167,15 +196,7 @@ export function DeceasedStep() {
             size="sm"
             className="text-primary hover:bg-primary/10 gap-1 text-xs h-8"
             onClick={() => {
-              append({
-                gender: "ذكر",
-                title: "none",
-                fullName: "",
-                nationality: "",
-                deathLocation: "",
-                notes: "",
-                femaleRelations: []
-              });
+              append(emptyDeceased());
               setActiveTab(fields.length);
             }}
           >
@@ -344,21 +365,20 @@ export function DeceasedStep() {
                 />
               </div>
 
+              {/* الكنية، طريقة التعريف، الأب، وحدة العمر… (مطوية) */}
+              <DeceasedExtras index={index} />
+
               {fields.length === 1 && (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
                   className="w-full border-dashed gap-1 text-muted-foreground hover:text-primary mt-2 text-xs h-9"
-                  onClick={() => append({
-                    gender: "ذكر",
-                    title: "none",
-                    fullName: "",
-                    nationality: "",
-                    deathLocation: "",
-                    notes: "",
-                    femaleRelations: []
-                  })}
+                  onClick={() => {
+                    append(emptyDeceased());
+                    if (form.getValues("announcementMode") === "single") form.setValue("announcementMode", "unrelated");
+                    setActiveTab(1);
+                  }}
                 >
                   <Plus className="w-3.5 h-3.5" />
                   إضافة متوفى آخر في نفس الإعلان (إن وجد)
@@ -368,6 +388,8 @@ export function DeceasedStep() {
           </Card>
         );
       })}
+
+      <MultipleDeceasedCard />
     </div>
   );
 }
@@ -397,7 +419,7 @@ function FemaleRelationsSection({ deceasedIndex }: { deceasedIndex: number }) {
           variant="outline"
           size="sm"
           className="h-8 text-xs border-pink-300 hover:bg-pink-100 dark:hover:bg-pink-950/40 shrink-0"
-          onClick={() => append({ relationType: "أرملة", relatedName: "", isHusbandDeceased: true })}
+          onClick={() => append({ relationType: "أرملة", relatedTitle: "", relatedName: "", isHusbandDeceased: true })}
         >
           <Plus className="w-3.5 h-3.5 ml-1" />
           إضافة صلة
@@ -438,6 +460,21 @@ function FemaleRelationsSection({ deceasedIndex }: { deceasedIndex: number }) {
                       <SelectItem value="حرم" className="text-xs">حرم</SelectItem>
                     </SelectContent>
                   </Select>
+                )}
+              />
+            </div>
+
+            <div className="w-full sm:w-28 shrink-0">
+              <FormField
+                control={form.control}
+                name={`deceasedList.${deceasedIndex}.femaleRelations.${rIndex}.relatedTitle` as any}
+                render={({ field: titleField }) => (
+                  <Input 
+                    placeholder="اللقب: الوالد، الشيخ" 
+                    className="h-9 text-xs w-full" 
+                    {...titleField} 
+                    value={titleField.value || ""} 
+                  />
                 )}
               />
             </div>
@@ -515,6 +552,12 @@ export function RelativesStep() {
         </p>
       </div>
 
+      {(() => {
+        const relativesError = form.formState.errors.relatives as { message?: string; root?: { message?: string } } | undefined;
+        const message = relativesError?.message ?? relativesError?.root?.message;
+        return message ? <p className="text-xs sm:text-sm font-medium text-destructive">{message}</p> : null;
+      })()}
+
       {fields.length === 0 && (
         <Card className="border-dashed bg-muted/20 text-center p-6 sm:p-8 w-full box-border">
           <p className="text-muted-foreground text-xs sm:text-sm mb-3">لم يتم إضافة مجموعات أقارب بعد.</p>
@@ -522,7 +565,7 @@ export function RelativesStep() {
             type="button"
             variant="outline"
             className="gap-2 text-xs sm:text-sm"
-            onClick={() => append({ relationType: "أبناؤه", persons: [] } as any)}
+            onClick={() => append({ relationType: "أبناؤه", relationKey: "children", deceasedPlacement: "auto", deceasedTarget: "all", persons: [] } as any)}
           >
             <Plus className="w-4 h-4" />
             إضافة مجموعة قرابة أولى (مثل أبناؤه)
@@ -534,22 +577,7 @@ export function RelativesStep() {
         <Card key={field.id} className="relative border shadow-sm w-full max-w-full box-border">
           <CardHeader className="py-2.5 px-3 sm:px-4 bg-muted/30 border-b flex flex-row items-center justify-between gap-2">
             <div className="flex items-center gap-2 flex-1 max-w-xs">
-              <FormField
-                control={form.control}
-                name={`relatives.${gIndex}.relationType` as any}
-                render={({ field: relField }) => (
-                  <Select value={relField.value} onValueChange={relField.onChange}>
-                    <SelectTrigger className="h-9 bg-background font-semibold text-xs sm:text-sm w-full">
-                      <SelectValue placeholder="صلة القرابة" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {COMMON_RELATIONS.map((r) => (
-                        <SelectItem key={r} value={r}>{r}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                )}
-              />
+              <RelationSelect groupIndex={gIndex} options={COMMON_RELATIONS} />
             </div>
             <Button
               type="button"
@@ -563,6 +591,7 @@ export function RelativesStep() {
           </CardHeader>
           <CardContent className="p-3 sm:p-4 w-full box-border">
             <InlinePersonsManager groupIndex={gIndex} />
+            <RelativeGroupExtras groupIndex={gIndex} />
           </CardContent>
         </Card>
       ))}
@@ -572,7 +601,7 @@ export function RelativesStep() {
           type="button"
           variant="outline"
           className="w-full border-dashed h-11 text-muted-foreground hover:text-primary gap-2 text-xs sm:text-sm"
-          onClick={() => append({ relationType: "إخوانه", persons: [] } as any)}
+          onClick={() => append({ relationType: "أخوانه", relationKey: "siblings", deceasedPlacement: "auto", deceasedTarget: "all", persons: [] } as any)}
         >
           <Plus className="w-4 h-4" />
           إضافة مجموعة قرابة جديدة (مثل إخوانه، أعمامه...)
@@ -724,6 +753,7 @@ export function BurialPrayerStep() {
   
   const burialStatus = form.watch("burial.status") || "scheduled";
   const isDone = burialStatus === "done";
+  const isPostponed = burialStatus === "pending" || burialStatus === "cancelled";
   const isSeparatePrayer = Boolean(form.watch("prayer.enabled"));
 
   // حالة اختيار مقبرة "أخرى"
@@ -777,10 +807,19 @@ export function BurialPrayerStep() {
                     type="button"
                     onClick={() => field.onChange("scheduled")}
                     className={`px-2.5 py-1 rounded transition-colors ${
-                      !isDone ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
+                      !isDone && !isPostponed ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     سيتم الدفن
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => field.onChange("pending")}
+                    className={`px-2.5 py-1 rounded transition-colors ${
+                      isPostponed ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    مؤجل
                   </button>
                   <button
                     type="button"
@@ -802,7 +841,7 @@ export function BurialPrayerStep() {
             />
 
             {/* خارج قطر (يظهر فقط إذا كان الدفن قادماً) */}
-            {!isDone && (
+            {!isDone && !isPostponed && (
               <FormField
                 control={form.control}
                 name="burial.isOutsideQatar"
@@ -840,6 +879,32 @@ export function BurialPrayerStep() {
                     </FormControl>
                     <FormDescription className="text-[11px] text-muted-foreground">
                       بما أنه تم الدفن مسبقاً، سيتم الاكتفاء بهذه الملاحظة في الإعلان دون نشر موعد قادم للصلاة والدفن.
+                    </FormDescription>
+                  </FormItem>
+                )}
+              />
+            </div>
+          ) : isPostponed ? (
+            <div className="p-3.5 sm:p-5 rounded-lg bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 space-y-2 animate-in fade-in">
+              <FormLabel className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1.5">
+                <FileText className="w-4 h-4 shrink-0" />
+                تأجيل الدفن حتى إشعار آخر
+              </FormLabel>
+              <FormField
+                control={form.control}
+                name="burial.notes"
+                render={({ field }) => (
+                  <FormItem className="w-full">
+                    <FormControl>
+                      <Input 
+                        placeholder="سبب التأجيل (اختياري، مثال: لحين وصول الجثمان)" 
+                        className="h-10 bg-background text-xs sm:text-sm w-full" 
+                        {...field} 
+                        value={field.value || ""} 
+                      />
+                    </FormControl>
+                    <FormDescription className="text-[11px] text-muted-foreground">
+                      يُكتب «تأجيل الدفن حتى إشعار آخر». عند تحديد الموعد الجديد أرسل «تعديل إعلان سابق».
                     </FormDescription>
                   </FormItem>
                 )}
@@ -1094,13 +1159,15 @@ export function CondolencesStep() {
         )}
       />
 
-      {/* تنبيه عند اختيار لا يوجد عزاء */}
-      {condType === "none" && (
+      {/* تنبيه عند اختيار لا يوجد عزاء أو المقبرة فقط */}
+      {(condType === "none" || condType === "cemetery_only" || condType === "tbd") && (
         <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/10 p-3 sm:p-4 text-amber-800 dark:text-amber-300 text-xs sm:text-sm flex items-center gap-2.5 w-full box-border">
           <AlertCircle className="w-5 h-5 shrink-0" />
           <div>
-            <p className="font-semibold">يقتصر العزاء على المقبرة أو لا يوجد عزاء</p>
-            <p className="text-[11px] opacity-90 mt-0.5">لن يتم نشر أي مقر عزاء في الإعلان وسيكتفى بتفاصيل الدفن.</p>
+            <p className="font-semibold">
+              {condType === "none" ? "يُكتب «لا يوجد عزاء»" : condType === "tbd" ? "يُكتب «العزاء: سيُحدَّد لاحقاً»" : "يُكتب «عزاء الرجال في المقبرة فقط»"}
+            </p>
+            <p className="text-[11px] opacity-90 mt-0.5">يمكن إضافة السبب من «خيارات إضافية» أسفل الصفحة (مثل: اتباعاً للسنة، أو تنفيذاً لوصية المتوفى).</p>
           </div>
         </Card>
       )}
@@ -1134,6 +1201,27 @@ export function CondolencesStep() {
           <CondolenceVenueCard audience="women" title="عزاء النساء" />
         </div>
       )}
+
+      {/* سبب العزاء، أرقام الهاتف مع المقرات، والمواقع الإضافية (مطوية) */}
+      <MoreOptions
+        hint="سبب العزاء، أرقام الهاتف، مواقع إضافية"
+        paths={[
+          "condolences.cancellationOrRestrictionReason",
+          "condolences.withPhones",
+          "condolences.extraVenues",
+          ...(condType === "phone_only" ? [] : ["condolences.phones"]),
+        ]}
+      >
+        <CondolenceExtras type={condType} />
+        {condType !== "phone_only" && form.watch("condolences.withPhones") && (
+          <SmartPhonesSection isPhoneOnly={false} />
+        )}
+        {(condType === "full" || condType === "men_only" || condType === "women_only") && (
+          <ExtraVenuesSection
+            audiences={condType === "full" ? ["men", "women"] : condType === "men_only" ? ["men"] : ["women"]}
+          />
+        )}
+      </MoreOptions>
     </div>
   );
 }
@@ -1364,6 +1452,9 @@ function CondolenceVenueCard({ audience, title }: { audience: "men" | "women"; t
             </div>
           )}
         </div>
+
+        {/* «حتى» و«عزاء لـ» (مطوية) */}
+        <VenueExtras audience={audience} />
       </CardContent>
     </Card>
   );
@@ -1676,6 +1767,8 @@ export function ReviewStep() {
         <h2 className="text-xl sm:text-2xl font-bold text-foreground">مراجعة بيانات إعلان الوفاة</h2>
         <p className="text-muted-foreground text-xs sm:text-sm mt-0.5">تأكد من صحة وشمولية البيانات قبل الاعتماد والإرسال النهائي.</p>
       </div>
+
+      <AnnouncementPreview />
 
       <div className="space-y-3.5 text-xs sm:text-sm w-full box-border">
         {/* المتوفون */}

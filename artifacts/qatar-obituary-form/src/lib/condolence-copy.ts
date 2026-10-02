@@ -1,5 +1,9 @@
 import type { ObituaryRequest } from "@workspace/api-client-react";
 import type { CondolenceContentItem } from "./condolence-poster-renderer";
+import { buildAnnouncement, makeClosingPrayer, makeDeathStatement } from "./announcement";
+
+// صيغ الوفاة والختام من المولّد الموحّد (تراعي الجنس والعدد والأطفال).
+export { makeClosingPrayer, makeDeathStatement };
 
 export type Audience = "men" | "women";
 
@@ -29,42 +33,14 @@ export type ImageDraft = {
   notes: string;
 };
 
-type DeceasedForWording = {
-  gender?: string | null;
-};
-
 type RelativeForWording = {
   name: string;
   occupation?: string;
   deceased: boolean;
 };
 
-const FEMININE_RELATIONS = new Set([
-  "والدة", "أم", "ابنة", "بنت", "أخت", "شقيقة", "عمة", "خالة", "جدة",
-  "زوجة", "زوجة/حرم", "حرم", "أرملة", "بنات", "أخوات", "عمات", "خالات",
-  "جدات", "حفيدات",
-]);
-
-const MASCULINE_RELATIONS = new Set([
-  "والد", "أب", "ابن", "ولد", "أخ", "شقيق", "عم", "خال", "جد", "زوج",
-  "أرمل", "أبناء", "إخوة", "أعمام", "أخوال", "أجداد", "أحفاد",
-]);
-
 function clean(value: string | null | undefined): string {
   return (value || "").replace(/\s+/gu, " ").trim();
-}
-
-function relativeRelationKey(relation: string): string {
-  return clean(relation).replace(/^ال/u, "");
-}
-
-export function inferRelativeGender(relation: string): "feminine" | "masculine" | "unknown" {
-  const key = relativeRelationKey(relation);
-  const matchesRelation = (known: Set<string>) =>
-    [...known].some((value) => key === value || key.startsWith(`${value} `) || key.startsWith(`${value}/`));
-  if (matchesRelation(FEMININE_RELATIONS)) return "feminine";
-  if (matchesRelation(MASCULINE_RELATIONS)) return "masculine";
-  return "unknown";
 }
 
 export function formatDeceasedIdentity(title: string | undefined, fullName: string): string {
@@ -86,66 +62,24 @@ export function formatDeceasedIdentity(title: string | undefined, fullName: stri
   if (normalizedTitle.includes(normalizedName)) return cleanTitle;
   if (normalizedName.includes(normalizedTitle)) return cleanName;
 
-  if (/^(?:حرم|زوجة)(?:\s|\/|$)/u.test(cleanTitle)) {
-    return `${cleanTitle}، ${cleanName}`;
+  // «حرم الشيخ فلان» تعريف بالزوج يأتي بعد اسمها، لا قبله، حتى لا يُقرأ اسم الزوج اسماً لها.
+  if (/^(?:حرم|زوجة|أرملة)(?:\s|\/|$)/u.test(cleanTitle)) {
+    return `${cleanName}، ${cleanTitle}`;
   }
   return `${cleanTitle} / ${cleanName}`;
 }
 
-export function makeDeathStatement(people: DeceasedForWording[]): string {
-  if (people.length === 1) {
-    const gender = people[0]?.gender;
-    if (gender === "woman" || gender === "girl") return "انتقلت إلى رحمة الله تعالى";
-    if (gender === "man" || gender === "boy") return "انتقل إلى رحمة الله تعالى";
-    return "في ذمة الله تعالى";
-  }
-  if (people.length === 2) {
-    const bothWomen = people.every((person) => person.gender === "woman" || person.gender === "girl");
-    return bothWomen ? "انتقلتا إلى رحمة الله تعالى" : "انتقلا إلى رحمة الله تعالى";
-  }
-  if (people.length > 2) {
-    const allWomen = people.every((person) => person.gender === "woman" || person.gender === "girl");
-    return allWomen ? "انتقلن إلى رحمة الله تعالى" : "انتقلوا إلى رحمة الله تعالى";
-  }
-  return "تغمد الله الفقيد بواسع رحمته";
-}
-
-export function makeClosingPrayer(people: DeceasedForWording[]): string {
-  if (people.length === 1) {
-    const gender = people[0]?.gender;
-    if (gender === "woman" || gender === "girl") {
-      return "رحمها الله وغفر لها، وأسكنها فسيح جناته.";
-    }
-    if (gender === "man" || gender === "boy") {
-      return "رحمه الله وغفر له، وأسكنه فسيح جناته.";
-    }
-    return "اللهم اغفر للفقيد وارحمه، وأسكنه فسيح جناتك.";
-  }
-  if (people.length === 2) {
-    return "رحمهما الله وغفر لهما، وأسكنهما فسيح جناته.";
-  }
-  if (people.length > 2 && people.every((person) => person.gender === "woman" || person.gender === "girl")) {
-    return "اللهم ارحمهن واغفر لهن، وأسكنهن فسيح جناتك.";
-  }
-  if (people.length > 2) {
-    return "اللهم ارحمهم واغفر لهم، وأسكنهم فسيح جناتك.";
-  }
-  return "اللهم اغفر للفقيد وارحمه، وأسكنه فسيح جناتك.";
-}
-
+/** خانة الأقارب لا تذكر الإناث حسب العرف، فالترحّم عليهم بالمذكر دائماً. */
 export function formatRelativePerson(
   person: RelativeForWording,
-  relation: string,
+  _relation?: string,
 ): string {
-  const parts: string[] = [clean(person.name)];
-  if (person.deceased) {
-    const gender = inferRelativeGender(relation);
-    parts.push(gender === "feminine" ? "(رحمها الله تعالى)" : "(رحمه الله تعالى)");
-  }
-  if (person.occupation && clean(person.occupation)) {
-    parts.push(`- ${clean(person.occupation)}`);
-  }
-  return parts.filter(Boolean).join(" ");
+  const occupation = clean(person.occupation);
+  return [
+    clean(person.name),
+    occupation ? `(${occupation})` : "",
+    person.deceased ? "رحمه الله" : "",
+  ].filter(Boolean).join(" ");
 }
 
 export function formatRelativeGroups(request: ObituaryRequest): string {
@@ -196,24 +130,10 @@ export function createCondolenceImageDraft(request: ObituaryRequest): ImageDraft
   const women = request.condolences?.find((card) => card.audience === "women");
   const people = request.deceasedPeople || [];
 
-  const prayerLines: string[] = [];
-  if (request.prayer?.day) prayerLines.push(`اليوم: ${request.prayer.day}`);
-  if (request.prayer?.time) prayerLines.push(`الوقت: ${request.prayer.time}`);
-  if (request.prayer?.place) prayerLines.push(`المسجد: ${request.prayer.place}`);
-  const prayerText = prayerLines.join("\n");
-
-  const burialLines: string[] = [];
-  if (request.burial?.status) {
-    burialLines.push(request.burial.status === "completed" ? "تم الدفن" : "سيتم الدفن");
-  }
-  if (request.burial?.day) burialLines.push(`اليوم: ${request.burial.day}`);
-  if (request.burial?.time) burialLines.push(`الوقت: ${request.burial.time}`);
-  if (request.burial?.outsideQatar) {
-    if (request.burial.outsideLocation) burialLines.push(`المكان: ${request.burial.outsideLocation} (خارج قطر)`);
-  } else if (request.burial?.cemetery) {
-    burialLines.push(`المقبرة: ${request.burial.cemetery}`);
-  }
-  const burialText = burialLines.join("\n");
+  const announcement = buildAnnouncement({ ...request, messageType: "announcement" });
+  const sectionText = (id: string) => announcement.sections.find((section) => section.id === id)?.lines.join("\n") ?? "";
+  const prayerText = sectionText("prayer");
+  const burialText = sectionText("burial");
 
   const cardToDraft = (card: ObituaryRequest["condolences"][number] | undefined): EditableCard | undefined => {
     if (!card) return undefined;
@@ -236,14 +156,14 @@ export function createCondolenceImageDraft(request: ObituaryRequest): ImageDraft
   };
 
   return {
-    deceasedNames: people.map((person) => person.fullName),
+    deceasedNames: people.map((person) => person.fullName ?? ""),
     deceasedTitles: people.map((person) => person.title || ""),
     opening: "إنا لله وإنا إليه راجعون",
     prayerText,
     prayerMapLink: request.prayer?.mapLink || "",
     burialText,
     burialMapLink: request.burial?.mapLink || "",
-    closing: makeClosingPrayer(people),
+    closing: announcement.closing,
     men: cardToDraft(men),
     women: cardToDraft(women),
     phoneContacts: (request.condolencePhoneContacts || []).map((contact) => ({
@@ -321,7 +241,7 @@ export function buildCondolencePosterContent(
   const people = request.deceasedPeople || [];
   const deceasedData = people.map((person, index) => {
     const title = draft.deceasedTitles[index] ?? person.title;
-    const name = draft.deceasedNames[index] ?? person.fullName;
+    const name = draft.deceasedNames[index] ?? person.fullName ?? "";
     const identity = formatDeceasedIdentity(title, name);
     const details = detailsForPerson(person);
     return {
@@ -358,7 +278,7 @@ export function buildCondolencePosterContent(
   let burial: CondolencePosterStructured["burial"] = null;
   if (draft.burialText.trim() || qrUrls.burial?.trim() || request.burial) {
     const qrInfo = qrFor("burial", "مسح موقع الدفن");
-    const statusText = request.burial?.status === "completed" ? "تم الدفن" : "سيتم الدفن";
+    const statusText = request.burial?.status === "completed" ? "تم الدفن" : request.burial?.status === "postponed" ? "تأجيل الدفن حتى إشعار آخر" : "سيتم الدفن";
     const cemetery = request.burial?.outsideQatar
       ? `${request.burial.outsideLocation || ""} (خارج قطر)`
       : request.burial?.cemetery;

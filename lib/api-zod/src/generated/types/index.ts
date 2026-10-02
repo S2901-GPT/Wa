@@ -3,23 +3,36 @@
  * Do not edit manually.
  * Api
  * واجهة طلبات بيانات إعلانات الوفاة
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 
 export * from './burialDetails';
 export * from './burialDetailsStatus';
+export * from './condolenceCancellation';
+export * from './condolenceCancellationAudience';
 export * from './condolenceCard';
 export * from './condolenceCardAudience';
 export * from './condolencePhoneContact';
+export * from './condolenceScheduleEntry';
 export * from './deceasedPerson';
+export * from './deceasedPersonAgeUnit';
 export * from './deceasedPersonGender';
+export * from './deceasedPersonIdentifyBy';
 export * from './healthStatus';
+export * from './linkedPerson';
 export * from './obituaryRequest';
 export * from './obituaryRequestInput';
+export * from './obituaryRequestInputAnnouncementMode';
 export * from './obituaryRequestInputCondolenceOptionsItem';
+export * from './obituaryRequestInputMessageType';
+export * from './obituaryRequestInputPhoneAudience';
 export * from './obituaryRequestStatus';
 export * from './obituaryRequestUpdate';
 export * from './obituaryRequestUpdateStatus';
 export * from './prayerDetails';
 export * from './relativeGroup';
+export * from './relativeGroupDeceasedPlacement';
+export * from './relativeGroupRelationKey';
 export * from './relativePerson';
+export * from './spouseReference';
+export * from './spouseReferenceKind';

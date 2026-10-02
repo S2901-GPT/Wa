@@ -1,12 +1,11 @@
+/**
+ * اختبارات محتوى الصورة: محوّل القوالب (presentation-normalizer) ودوال condolence-copy
+ * يجب أن تطابق صياغة المولّد الموحّد (announcement.ts).
+ */
 import assert from "node:assert/strict";
 import type { ObituaryRequest } from "@workspace/api-client-react";
-import {
-  buildCondolencePosterContent,
-  createCondolenceImageDraft,
-  formatDeceasedIdentity,
-  formatRelativePerson,
-  makeDeathStatement,
-} from "./condolence-copy";
+import { createCondolenceImageDraft, formatDeceasedIdentity, formatRelativePerson, makeDeathStatement } from "./condolence-copy";
+import { normalizeObituaryPresentation } from "./presentation-normalizer";
 
 function makeRequest(overrides: Partial<ObituaryRequest> = {}): ObituaryRequest {
   return {
@@ -18,7 +17,7 @@ function makeRequest(overrides: Partial<ObituaryRequest> = {}): ObituaryRequest 
     deceasedPeople: [{ fullName: "عبدالله محمد عبدالله", gender: "man" }],
     relatives: [],
     prayer: { enabled: false },
-    burial: { status: "upcoming", outsideQatar: false },
+    burial: { status: "upcoming", outsideQatar: false, day: "اليوم", time: "بعد صلاة العصر", cemetery: "مقبرة مسيمير" },
     condolenceOptions: [],
     condolences: [],
     condolencePhoneContacts: [],
@@ -26,224 +25,102 @@ function makeRequest(overrides: Partial<ObituaryRequest> = {}): ObituaryRequest 
   } as ObituaryRequest;
 }
 
-function build(request: ObituaryRequest) {
-  const draft = createCondolenceImageDraft(request);
-  const qrUrls = {
-    men: draft.men?.mapLink || "",
-    women: draft.women?.mapLink || "",
-    prayer: draft.prayerMapLink,
-    burial: draft.burialMapLink,
-  };
-  return {
-    draft,
-    poster: buildCondolencePosterContent(request, draft, qrUrls),
-  };
-}
-
-function allPosterText(request: ObituaryRequest) {
-  const { poster } = build(request);
-  return JSON.stringify(poster);
-}
-
 const cases: Array<[string, () => void]> = [
-  ["single deceased man", () => {
+  ["death statement by gender and number", () => {
     assert.equal(makeDeathStatement([{ gender: "man" }]), "انتقل إلى رحمة الله تعالى");
-  }],
-  ["single deceased woman", () => {
     assert.equal(makeDeathStatement([{ gender: "woman" }]), "انتقلت إلى رحمة الله تعالى");
+    assert.equal(makeDeathStatement([{ gender: "woman" }, { gender: "girl" }]), "انتقلتا إلى رحمة الله تعالى");
+    assert.equal(makeDeathStatement([{ gender: "man" }, { gender: "woman" }, { gender: "man" }]), "انتقلوا إلى رحمة الله تعالى");
   }],
-  ["two deceased people", () => {
-    assert.equal(makeDeathStatement([{ gender: "man" }, { gender: "man" }]), "انتقلا إلى رحمة الله تعالى");
+  ["nameless widow on the template: the husband is never presented as her name", () => {
+    const content = normalizeObituaryPresentation(makeRequest({
+      deceasedPeople: [{ gender: "woman", identifyBy: "spouse", spouse: { kind: "widow", title: "الوالد", name: "سيف سعيد", deceased: true }, age: 84 }],
+    }));
+    assert.equal(content.statement, "انتقلت إلى رحمة الله تعالى");
+    assert.equal(content.deceasedList[0].identity, "أرملة الوالد سيف سعيد رحمهم الله");
+    assert.deepEqual(content.deceasedList[0].details, ["84 عاماً"]);
+    assert.equal(content.closing, "الله يرحمها ويغفر لها");
   }],
-  ["more than two deceased people", () => {
-    assert.equal(
-      makeDeathStatement([{ gender: "man" }, { gender: "woman" }, { gender: "man" }]),
-      "انتقلوا إلى رحمة الله تعالى",
-    );
+  ["relatives on the template use the deceased's perspective and masculine mercy", () => {
+    const content = normalizeObituaryPresentation(makeRequest({
+      deceasedPeople: [{ fullName: "نورة", gender: "woman" }],
+      relatives: [{ relation: "الأبناء", relationKey: "children", people: [{ name: "باسل", deceased: false }, { name: "محمد", deceased: true }] }],
+    }));
+    assert.deepEqual(content.relatives, [{ heading: "والدة كل من", membersList: ["باسل", "محمد رحمه الله"], membersText: "باسل ومحمد رحمه الله" }]);
   }],
-  ["harem identity", () => {
-    assert.equal(
-      formatDeceasedIdentity("حرم الشيخ عبدالله", "عائشة محمد"),
-      "حرم الشيخ عبدالله، عائشة محمد",
-    );
+  ["prayer and burial in the same place become one archive sentence", () => {
+    const content = normalizeObituaryPresentation(makeRequest());
+    assert.equal(content.hasCombinedPrayerBurial, true);
+    assert.equal(content.prayerBurialCombined?.dayTime, "الدفن اليوم بعد صلاة العصر في مقبرة مسيمير");
+    assert.doesNotMatch(JSON.stringify(content), /يوم اليوم|اليوم: /u);
   }],
-  ["deceased relative wording", () => {
-    const text = formatRelativePerson({ name: "مريم", deceased: true }, "والدة");
-    assert.match(text, /رحمها الله تعالى/u);
-    assert.doesNotMatch(text, /متوفى|متوفاة/u);
+  ["separate mosque prayer then burial", () => {
+    const content = normalizeObituaryPresentation(makeRequest({
+      prayer: { enabled: true, day: "اليوم", time: "بعد صلاة العصر", place: "مسجد حمد بن علي", mapLink: "https://example.com/prayer" },
+    }));
+    assert.equal(content.hasCombinedPrayerBurial, false);
+    assert.equal(content.prayer?.day, "صلاة الجنازة اليوم بعد صلاة العصر في مسجد حمد بن علي");
+    assert.equal(content.prayer?.qrUrl, "https://example.com/prayer");
+    assert.equal(content.burial?.statusText, "والدفن في مقبرة مسيمير");
   }],
-  ["men-only condolence module", () => {
-    const request = makeRequest({
-      condolences: [{ audience: "men", location: "مجلس العائلة" }],
-    });
-    const { poster } = build(request);
-    assert.ok(poster.items.some((item) => item.kind === "section" && item.id === "men"));
-    assert.ok(!poster.items.some((item) => item.kind === "section" && item.id === "women"));
-  }],
-  ["women-only condolence module", () => {
-    const request = makeRequest({
-      condolences: [{ audience: "women", location: "منزل العائلة" }],
-    });
-    const { poster } = build(request);
-    assert.ok(poster.items.some((item) => item.kind === "section" && item.id === "women"));
-    assert.ok(!poster.items.some((item) => item.kind === "section" && item.id === "men"));
-  }],
-  ["men and women modules and labeled QR codes", () => {
-    const request = makeRequest({
+  ["condolence blocks: archive sentence, duration agreement, and extra locations", () => {
+    const content = normalizeObituaryPresentation(makeRequest({
+      condolenceOptions: ["men", "women"],
       condolences: [
-        { audience: "men", location: "مجلس العائلة", mapLink: "https://example.com/men" },
-        { audience: "women", location: "منزل العائلة", mapLink: "https://example.com/women" },
+        { audience: "men", location: "مجلس العائلة", area: "الدفنة", durationDays: 2, mapLink: "https://example.com/men" },
+        { audience: "women", location: "منزل ابنها غانم" },
+        { audience: "women", location: "منزل ابنها ناصر" },
       ],
-    });
-    const { poster } = build(request);
-    const men = poster.items.find((item) => item.kind === "section" && item.id === "men");
-    const women = poster.items.find((item) => item.kind === "section" && item.id === "women");
-    assert.ok(men?.kind === "section");
-    assert.ok(women?.kind === "section");
-    if (men?.kind === "section" && women?.kind === "section") {
-      assert.equal(men.label, "عزاء الرجال");
-      assert.equal(men.qr?.label, "موقع الرجال");
-      assert.equal(men.qr?.url, "https://example.com/men");
-      assert.equal(women.label, "عزاء النساء");
-      assert.equal(women.qr?.label, "موقع النساء");
-      assert.equal(women.qr?.url, "https://example.com/women");
-    }
+    }));
+    assert.equal(content.men?.location, "في مجلس العائلة بمنطقة الدفنة\nلمدة يومين");
+    assert.equal(content.men?.qrUrl, "https://example.com/men");
+    assert.equal(content.women?.location, "الموقع الأول:\nفي منزل ابنها غانم\nالموقع الثاني:\nفي منزل ابنها ناصر");
   }],
-  ["phone-only contact details", () => {
-    const request = makeRequest({
-      condolenceOptions: ["phone"],
-      condolencePhoneContacts: [{ name: "ناصر", phone: "55551234" }],
-    });
-    const { poster } = build(request);
-    const phone = poster.items.find((item) => item.kind === "section" && item.id === "phone");
-    assert.ok(phone?.kind === "section");
-    if (phone?.kind === "section") assert.match(phone.text, /ناصر — 55551234/u);
+  ["children get «شفيعاً لوالديه يارب», never the adult prayer", () => {
+    const content = normalizeObituaryPresentation(makeRequest({ deceasedPeople: [{ fullName: "يوسف", gender: "boy" }] }));
+    assert.equal(content.closing, "شفيعاً لوالديه يارب");
+    assert.equal(content.deceasedList[0].identity, "الطفل يوسف");
   }],
-  ["short request remains complete", () => {
-    const request = makeRequest();
-    const { poster } = build(request);
-    assert.equal(poster.names, "عبدالله محمد عبدالله");
-    assert.equal(poster.statement, "انتقل إلى رحمة الله تعالى");
-    assert.ok(poster.items.some((item) => item.kind === "section" && item.id === "closing"));
-    assert.ok(!poster.items.some((item) => item.id === "relatives" || item.id === "notes"));
-  }],
-  ["map link alone keeps its audience card visible", () => {
-    const request = makeRequest({
-      condolences: [{ audience: "men", mapLink: "https://example.com/men" }],
+  ["image editor overrides (names, notes, closing) are applied", () => {
+    const content = normalizeObituaryPresentation(makeRequest(), {
+      deceasedNames: ["عبدالله محمد"],
+      deceasedTitles: ["الوالد"],
+      notes: "ملاحظة",
+      closing: "رحمه الله",
     });
-    const { poster } = build(request);
-    const men = poster.items.find((item) => item.kind === "section" && item.id === "men");
-    assert.ok(men?.kind === "section");
-    if (men?.kind === "section") {
-      assert.equal(men.text, "");
-      assert.equal(men.qr?.url, "https://example.com/men");
-    }
+    assert.equal(content.deceasedList[0].identity, "الوالد عبدالله محمد");
+    assert.equal(content.notes, "ملاحظة");
+    assert.equal(content.closing, "رحمه الله");
   }],
-  ["long request preserves every populated value", () => {
-    const request = makeRequest({
-      deceasedPeople: [{
-        fullName: "عبدالله محمد عبدالله",
-        gender: "man",
-        age: 72,
-        nationality: "قطري",
-        deathPlace: "مستشفى حمد العام",
-        occupation: "مهندس متقاعد",
-        note: "كان محباً للخير وخدمة المجتمع",
-      }],
-      relatives: [
-        {
-          relation: "أبناء",
-          familyReference: "آل عبدالله",
-          people: [{ name: "ناصر عبدالله", occupation: "طبيب", deceased: false }],
-        },
-        {
-          relation: "حرم فلان",
-          familyReference: "الأسرة",
-          people: [{ name: "مريم عبدالله", occupation: "معلمة", deceased: true }],
-        },
-      ],
-      prayer: {
-        enabled: true,
-        day: "الخميس ٢٥ سبتمبر",
-        time: "بعد صلاة العصر",
-        place: "مسجد الإمام محمد بن عبدالوهاب",
-        mapLink: "https://example.com/prayer",
-      },
-      burial: {
-        status: "upcoming",
-        day: "الخميس ٢٥ سبتمبر",
-        time: "بعد صلاة المغرب",
-        cemetery: "مقبرة مسيمير",
-        mapLink: "https://example.com/burial",
-        outsideQatar: false,
-      },
-      condolences: [
-        {
-          audience: "men",
-          start: "الخميس",
-          durationDays: 3,
-          time: "بعد العصر",
-          location: "مجلس العائلة",
-          area: "الدفنة",
-          street: "شارع الكورنيش",
-          houseNumber: "١٢",
-          buildingNumber: "٢",
-          floor: "الأول",
-          apartmentNumber: "٣",
-          locationNotes: "المدخل الجانبي",
-          mapLink: "https://example.com/men",
-        },
-        {
-          audience: "women",
-          start: "الخميس",
-          durationDays: 3,
-          time: "بعد العصر",
-          location: "منزل العائلة",
-          area: "الهلال",
-          mapLink: "https://example.com/women",
-        },
-      ],
-      condolencePhoneContacts: [{ name: "ناصر عبدالله", phone: "55551234" }],
-      notes: "ملاحظة طويلة للاختبار: ".concat("تفاصيل إضافية ".repeat(80)),
-    });
-    const { poster } = build(request);
-    const text = allPosterText(request);
-    assert.deepEqual(
-      poster.items.map((item) => item.id),
-      ["deceased-details", "prayer", "burial", "men", "women", "relatives", "phone", "notes", "closing"],
-    );
-    for (const value of [
-      "عبدالله محمد عبدالله",
-      "العمر: 72",
-      "الجنسية: قطري",
-      "مكان الوفاة: مستشفى حمد العام",
-      "العمل: طبيب",
-      "رحمها الله تعالى",
-      "آل عبدالله",
-      "مسجد الإمام محمد بن عبدالوهاب",
-      "حالة الدفن: سيتم الدفن",
-      "مقبرة مسيمير",
-      "المدة: 3 أيام",
-      "رقم المنزل: ١٢",
-      "رقم المبنى: ٢",
-      "الطابق: الأول",
-      "رقم الشقة: ٣",
-      "ملاحظة طويلة للاختبار:",
-      "https://example.com/men",
-      "https://example.com/women",
-      "https://example.com/prayer",
-      "https://example.com/burial",
-    ]) {
-      assert.ok(text.includes(value), `expected poster data to include: ${value}`);
-    }
-    const qrSections = poster.items.filter((item) => item.kind === "section" && item.qr);
-    assert.deepEqual(qrSections.map((item) => item.id), ["prayer", "burial", "men", "women"]);
+  ["relative wording helper is masculine and keeps the job in parentheses", () => {
+    assert.equal(formatRelativePerson({ name: "مريم", deceased: true }, "والدة"), "مريم رحمه الله");
+    assert.equal(formatRelativePerson({ name: "أحمد", occupation: "جامعة قطر", deceased: false }), "أحمد (جامعة قطر)");
+  }],
+  ["identity helper puts the husband after her name", () => {
+    assert.equal(formatDeceasedIdentity("حرم الشيخ عبدالله", "عائشة محمد"), "عائشة محمد، حرم الشيخ عبدالله");
+  }],
+  ["image draft starts from the generator's sentences", () => {
+    const draft = createCondolenceImageDraft(makeRequest({
+      deceasedPeople: [{ gender: "woman", identifyBy: "spouse", spouse: { kind: "harem", name: "خالد", deceased: false } }],
+    }));
+    assert.deepEqual(draft.deceasedNames, [""]);
+    assert.equal(draft.burialText, "الدفن اليوم بعد صلاة العصر في مقبرة مسيمير");
+    assert.equal(draft.closing, "الله يرحمها ويغفر لها");
   }],
 ];
 
+let failed = 0;
 for (const [name, test] of cases) {
-  test();
-  console.log(`✓ ${name}`);
+  try {
+    test();
+    console.log(`✓ ${name}`);
+  } catch (error) {
+    failed += 1;
+    console.error(`✗ ${name}\n${error instanceof Error ? error.message : String(error)}`);
+  }
 }
-
+if (failed) {
+  console.error(`${failed} of ${cases.length} condolence-content cases failed.`);
+  process.exit(1);
+}
 console.log(`Passed ${cases.length} condolence-content cases.`);

@@ -1,9 +1,36 @@
+import { useState, type MouseEvent } from "react";
 import { Link } from "wouter";
-import { useListObituaryRequests } from "@workspace/api-client-react";
+import { useListObituaryRequests, type ObituaryRequest } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, ChevronLeft, Loader2, AlertCircle, Sliders } from "lucide-react";
+import { FileText, ChevronLeft, Loader2, AlertCircle, Sliders, Copy, Check } from "lucide-react";
+import { toast } from "sonner";
+import { MESSAGE_TYPE_LABELS, buildAnnouncement, describeRequestDeceased } from "@/lib/announcement";
+
+/** نسخ سريع لنص الإعلان من القائمة دون فتح الطلب. */
+function QuickCopyButton({ request }: { request: ObituaryRequest }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async (event: MouseEvent) => {
+    // الزر داخل رابط البطاقة: لا ننتقل لصفحة الطلب عند النسخ.
+    event.preventDefault();
+    event.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(buildAnnouncement(request).text);
+      setCopied(true);
+      toast.success("تم نسخ نص الإعلان");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("فشل في نسخ النص");
+    }
+  };
+  return (
+    <Button type="button" variant="outline" size="sm" onClick={copy} className="gap-1.5 shrink-0" aria-label="نسخ نص الإعلان">
+      {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+      {copied ? "تم النسخ" : "نسخ"}
+    </Button>
+  );
+}
 
 export default function AdminPage() {
   const { data: requests, isLoading, error } = useListObituaryRequests();
@@ -62,16 +89,22 @@ export default function AdminPage() {
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center gap-3 flex-wrap">
                       <h3 className="font-bold text-lg text-foreground group-hover:text-primary transition-colors">
-                        {req.deceasedPeople.map(d => d.fullName).join("، ")}
+                        {describeRequestDeceased(req)}
                       </h3>
                       {getStatusBadge(req.status)}
+                      {req.messageType && req.messageType !== "announcement" && (
+                        <Badge variant="outline">{MESSAGE_TYPE_LABELS[req.messageType]}</Badge>
+                      )}
                     </div>
                     <div className="text-sm text-muted-foreground flex items-center gap-4 divide-x divide-x-reverse divide-border">
                       <span>رقم: <span className="font-mono">{req.requestNumber}</span></span>
                       <span className="pr-4">تحديث: {new Date(req.updatedAt).toLocaleDateString('ar-QA')}</span>
                     </div>
                   </div>
-                  <ChevronLeft className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors rtl:rotate-180" />
+                  <div className="flex items-center gap-3 shrink-0">
+                    <QuickCopyButton request={req} />
+                    <ChevronLeft className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors rtl:rotate-180" />
+                  </div>
                 </CardContent>
               </Card>
             </Link>
