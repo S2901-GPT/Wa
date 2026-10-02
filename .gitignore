@@ -47,3 +47,7 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# Bun lockfile: Cloud Run buildpacks pick Bun over npm when it exists
+bun.lock
+bun.lockb
