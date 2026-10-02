@@ -40,7 +40,12 @@ async function startServer() {
   } else {
     const staticDir = path.resolve(clientRoot, "dist/public");
     app.use(express.static(staticDir));
-    app.get("*", (_req, res) => {
+    // Express 5 (path-to-regexp v8) rejects "*"; the SPA fallback must be written as a named wildcard.
+    app.get("/{*splat}", (req, res) => {
+      if (req.path.startsWith("/api/")) {
+        res.status(404).json({ error: "Not found" });
+        return;
+      }
       res.sendFile(path.resolve(staticDir, "index.html"));
     });
   }
