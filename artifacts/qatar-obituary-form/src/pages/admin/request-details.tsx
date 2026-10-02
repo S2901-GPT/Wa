@@ -71,14 +71,14 @@ export default function AdminRequestDetailsPage() {
       text += `\n`;
     }
     
-    if (req.prayer.enabled) {
+    if (req.prayer?.enabled) {
       text += `صلاة الجنازة: يوم ${req.prayer.day || ""} ${req.prayer.time || ""} في ${req.prayer.place || ""}\n`;
       if (req.prayer.mapLink) text += `موقع الصلاة: ${req.prayer.mapLink}\n`;
     }
 
-    if (req.condolenceOptions.length > 0 && req.condolences.length > 0) {
+    if ((req.condolenceOptions?.length ?? 0) > 0 && (req.condolences?.length ?? 0) > 0) {
       text += `\nالعزاء:\n`;
-      req.condolences.forEach(card => {
+      (req.condolences || []).forEach(card => {
         text += `\n- عزاء ${card.audience === "men" ? "الرجال" : "النساء"}:`;
         if (card.location) text += `\nالمكان: ${card.location}`;
         if (card.start) text += `\nالبداية: ${card.start}`;
@@ -102,9 +102,9 @@ export default function AdminRequestDetailsPage() {
     if (req.notes) {
       text += `\nملاحظات:\n${req.notes}\n`;
     }
-    if (req.condolenceOptions.includes("phone") && req.condolencePhoneContacts.length > 0) {
+    if (req.condolenceOptions?.includes("phone") && (req.condolencePhoneContacts?.length ?? 0) > 0) {
       text += `\nالتواصل:\n`;
-      req.condolencePhoneContacts.forEach(contact => {
+      (req.condolencePhoneContacts || []).forEach(contact => {
         text += `${contact.name || ""}${contact.name && contact.phone ? ": " : ""}${contact.phone || ""}\n`;
       });
     }

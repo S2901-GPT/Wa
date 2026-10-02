@@ -1,1047 +1,1439 @@
 export const IMAGE_WIDTH = 1080;
 export const IMAGE_HEIGHT = 1350;
 
-export type CondolenceDesignId = "official" | "modern" | "editorial";
-
-export type CondolenceContentItem =
-  | {
-      kind: "section";
-      id: string;
-      label?: string;
-      text: string;
-      tone?: "body" | "identity" | "closing";
-      qr?: { key: string; label: string; url: string };
-    }
-  | {
-      kind: "columns";
-      id: string;
-      label?: string;
-      columns: [{ label: string; text: string }, { label: string; text: string }];
-    }
-  | {
-      kind: "qr-row";
-      id: string;
-      codes: Array<{ key: string; label: string; url: string }>;
-    };
+export type CondolenceDesignId = "official" | "modern" | "cards";
 
 export type QrImage = { dataUrl: string; image: HTMLImageElement };
 
-type TextTone = "body" | "identity" | "closing";
-type SourceSection = {
+export type CondolenceContentItem = {
   kind: "section";
   id: string;
   label?: string;
   text: string;
-  tone: TextTone;
-  qrCode?: { key: string; label: string; url: string; image?: QrImage };
-};
-type SourceQrRow = {
-  kind: "qr-row";
-  id: string;
-  codes: Array<{ key: string; label: string; url: string; qr?: QrImage }>;
-};
-type SourceBlock = SourceSection | SourceQrRow;
-
-type PreparedSection = SourceSection & {
-  lines: string[];
-  fontSize: number;
-  lineHeight: number;
-  labelHeight: number;
-  height: number;
-  qr?: QrImage;
-  qrLabel?: string;
-  qrUrlLines: string[];
-  qrSize: number;
-  scale: number;
-  continuation?: boolean;
-};
-type PreparedQrCode = {
-  key: string;
-  label: string;
-  url: string;
-  urlLines: string[];
-  qr?: QrImage;
-};
-type PreparedQrRow = {
-  kind: "qr-row";
-  id: string;
-  codes: PreparedQrCode[];
-  columns: number;
-  rows: number;
-  cellWidth: number;
-  qrSize: number;
-  height: number;
-};
-type PreparedBlock = PreparedSection | PreparedQrRow;
-type LayoutCell = { block: PreparedBlock; x: number; width: number };
-type LayoutRow = {
-  cells: LayoutCell[];
-  height: number;
-  gap: number;
-  label?: string;
-  labelHeight?: number;
-};
-type PageLayout = { rows: LayoutRow[]; used: number };
-
-type HeaderLayout = {
-  openingLines: string[];
-  statementLines: string[];
-  nameLines: string[];
-  openingSize: number;
-  statementSize: number;
-  nameSize: number;
-  openingLineHeight: number;
-  statementLineHeight: number;
-  nameLineHeight: number;
-  openingY: number;
-  statementY: number;
-  nameY: number;
-  bodyTop: number;
+  tone?: "body" | "identity" | "closing";
+  qr?: { key: string; label: string; url: string };
 };
 
-const COLORS = {
-  official: {
-    paper: "#f6f1e8",
-    card: "#fffdf9",
-    ink: "#29252a",
-    accent: "#6b2d43",
-    secondary: "#a58c5e",
-    muted: "#746c68",
-    hairline: "#dfd4c4",
-  },
-  modern: {
-    paper: "#f1f3f1",
-    card: "#fffefd",
-    ink: "#202d2c",
-    accent: "#386b62",
-    secondary: "#b56f48",
-    muted: "#687371",
-    hairline: "#d5ddda",
-  },
-  editorial: {
-    paper: "#f7f4ee",
-    card: "#fffdfa",
-    ink: "#2b2730",
-    accent: "#43536e",
-    secondary: "#a8874d",
-    muted: "#726d6b",
-    hairline: "#ded4c8",
-  },
-} as const;
-
-const FONT_DISPLAY = '"Noto Naskh Arabic", "Amiri", serif';
-const FONT_BODY = '"IBM Plex Sans Arabic", "Tajawal", Arial, sans-serif';
-const PAGE_MARGIN = 62;
-const CONTENT_WIDTH = IMAGE_WIDTH - PAGE_MARGIN * 2;
-const CONTENT_BOTTOM = 1260;
-const ROW_GAP = 14;
-const COLUMN_GAP = 18;
-const MIN_READABLE_SCALE = 0.94;
-
-const ROW_PLANS: Record<
-  CondolenceDesignId,
-  Array<
-    | { kind: "pair"; ids: [string, string]; rightFraction?: number; label?: string }
-    | { kind: "full"; id: string }
-  >
-> = {
-  official: [
-    { kind: "full", id: "deceased-details" },
-    { kind: "pair", ids: ["prayer", "burial"], label: "صلاة الجنازة والدفن" },
-    { kind: "full", id: "men" },
-    { kind: "full", id: "women" },
-    { kind: "full", id: "relatives" },
-    { kind: "full", id: "phone" },
-    { kind: "full", id: "notes" },
-    { kind: "full", id: "closing" },
-  ],
-  modern: [
-    { kind: "pair", ids: ["prayer", "deceased-details"] },
-    { kind: "pair", ids: ["relatives", "burial"] },
-    { kind: "pair", ids: ["men", "women"] },
-    { kind: "pair", ids: ["phone", "notes"] },
-    { kind: "full", id: "closing" },
-    { kind: "full", id: "locations" },
-  ],
-  editorial: [
-    { kind: "pair", ids: ["relatives", "deceased-details"], rightFraction: 0.62 },
-    { kind: "pair", ids: ["prayer", "burial"], rightFraction: 0.46 },
-    { kind: "pair", ids: ["men", "women"] },
-    { kind: "full", id: "locations" },
-    { kind: "pair", ids: ["notes", "phone"], rightFraction: 0.42 },
-    { kind: "full", id: "closing" },
-  ],
+export type RenderPageInput = {
+  opening: string;
+  statement: string;
+  names: string;
+  deceasedPeople?: Array<{
+    fullName: string;
+    title?: string;
+    identity: string;
+    details: string[];
+  }>;
+  prayer?: {
+    day?: string;
+    time?: string;
+    place?: string;
+    text?: string;
+    qrKey?: string;
+    qrLabel?: string;
+    qrUrl?: string;
+  } | null;
+  burial?: {
+    statusText?: string;
+    day?: string;
+    time?: string;
+    cemetery?: string;
+    text?: string;
+    qrKey?: string;
+    qrLabel?: string;
+    qrUrl?: string;
+  } | null;
+  menCondolence?: {
+    start?: string;
+    duration?: string;
+    time?: string;
+    location?: string;
+    address?: string;
+    qrKey?: string;
+    qrLabel?: string;
+    qrUrl?: string;
+  } | null;
+  womenCondolence?: {
+    start?: string;
+    duration?: string;
+    time?: string;
+    location?: string;
+    address?: string;
+    qrKey?: string;
+    qrLabel?: string;
+    qrUrl?: string;
+  } | null;
+  phoneContacts?: Array<{ name: string; phone: string }>;
+  relatives?: Array<{
+    heading: string;
+    members: string[];
+  }>;
+  notes?: string | null;
+  closing: string;
+  designId?: CondolenceDesignId;
+  qrImages?: Record<string, QrImage>;
+  items?: CondolenceContentItem[];
 };
 
 export async function loadCondolenceFonts() {
+  if (typeof document === "undefined" || !document.fonts) return;
   await Promise.allSettled([
-    document.fonts.load('700 60px "Noto Naskh Arabic"'),
+    document.fonts.load('700 48px "Noto Naskh Arabic"'),
+    document.fonts.load('600 24px "Noto Naskh Arabic"'),
+    document.fonts.load('700 48px "IBM Plex Sans Arabic"'),
     document.fonts.load('500 24px "IBM Plex Sans Arabic"'),
-    document.fonts.load('500 24px Tajawal'),
+    document.fonts.load('800 48px "Tajawal"'),
+    document.fonts.load('700 48px "Tajawal"'),
+    document.fonts.load('500 24px "Tajawal"'),
   ]);
   await document.fonts.ready;
 }
 
-function fontString(weight: number, size: number, family: string) {
+const FONT_NASKH = '"Noto Naskh Arabic", "Amiri", serif';
+const FONT_PLEX = '"IBM Plex Sans Arabic", -apple-system, sans-serif';
+const FONT_TAJAWAL = '"Tajawal", "IBM Plex Sans Arabic", sans-serif';
+
+function font(weight: number, size: number, family: string) {
   return `${weight} ${Math.max(8, Math.round(size))}px ${family}`;
 }
 
 function setRtl(ctx: CanvasRenderingContext2D) {
   ctx.direction = "rtl";
   ctx.textBaseline = "alphabetic";
+  ctx.textAlign = "right";
 }
 
-function wrapText(ctx: CanvasRenderingContext2D, text: string, width: number, isUrl = false): string[] {
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.lineTo(x + w - radius, y);
+  ctx.arcTo(x + w, y, x + w, y + radius, radius);
+  ctx.lineTo(x + w, y + h - radius);
+  ctx.arcTo(x + w, y + h, x + w - radius, y + h, radius);
+  ctx.lineTo(x + radius, y + h);
+  ctx.arcTo(x, y + h, x, y + h - radius, radius);
+  ctx.lineTo(x, y + radius);
+  ctx.arcTo(x, y, x + radius, y, radius);
+  ctx.closePath();
+}
+
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  if (!text) return [];
   const paragraphs = text.split("\n");
   const lines: string[] = [];
-  for (const paragraph of paragraphs) {
-    if (!paragraph.trim()) {
+
+  for (const para of paragraphs) {
+    const trimmed = para.trim();
+    if (!trimmed) {
       lines.push("");
       continue;
     }
-    if (isUrl) {
-      const pieces: string[] = [];
-      let piece = "";
-      for (const character of Array.from(paragraph.trim())) {
-        piece += character;
-        if (/[/?#&=._:-]/u.test(character)) {
-          pieces.push(piece);
-          piece = "";
-        }
-      }
-      if (piece) pieces.push(piece);
-      let line = "";
-      for (const part of pieces) {
-        if (line && ctx.measureText(line + part).width > width) {
-          lines.push(line);
-          line = part;
-        } else {
-          line += part;
-        }
-      }
-      if (line) lines.push(line);
-      continue;
-    }
+    const words = trimmed.split(/\s+/u);
     let line = "";
-    for (const word of paragraph.trim().split(/\s+/u)) {
-      const candidate = line ? `${line} ${word}` : word;
-      if (!line || ctx.measureText(candidate).width <= width) {
-        line = candidate;
+    for (const word of words) {
+      const testLine = line ? `${line} ${word}` : word;
+      if (ctx.measureText(testLine).width <= maxWidth) {
+        line = testLine;
       } else {
-        lines.push(line);
+        if (line) lines.push(line);
         line = word;
       }
     }
     if (line) lines.push(line);
   }
-  return lines.length ? lines : [""];
+  return lines;
 }
 
-function fitText(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  x: number,
-  y: number,
-  maxWidth: number,
-  size: number,
-  family: string,
-  weight: number,
-  align: CanvasTextAlign,
-  color: string,
-) {
-  if (!text) return;
-  ctx.save();
-  ctx.font = fontString(weight, size, family);
-  ctx.textAlign = align;
-  ctx.fillStyle = color;
-  const measured = ctx.measureText(text).width;
-  const ratio = measured > maxWidth && measured > 0 ? maxWidth / measured : 1;
-  ctx.translate(x, y);
-  ctx.scale(ratio, 1);
-  ctx.fillText(text, 0, 0);
-  ctx.restore();
-}
+type CardBlock = {
+  id: string;
+  type: "pair" | "full" | "closing";
+  height: number;
+  draw: (ctx: CanvasRenderingContext2D, y: number, design: CondolenceDesignId) => void;
+};
 
-function drawLines(
-  ctx: CanvasRenderingContext2D,
-  lines: string[],
-  x: number,
-  y: number,
-  maxWidth: number,
-  lineHeight: number,
-  size: number,
-  family: string,
-  weight: number,
-  align: CanvasTextAlign,
-  color: string,
-) {
-  lines.forEach((line, index) => {
-    if (line) fitText(ctx, line, x, y + index * lineHeight, maxWidth, size, family, weight, align, color);
-  });
-}
+export function renderCondolencePages(input: RenderPageInput): HTMLCanvasElement[] {
+  const rawDesign = (input.designId as string) || "official";
+  const design: CondolenceDesignId = rawDesign === "editorial" ? "cards" : (rawDesign as CondolenceDesignId);
+  const qrImages = input.qrImages || {};
 
-function headerLayout(
-  ctx: CanvasRenderingContext2D,
-  opening: string,
-  statement: string,
-  names: string,
-  design: CondolenceDesignId,
-  scale: number,
-): HeaderLayout {
-  const splitHeader = design !== "official";
-  const introWidth = splitHeader ? 390 : CONTENT_WIDTH;
-  const nameWidth = splitHeader ? 520 : CONTENT_WIDTH;
-  const openingSize = (design === "editorial" ? 25 : 24) * scale;
-  const statementSize = 18 * scale;
-  const openingLineHeight = 30 * scale;
-  const statementLineHeight = 25 * scale;
-  const openingY = design === "official" ? 118 : 150;
-  let statementY = openingY + 36;
-  const nameY = design === "official" ? 240 : 174;
-  let nameSize = (design === "official" ? 54 : 50) * scale;
-  let nameLines: string[] = [];
-  let nameLineHeight = Math.round(nameSize * 1.12);
-  let openingLines: string[] = [];
-  let statementLines: string[] = [];
+  const dummyCanvas = document.createElement("canvas");
+  dummyCanvas.width = IMAGE_WIDTH;
+  dummyCanvas.height = IMAGE_HEIGHT;
+  const ctx = dummyCanvas.getContext("2d")!;
+  setRtl(ctx);
 
-  ctx.font = fontString(600, openingSize, FONT_DISPLAY);
-  openingLines = wrapText(ctx, opening, introWidth);
-  ctx.font = fontString(500, statementSize, FONT_BODY);
-  statementLines = wrapText(ctx, statement, introWidth);
+  const PAGE_MARGIN_X = design === "official" ? 64 : 56;
+  const CARD_WIDTH = IMAGE_WIDTH - PAGE_MARGIN_X * 2;
+  const HALF_GAP = 18;
+  const HALF_WIDTH = (CARD_WIDTH - HALF_GAP) / 2;
 
-  if (design === "official") {
-    statementY = openingY + Math.max(1, openingLines.length) * openingLineHeight + 8;
-    return {
-      openingLines,
-      statementLines,
-      nameLines: [],
-      openingSize,
-      statementSize,
-      nameSize,
-      openingLineHeight,
-      statementLineHeight,
-      nameLineHeight,
-      openingY,
-      statementY,
-      nameY,
-      bodyTop: Math.max(210, statementY + statementLines.length * statementLineHeight + 30),
-    };
+  // 1. Process Deceased Names (Title + Name inline)
+  const deceasedList = input.deceasedPeople && input.deceasedPeople.length > 0
+    ? input.deceasedPeople
+    : [{ fullName: input.names, title: "", identity: input.names, details: [] }];
+
+  const headerDeceased = deceasedList.map((d) => d.identity).join("، ");
+  const headerDetails = deceasedList.flatMap((d) => d.details);
+
+  ctx.font = font(700, design === "official" ? 44 : 40, design === "official" ? FONT_NASKH : FONT_TAJAWAL);
+  const nameLines: string[] = [];
+  for (const d of deceasedList) {
+    nameLines.push(...wrapText(ctx, d.identity, CARD_WIDTH - 50));
   }
 
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    ctx.font = fontString(700, nameSize, FONT_DISPLAY);
-    nameLines = wrapText(ctx, names, nameWidth, false);
-    nameLineHeight = Math.round(nameSize * 1.12);
-    const nameEnd = nameY + nameLines.length * nameLineHeight;
-    const introEnd = statementY + statementLines.length * statementLineHeight;
-    if (Math.max(nameEnd, introEnd) <= 400 || nameSize <= 26 * scale) break;
-    nameSize = Math.max(26 * scale, nameSize * 0.9);
+  const headerHeight = design === "official"
+    ? 220 + (nameLines.length - 1) * 56 + (headerDetails.length ? 36 : 0)
+    : design === "modern"
+    ? 195 + (nameLines.length - 1) * 50 + (headerDetails.length ? 34 : 0)
+    : 230 + (nameLines.length - 1) * 52 + (headerDetails.length ? 36 : 0);
+
+  // 2. Prepare Structured Content Blocks in strict order
+  const blocks: CardBlock[] = [];
+
+  // A. PRAYER & BURIAL
+  const hasPrayer = Boolean(input.prayer && (input.prayer.place || input.prayer.day || input.prayer.time || input.prayer.text || input.prayer.qrUrl));
+  const hasBurial = Boolean(input.burial && (input.burial.cemetery || input.burial.day || input.burial.time || input.burial.text || input.burial.qrUrl));
+
+  if (hasPrayer && hasBurial) {
+    const prayerQr = input.prayer?.qrKey ? qrImages[input.prayer.qrKey] : undefined;
+    const burialQr = input.burial?.qrKey ? qrImages[input.burial.qrKey] : undefined;
+
+    const prayerRows = [
+      input.prayer?.day ? `اليوم: ${input.prayer.day}` : "",
+      input.prayer?.time ? `الوقت: ${input.prayer.time}` : "",
+      input.prayer?.place ? `المسجد: ${input.prayer.place}` : "",
+    ].filter(Boolean);
+
+    const burialRows = [
+      input.burial?.statusText || "سيتم الدفن",
+      input.burial?.day ? `اليوم: ${input.burial.day}` : "",
+      input.burial?.time ? `الوقت: ${input.burial.time}` : "",
+      input.burial?.cemetery ? `المقبرة: ${input.burial.cemetery}` : "",
+    ].filter(Boolean);
+
+    ctx.font = font(500, 19, FONT_PLEX);
+    const prayerTextW = HALF_WIDTH - 40 - (prayerQr ? 126 : 0);
+    const burialTextW = HALF_WIDTH - 40 - (burialQr ? 126 : 0);
+
+    let prayerLinesCount = 0;
+    for (const r of prayerRows) prayerLinesCount += wrapText(ctx, r, prayerTextW).length;
+    let burialLinesCount = 0;
+    for (const r of burialRows) burialLinesCount += wrapText(ctx, r, burialTextW).length;
+
+    const baseOffset = design === "cards" ? 72 : 64;
+    const calcPrayerH = baseOffset + prayerLinesCount * 28 + 20;
+    const calcBurialH = baseOffset + burialLinesCount * 28 + 20;
+    const minQrBoxH = 146 + (design === "cards" ? 52 : 46);
+
+    const height = Math.max(
+      calcPrayerH,
+      calcBurialH,
+      prayerQr ? minQrBoxH : 185,
+      burialQr ? minQrBoxH : 185,
+      205,
+    );
+
+    blocks.push({
+      id: "prayer-burial-pair",
+      type: "pair",
+      height,
+      draw: (drawCtx, y) => {
+        // Right: Prayer
+        drawHalfCard(drawCtx, {
+          x: PAGE_MARGIN_X + HALF_WIDTH + HALF_GAP,
+          y,
+          width: HALF_WIDTH,
+          height,
+          title: "صلاة الجنازة",
+          accentColor: design === "official" ? "#671426" : design === "modern" ? "#0F172A" : "#1E3A8A",
+          rows: prayerRows,
+          qr: prayerQr,
+          qrLabel: "موقع الصلاة",
+          design,
+        });
+
+        // Left: Burial
+        drawHalfCard(drawCtx, {
+          x: PAGE_MARGIN_X,
+          y,
+          width: HALF_WIDTH,
+          height,
+          title: "الدفن",
+          accentColor: design === "official" ? "#671426" : design === "modern" ? "#0F172A" : "#0F766E",
+          rows: burialRows,
+          qr: burialQr,
+          qrLabel: "موقع الدفن",
+          design,
+        });
+      },
+    });
+  } else if (hasPrayer || hasBurial) {
+    const isPrayer = hasPrayer;
+    const item = isPrayer ? input.prayer! : input.burial!;
+    const itemQr = item.qrKey ? qrImages[item.qrKey] : undefined;
+    const title = isPrayer ? "صلاة الجنازة" : "الدفن";
+    const rows = isPrayer
+      ? [
+          item.day ? `اليوم: ${item.day}` : "",
+          item.time ? `الوقت: ${item.time}` : "",
+          item.place ? `المسجد / المكان: ${item.place}` : "",
+        ].filter(Boolean)
+      : [
+          (item as any).statusText || "سيتم الدفن",
+          item.day ? `اليوم: ${item.day}` : "",
+          item.time ? `الوقت: ${item.time}` : "",
+          (item as any).cemetery ? `المقبرة: ${(item as any).cemetery}` : "",
+        ].filter(Boolean);
+
+    ctx.font = font(500, 20, FONT_PLEX);
+    const textMaxWidth = CARD_WIDTH - 50 - (itemQr ? 150 : 0);
+    let totalLines = 0;
+    for (const r of rows) totalLines += wrapText(ctx, r, textMaxWidth).length;
+
+    const baseOffset = design === "cards" ? 72 : 64;
+    const height = Math.max(baseOffset + totalLines * 30 + 20, itemQr ? 200 : 160);
+
+    blocks.push({
+      id: isPrayer ? "prayer-card" : "burial-card",
+      type: "full",
+      height,
+      draw: (drawCtx, y) => {
+        drawFullCard(drawCtx, {
+          x: PAGE_MARGIN_X,
+          y,
+          width: CARD_WIDTH,
+          height,
+          title,
+          accentColor: design === "official" ? "#671426" : design === "modern" ? "#0F172A" : isPrayer ? "#1E3A8A" : "#0F766E",
+          rows,
+          qr: itemQr,
+          qrLabel: isPrayer ? "موقع الصلاة" : "موقع الدفن",
+          design,
+        });
+      },
+    });
   }
 
-  const nameEnd = nameY + nameLines.length * nameLineHeight;
-  const introEnd = statementY + statementLines.length * statementLineHeight;
-  return {
-    openingLines,
-    statementLines,
-    nameLines,
-    openingSize,
-    statementSize,
-    nameSize,
-    openingLineHeight,
-    statementLineHeight,
-    nameLineHeight,
-    openingY,
-    statementY,
-    nameY,
-    bodyTop: Math.max(340, Math.max(nameEnd, introEnd) + 44),
-  };
-}
-
-function sourceBlocks(items: CondolenceContentItem[], qrImages: Record<string, QrImage>): SourceBlock[] {
-  const blocks: SourceBlock[] = [];
-  for (const item of items) {
-    if (item.kind === "section") {
-      if (!item.text.trim() && !item.qr?.url.trim()) continue;
-      blocks.push({
-        kind: "section",
-        id: item.id,
-        label: item.label?.trim() || undefined,
-        text: item.text,
-        tone: item.tone ?? "body",
-        qrCode: item.qr ? { ...item.qr, image: qrImages[item.qr.key] } : undefined,
-      });
-    } else if (item.kind === "columns") {
-      for (const column of item.columns) {
-        if (!column.text.trim()) continue;
-        const id = column.label === "الرجال" ? "men" : column.label === "النساء" ? "women" : `${item.id}-${column.label}`;
-        const label = column.label.startsWith("مجلس") ? column.label : `مجلس ${column.label}`;
-        blocks.push({ kind: "section", id, label, text: column.text, tone: "body" });
-      }
-    } else {
-      const codes = item.codes
-        .filter((code) => code.key.trim() || code.label.trim() || code.url.trim())
-        .map((code) => ({ ...code, qr: qrImages[code.key] }));
-      if (codes.length) blocks.push({ kind: "qr-row", id: item.id, codes });
-    }
-  }
-  return blocks;
-}
-
-function prepareSection(
-  ctx: CanvasRenderingContext2D,
-  source: SourceSection,
-  width: number,
-  scale: number,
-): PreparedSection {
-  const fontSize = (source.tone === "closing" ? 26 : source.tone === "identity" ? 25 : 23) * scale;
-  const lineHeight = (source.tone === "closing" ? 36 : source.tone === "identity" ? 34 : 32) * scale;
-  const labelHeight = source.label ? 30 * scale : 0;
-  const padding = 16 * scale;
-  const qrSize = source.qrCode ? Math.min(128 * scale, width * 0.3) : 0;
-  const textWidth = Math.max(100, width - padding * 2 - (qrSize ? qrSize + 34 * scale : 0) - 12);
-  ctx.font = fontString(source.tone === "body" ? 500 : 600, fontSize, source.tone === "body" ? FONT_BODY : FONT_DISPLAY);
-  const lines = source.text.trim() ? wrapText(ctx, source.text, textWidth) : [];
-  const qrUrlLines = source.qrCode && !source.qrCode.image
-    ? (() => {
-        ctx.font = fontString(400, 9 * scale, FONT_BODY);
-        return wrapText(ctx, source.qrCode.url, Math.max(80, qrSize + 12), true);
-      })()
-    : [];
-  const qrContentHeight = qrSize
-    ? qrSize + (source.qrCode?.label ? 20 * scale : 0) + (qrUrlLines.length ? qrUrlLines.length * 11 * scale + 10 * scale : 0)
-    : 0;
-  const textContentHeight = lines.length * lineHeight;
-  return {
-    ...source,
-    lines,
-    fontSize,
-    lineHeight,
-    labelHeight,
-    qr: source.qrCode?.image,
-    qrLabel: source.qrCode?.label,
-    qrUrlLines,
-    qrSize,
-    scale,
-    height: Math.max(
-      58 * scale,
-      padding * 2 + labelHeight + Math.max(textContentHeight, qrContentHeight),
+  // B. MEN'S CONDOLENCE
+  const hasMen = Boolean(
+    input.menCondolence && (
+      input.menCondolence.location
+      || input.menCondolence.time
+      || input.menCondolence.start
+      || input.menCondolence.address
+      || input.menCondolence.qrUrl
     ),
-  };
-}
-
-function prepareQrRow(
-  ctx: CanvasRenderingContext2D,
-  source: SourceQrRow,
-  width: number,
-  scale: number,
-): PreparedQrRow {
-  const columns = Math.min(2, source.codes.length);
-  const rows = Math.ceil(source.codes.length / columns);
-  const cellWidth = (width - 24 * scale - 14 * scale * (columns - 1)) / columns;
-  const qrSize = source.codes.some((code) => code.qr)
-    ? Math.min(112 * scale, cellWidth - 24 * scale)
-    : 0;
-  const urlFontSize = Math.max(9, 10 * scale);
-  const codes = source.codes.map((code) => {
-    ctx.font = fontString(400, urlFontSize, FONT_BODY);
-    return {
-      ...code,
-      urlLines: code.qr || !code.url ? [] : wrapText(ctx, code.url, Math.max(80, cellWidth - 20), true),
-    };
-  });
-  const codeCellHeight = qrSize + 40 * scale
-    + (codes.some((code) => code.urlLines.length) ? 12 * scale + Math.max(...codes.map((code) => code.urlLines.length)) * 12 * scale : 0);
-  return {
-    kind: "qr-row",
-    id: source.id,
-    codes,
-    columns,
-    rows,
-    cellWidth,
-    qrSize,
-    height: 16 * scale + rows * codeCellHeight + (rows - 1) * 8 * scale + 18 * scale,
-  };
-}
-
-function planLayout(
-  ctx: CanvasRenderingContext2D,
-  blocks: SourceBlock[],
-  design: CondolenceDesignId,
-  scale: number,
-): LayoutRow[] {
-  const byId = new Map(blocks.map((block) => [block.id, block]));
-  const consumed = new Set<string>();
-  const rows: LayoutRow[] = [];
-
-  const makeSectionCell = (source: SourceSection, x: number, width: number): LayoutCell => ({
-    block: prepareSection(ctx, source, width, scale),
-    x,
-    width,
-  });
-  const makeQrCell = (source: SourceQrRow): LayoutCell => ({
-    block: prepareQrRow(ctx, source, CONTENT_WIDTH, scale),
-    x: PAGE_MARGIN,
-    width: CONTENT_WIDTH,
-  });
-
-  for (const plan of ROW_PLANS[design]) {
-    if (plan.kind === "full") {
-      const source = byId.get(plan.id);
-      if (!source) continue;
-      consumed.add(plan.id);
-      rows.push({
-        cells: [source.kind === "qr-row"
-          ? makeQrCell(source)
-          : makeSectionCell(source, PAGE_MARGIN, CONTENT_WIDTH)],
-        height: 0,
-        gap: ROW_GAP * scale,
-      });
-      continue;
-    }
-
-    const [rightId, leftId] = plan.ids;
-    const rightSource = byId.get(rightId);
-    const leftSource = byId.get(leftId);
-    if (rightSource) consumed.add(rightId);
-    if (leftSource) consumed.add(leftId);
-    const sources = [rightSource, leftSource].filter((source): source is SourceSection => !!source && source.kind === "section");
-    if (!sources.length) continue;
-
-    if (sources.length === 1) {
-      rows.push({
-        cells: [makeSectionCell(sources[0], PAGE_MARGIN, CONTENT_WIDTH)],
-        height: 0,
-        gap: ROW_GAP * scale,
-        label: plan.label,
-        labelHeight: plan.label ? 30 * scale : 0,
-      });
-      continue;
-    }
-
-    const innerWidth = CONTENT_WIDTH - COLUMN_GAP * scale;
-    const rightWidth = innerWidth * (plan.rightFraction ?? 0.5);
-    const leftWidth = innerWidth - rightWidth;
-    const rightX = PAGE_MARGIN + leftWidth + COLUMN_GAP * scale;
-    const cells: LayoutCell[] = [];
-    if (rightSource?.kind === "section") cells.push(makeSectionCell(rightSource, rightX, rightWidth));
-    if (leftSource?.kind === "section") cells.push(makeSectionCell(leftSource, PAGE_MARGIN, leftWidth));
-    rows.push({
-      cells,
-      height: 0,
-      gap: ROW_GAP * scale,
-      label: plan.label,
-      labelHeight: plan.label ? 30 * scale : 0,
-    });
-  }
-
-  for (const source of blocks) {
-    if (consumed.has(source.id)) continue;
-    rows.push({
-      cells: [source.kind === "qr-row"
-        ? makeQrCell(source)
-        : makeSectionCell(source, PAGE_MARGIN, CONTENT_WIDTH)],
-      height: 0,
-      gap: ROW_GAP * scale,
-    });
-  }
-
-  return rows.map((row) => ({
-    ...row,
-    height: Math.max(...row.cells.map((cell) => cell.block.height)) + (row.labelHeight ?? 0),
-  }));
-}
-
-function splitTallRow(row: LayoutRow, capacity: number, scale: number): LayoutRow[] {
-  const onlyBlock = row.cells.length === 1 ? row.cells[0].block : undefined;
-  if (onlyBlock?.kind === "qr-row") {
-    const cell = row.cells[0];
-    const block = onlyBlock;
-    const perPage = Math.max(1, Math.ceil(block.codes.length / 2));
-    const chunks: LayoutRow[] = [];
-    for (let offset = 0; offset < block.codes.length; offset += perPage) {
-      const codes = block.codes.slice(offset, offset + perPage);
-      const columns = Math.min(2, codes.length);
-      const rows = Math.ceil(codes.length / columns);
-      const cellHeight = block.qrSize + 40 * scale
-        + (codes.some((code) => code.urlLines.length) ? 12 * scale + Math.max(...codes.map((code) => code.urlLines.length)) * 12 * scale : 0);
-      const nextBlock: PreparedQrRow = {
-        ...block,
-        codes,
-        columns,
-        rows,
-        height: 34 * scale + rows * cellHeight + (rows - 1) * 8 * scale,
-      };
-      chunks.push({ cells: [{ ...cell, block: nextBlock }], height: nextBlock.height, gap: row.gap });
-    }
-    return chunks;
-  }
-
-  const sections = row.cells.filter((cell): cell is LayoutCell & { block: PreparedSection } => cell.block.kind === "section");
-  if (!sections.length) return [row];
-  const maximumContentHeight = Math.max(34 * scale, capacity - row.gap - (row.labelHeight ?? 0));
-  const maximumLines = Math.max(
-    1,
-    Math.floor((maximumContentHeight - 35 * scale) / Math.max(1, ...sections.map(({ block }) => block.lineHeight))),
   );
-  const offsets = new Map(sections.map(({ block }) => [block.id, 0]));
-  const chunks: LayoutRow[] = [];
 
-  while (sections.some(({ block }) => (offsets.get(block.id) ?? 0) < block.lines.length)) {
-    const cells = sections.flatMap((cell) => {
-      const offset = offsets.get(cell.block.id) ?? 0;
-      if (offset >= cell.block.lines.length) return [];
-      const lines = cell.block.lines.slice(offset, offset + maximumLines);
-      offsets.set(cell.block.id, offset + lines.length);
-      const continuation = offset > 0;
-      const sectionLabelHeight = continuation && !cell.block.label
-        ? 27 * scale
-        : cell.block.labelHeight;
-      const qrSize = continuation ? 0 : cell.block.qrSize;
-      const qrContentHeight = qrSize
-        ? qrSize + (cell.block.qrLabel ? 20 * scale : 0) + (cell.block.qrUrlLines.length ? cell.block.qrUrlLines.length * 11 * scale + 10 * scale : 0)
-        : 0;
-      const block: PreparedSection = {
-        ...cell.block,
-        lines,
-        qr: continuation ? undefined : cell.block.qr,
-        qrSize,
-        qrUrlLines: continuation ? [] : cell.block.qrUrlLines,
-        continuation,
-        label: continuation
-          ? cell.block.label
-            ? `${cell.block.label} · تابع`
-            : "متابعة"
-          : cell.block.label,
-        labelHeight: sectionLabelHeight,
-        height: 28 * scale + sectionLabelHeight
-          + Math.max(lines.length * cell.block.lineHeight, qrContentHeight),
-      };
-      return [{ ...cell, block }];
+  if (hasMen) {
+    const men = input.menCondolence!;
+    const menQr = men.qrKey ? qrImages[men.qrKey] : undefined;
+    const rows = [
+      men.start ? `البداية: ${men.start}${men.duration ? ` (${men.duration})` : ""}` : "",
+      men.time ? `الوقت: ${men.time}` : "",
+      men.location ? `المجلس: ${men.location}` : "",
+      men.address ? `العنوان: ${men.address}` : "",
+    ].filter(Boolean);
+
+    ctx.font = font(500, 20, FONT_PLEX);
+    const paddingX = design === "official" ? 28 : 24;
+    const qrSize = menQr ? 120 : 0;
+    const qrTotalWidth = menQr ? qrSize + 36 : 0;
+    const textMaxWidth = CARD_WIDTH - paddingX * 2 - qrTotalWidth;
+
+    let totalLines = 0;
+    for (const r of rows) totalLines += wrapText(ctx, r, textMaxWidth).length;
+
+    const baseOffset = design === "cards" ? 72 : 64;
+    const calcTextH = baseOffset + totalLines * 30 + 20;
+    const minQrBoxH = menQr ? baseOffset + 120 + 26 + 18 : 0;
+    const height = Math.max(calcTextH, minQrBoxH, 180);
+
+    blocks.push({
+      id: "men-condolence",
+      type: "full",
+      height,
+      draw: (drawCtx, y) => {
+        drawFullCard(drawCtx, {
+          x: PAGE_MARGIN_X,
+          y,
+          width: CARD_WIDTH,
+          height,
+          title: "عزاء الرجال",
+          accentColor: design === "official" ? "#671426" : design === "modern" ? "#1E3A8A" : "#1E293B",
+          rows,
+          qr: menQr,
+          qrLabel: "موقع المجلس",
+          design,
+        });
+      },
     });
-    chunks.push({
-      cells,
-      height: Math.max(...cells.map((cell) => cell.block.height))
-        + (chunks.length === 0 ? row.labelHeight ?? 0 : 0),
-      gap: row.gap,
-      label: chunks.length === 0 ? row.label : undefined,
-      labelHeight: chunks.length === 0 ? row.labelHeight : 0,
+  }
+
+  // C. WOMEN'S CONDOLENCE
+  const hasWomen = Boolean(
+    input.womenCondolence && (
+      input.womenCondolence.location
+      || input.womenCondolence.time
+      || input.womenCondolence.start
+      || input.womenCondolence.address
+      || input.womenCondolence.qrUrl
+    ),
+  );
+
+  if (hasWomen) {
+    const women = input.womenCondolence!;
+    const womenQr = women.qrKey ? qrImages[women.qrKey] : undefined;
+    const rows = [
+      women.start ? `البداية: ${women.start}${women.duration ? ` (${women.duration})` : ""}` : "",
+      women.time ? `الوقت: ${women.time}` : "",
+      women.location ? `المكان: ${women.location}` : "",
+      women.address ? `العنوان: ${women.address}` : "",
+    ].filter(Boolean);
+
+    ctx.font = font(500, 20, FONT_PLEX);
+    const paddingX = design === "official" ? 28 : 24;
+    const qrSize = womenQr ? 120 : 0;
+    const qrTotalWidth = womenQr ? qrSize + 36 : 0;
+    const textMaxWidth = CARD_WIDTH - paddingX * 2 - qrTotalWidth;
+
+    let totalLines = 0;
+    for (const r of rows) totalLines += wrapText(ctx, r, textMaxWidth).length;
+
+    const baseOffset = design === "cards" ? 72 : 64;
+    const calcTextH = baseOffset + totalLines * 30 + 20;
+    const minQrBoxH = womenQr ? baseOffset + 120 + 26 + 18 : 0;
+    const height = Math.max(calcTextH, minQrBoxH, 180);
+
+    blocks.push({
+      id: "women-condolence",
+      type: "full",
+      height,
+      draw: (drawCtx, y) => {
+        drawFullCard(drawCtx, {
+          x: PAGE_MARGIN_X,
+          y,
+          width: CARD_WIDTH,
+          height,
+          title: "عزاء النساء",
+          accentColor: design === "official" ? "#7A2838" : design === "modern" ? "#581C87" : "#6B21A8",
+          rows,
+          qr: womenQr,
+          qrLabel: "موقع العزاء",
+          design,
+        });
+      },
     });
   }
-  return chunks;
-}
 
-function paginateRows(rows: LayoutRow[], capacity: number, scale: number): PageLayout[] {
-  const pages: PageLayout[] = [{ rows: [], used: 0 }];
-  const current = () => pages[pages.length - 1];
-  const nextPage = () => pages.push({ rows: [], used: 0 });
+  // D. PHONE CONTACTS (Placed right after condolences as per Qatar customs)
+  const hasPhone = Boolean(input.phoneContacts && input.phoneContacts.length > 0);
+  if (hasPhone) {
+    const contacts = input.phoneContacts!;
+    const rowPairs = Math.ceil(contacts.length / 2);
+    const baseOffset = design === "cards" ? 70 : 62;
+    const height = baseOffset + rowPairs * 36 + 14;
 
-  for (const originalRow of rows) {
-    const rowParts = originalRow.height > capacity
-      ? splitTallRow(originalRow, capacity, scale)
-      : [originalRow];
-    for (const row of rowParts) {
-      const page = current();
-      const gap = page.rows.length ? row.gap : 0;
-      if (page.rows.length && page.used + gap + row.height > capacity) {
-        nextPage();
-      }
-      const target = current();
-      const targetGap = target.rows.length ? row.gap : 0;
-      target.rows.push({ ...row, gap: targetGap });
-      target.used += targetGap + row.height;
+    blocks.push({
+      id: "phone-contacts",
+      type: "full",
+      height,
+      draw: (drawCtx, y) => {
+        drawPhoneCard(drawCtx, {
+          x: PAGE_MARGIN_X,
+          y,
+          width: CARD_WIDTH,
+          height,
+          contacts,
+          design,
+        });
+      },
+    });
+  }
+
+  // E. RELATIVES & FAMILY
+  const hasRelatives = Boolean(input.relatives && input.relatives.length > 0);
+  if (hasRelatives) {
+    const rels = input.relatives!;
+    const paddingX = design === "official" ? 28 : 24;
+    let totalLinesCount = 0;
+
+    for (const group of rels) {
+      ctx.font = font(700, 19, FONT_PLEX);
+      const label = `${group.heading}: `;
+      const labelWidth = ctx.measureText(label).width;
+
+      ctx.font = font(500, 19, FONT_PLEX);
+      const membersText = group.members.join("، ");
+      const firstLineWidth = CARD_WIDTH - paddingX * 2 - labelWidth - 6;
+      const wrapped = wrapText(ctx, membersText, firstLineWidth);
+      totalLinesCount += Math.max(1, wrapped.length);
     }
-  }
-  return pages.filter((page) => page.rows.length);
-}
 
-function colorsFor(design: CondolenceDesignId) {
-  return COLORS[design];
-}
+    const baseOffset = design === "cards" ? 72 : 62;
+    const height = Math.max(140, baseOffset + totalLinesCount * 30 + rels.length * 8 + 14);
 
-function drawBrand(ctx: CanvasRenderingContext2D, design: CondolenceDesignId) {
-  const colors = colorsFor(design);
-  setRtl(ctx);
-  ctx.fillStyle = colors.accent;
-  if (design === "official") {
-    ctx.fillRect(PAGE_MARGIN, 38, CONTENT_WIDTH, 2);
-    fitText(ctx, "دولة قطر · إعلان وفاة", IMAGE_WIDTH / 2, 66, 420, 15, FONT_BODY, 600, "center", colors.muted);
-    ctx.fillStyle = colors.secondary;
-    ctx.fillRect(IMAGE_WIDTH / 2 - 38, 82, 76, 3);
-    return;
-  }
-  if (design === "modern") {
-    ctx.fillRect(PAGE_MARGIN, 40, 8, 48);
-    fitText(ctx, "إعلان وفاة", IMAGE_WIDTH - PAGE_MARGIN, 58, 260, 15, FONT_BODY, 700, "right", colors.ink);
-    fitText(ctx, "دولة قطر", IMAGE_WIDTH - PAGE_MARGIN, 81, 260, 13, FONT_BODY, 500, "right", colors.muted);
-    return;
-  }
-  fitText(ctx, "دولة قطر / إعلان وفاة", IMAGE_WIDTH - PAGE_MARGIN, 53, 310, 15, FONT_BODY, 500, "right", colors.muted);
-  ctx.fillStyle = colors.accent;
-  ctx.fillRect(PAGE_MARGIN, 67, 96, 2);
-}
-
-function drawHeader(
-  ctx: CanvasRenderingContext2D,
-  header: HeaderLayout,
-  design: CondolenceDesignId,
-) {
-  const colors = colorsFor(design);
-  setRtl(ctx);
-  if (design === "official") {
-    drawLines(ctx, header.openingLines, IMAGE_WIDTH / 2, header.openingY, CONTENT_WIDTH - 52, header.openingLineHeight, header.openingSize, FONT_DISPLAY, 600, "center", colors.ink);
-    drawLines(ctx, header.statementLines, IMAGE_WIDTH / 2, header.statementY, CONTENT_WIDTH - 52, header.statementLineHeight, header.statementSize, FONT_BODY, 500, "center", colors.accent);
-    ctx.fillStyle = colors.secondary;
-    ctx.fillRect(IMAGE_WIDTH / 2 - 34, header.bodyTop - 12, 68, 2);
-    return;
-  }
-  if (design === "modern") {
-    const leftCenter = PAGE_MARGIN + 200;
-    const rightCenter = IMAGE_WIDTH - PAGE_MARGIN - 270;
-    ctx.fillStyle = colors.hairline;
-    ctx.fillRect(PAGE_MARGIN + 410, 116, 1, header.bodyTop - 138);
-    drawLines(ctx, header.openingLines, leftCenter, header.openingY, 390, header.openingLineHeight, header.openingSize, FONT_DISPLAY, 600, "center", colors.secondary);
-    drawLines(ctx, header.statementLines, leftCenter, header.statementY, 390, header.statementLineHeight, header.statementSize, FONT_BODY, 500, "center", colors.muted);
-    drawLines(ctx, header.nameLines, rightCenter, header.nameY, 520, header.nameLineHeight, header.nameSize, FONT_DISPLAY, 700, "center", colors.ink);
-    return;
+    blocks.push({
+      id: "relatives",
+      type: "full",
+      height,
+      draw: (drawCtx, y) => {
+        drawRelativesCard(drawCtx, {
+          x: PAGE_MARGIN_X,
+          y,
+          width: CARD_WIDTH,
+          height,
+          relatives: rels,
+          design,
+        });
+      },
+    });
   }
 
-  const leftCenter = PAGE_MARGIN + 205;
-  const rightCenter = IMAGE_WIDTH - PAGE_MARGIN - 260;
-  ctx.fillStyle = colors.secondary;
-  ctx.fillRect(PAGE_MARGIN + 418, 123, 2, header.bodyTop - 146);
-  drawLines(ctx, header.openingLines, leftCenter, header.openingY, 390, header.openingLineHeight, header.openingSize, FONT_DISPLAY, 600, "center", colors.accent);
-  drawLines(ctx, header.statementLines, leftCenter, header.statementY, 390, header.statementLineHeight, header.statementSize, FONT_BODY, 500, "center", colors.muted);
-  drawLines(ctx, header.nameLines, rightCenter, header.nameY, 520, header.nameLineHeight, header.nameSize, FONT_DISPLAY, 700, "center", colors.ink);
-  ctx.strokeStyle = colors.hairline;
-  ctx.beginPath();
-  ctx.moveTo(PAGE_MARGIN, header.bodyTop - 11);
-  ctx.lineTo(IMAGE_WIDTH - PAGE_MARGIN, header.bodyTop - 11);
-  ctx.stroke();
-}
+  // F. NOTES
+  const hasNotes = Boolean(input.notes && input.notes.trim());
+  if (hasNotes) {
+    ctx.font = font(500, 19, FONT_PLEX);
+    const wrapped = wrapText(ctx, input.notes!.trim(), CARD_WIDTH - 60);
+    const baseOffset = design === "cards" ? 70 : 62;
+    const height = Math.max(105, baseOffset + wrapped.length * 28 + 16);
 
-function drawRoundedRectPath(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  radius: number,
-) {
-  const r = Math.min(radius, width / 2, height / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.lineTo(x + width - r, y);
-  ctx.arcTo(x + width, y, x + width, y + r, r);
-  ctx.lineTo(x + width, y + height - r);
-  ctx.arcTo(x + width, y + height, x + width - r, y + height, r);
-  ctx.lineTo(x + r, y + height);
-  ctx.arcTo(x, y + height, x, y + height - r, r);
-  ctx.lineTo(x, y + r);
-  ctx.arcTo(x, y, x + r, y, r);
-  ctx.closePath();
-}
-
-function drawPanel(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-  design: CondolenceDesignId,
-) {
-  const colors = colorsFor(design);
-  if (design === "official") {
-    ctx.save();
-    ctx.shadowColor = "rgba(56, 37, 42, 0.10)";
-    ctx.shadowBlur = 18;
-    ctx.shadowOffsetY = 5;
-    ctx.fillStyle = colors.card;
-    drawRoundedRectPath(ctx, x, y, width, height, 16);
-    ctx.fill();
-    ctx.restore();
-    ctx.strokeStyle = colors.hairline;
-    ctx.lineWidth = 1;
-    drawRoundedRectPath(ctx, x, y, width, height, 16);
-    ctx.stroke();
-    ctx.fillStyle = colors.accent;
-    ctx.fillRect(x + width - 5, y + 14, 3, Math.max(0, height - 28));
-    return;
-  }
-  if (design === "editorial") {
-    ctx.fillStyle = colors.card;
-    ctx.fillRect(x, y, width, height);
-    ctx.fillStyle = colors.accent;
-    ctx.fillRect(x + width - 3, y, 3, height);
-    ctx.strokeStyle = colors.hairline;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(x, y + height);
-    ctx.lineTo(x + width, y + height);
-    ctx.stroke();
-    return;
-  }
-  ctx.fillStyle = colors.card;
-  ctx.fillRect(x, y, width, height);
-  ctx.fillStyle = colors.accent;
-  ctx.fillRect(x, y, width, 5);
-}
-
-function drawSectionCard(
-  ctx: CanvasRenderingContext2D,
-  block: PreparedSection,
-  x: number,
-  y: number,
-  width: number,
-  frameHeight: number,
-  design: CondolenceDesignId,
-) {
-  const colors = colorsFor(design);
-  const height = Math.max(block.height, frameHeight);
-  drawPanel(ctx, x, y, width, height, design);
-  const scale = block.scale;
-  const paddingX = (design === "official" ? 24 : 20) * scale;
-  let cursor = y + (design === "official" ? 33 : 29) * scale;
-  if (block.label) {
-    const labelColor = design === "modern" ? colors.secondary : colors.accent;
-    fitText(ctx, block.label, x + width - paddingX, cursor, width - paddingX * 2, (design === "official" ? 18 : 16) * scale, FONT_BODY, 700, "right", labelColor);
-    if (design === "editorial") {
-      ctx.fillStyle = colors.secondary;
-      ctx.fillRect(x + 20 * scale, cursor - 7 * scale, 26 * scale, 2 * scale);
-    }
-    cursor += block.labelHeight;
-  } else if (block.tone === "closing" && block.continuation) {
-    fitText(ctx, "متابعة الدعاء", x + width - paddingX, cursor, width - paddingX * 2, 14, FONT_BODY, 600, "right", colors.accent);
-    cursor += block.labelHeight;
+    blocks.push({
+      id: "notes",
+      type: "full",
+      height,
+      draw: (drawCtx, y) => {
+        drawNotesCard(drawCtx, {
+          x: PAGE_MARGIN_X,
+          y,
+          width: CARD_WIDTH,
+          height,
+          lines: wrapped,
+          design,
+        });
+      },
+    });
   }
 
-  const fontSize = block.fontSize;
-  const family = block.tone === "body" ? FONT_BODY : FONT_DISPLAY;
-  const weight = block.tone === "body" ? 500 : 600;
-  const color = block.tone === "closing" ? colors.accent : colors.ink;
-  const contentWidth = width - paddingX * 2 - (block.qrSize ? block.qrSize + 34 * scale : 0);
-  const align = design === "official" && block.tone === "closing" ? "center" : "right";
-  const textX = align === "center" ? x + width / 2 : x + width - paddingX;
-  if (block.qrSize > 0) {
-    const qrX = x + paddingX;
-    const qrY = cursor + (block.label ? 5 * scale : 0);
-    ctx.fillStyle = "#ffffff";
-    drawRoundedRectPath(ctx, qrX - 5 * scale, qrY - 5 * scale, block.qrSize + 10 * scale, block.qrSize + 10 * scale, 7 * scale);
-    ctx.fill();
-    if (block.qr) {
-      ctx.drawImage(block.qr.image, qrX, qrY, block.qrSize, block.qrSize);
+  // G. CLOSING DU'A PRAYER
+  const closingText = input.closing || "رحمه الله وغفر له وأسكنه فسيح جناته.";
+  ctx.font = font(600, 22, design === "official" ? FONT_NASKH : FONT_TAJAWAL);
+  const closingLines = wrapText(ctx, closingText, CARD_WIDTH - 50);
+  const closingHeight = 52 + closingLines.length * 32;
+
+  const closingBlock: CardBlock = {
+    id: "closing",
+    type: "closing",
+    height: closingHeight,
+    draw: (drawCtx, y) => {
+      drawClosingCard(drawCtx, {
+        x: PAGE_MARGIN_X,
+        y,
+        width: CARD_WIDTH,
+        height: closingHeight,
+        lines: closingLines,
+        design,
+      });
+    },
+  };
+
+  // 3. PAGINATION ALGORITHM (Dynamic Height Budgeting)
+  const BOTTOM_PADDING = 65;
+  const BLOCK_GAP = 14;
+  const maxPageHeight = IMAGE_HEIGHT - BOTTOM_PADDING;
+
+  const pages: Array<{
+    pageNumber: number;
+    isContinuation: boolean;
+    headerHeight: number;
+    blocks: CardBlock[];
+  }> = [];
+
+  let currentPageBlocks: CardBlock[] = [];
+  let currentUsedHeight = headerHeight;
+
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    const isLastBlock = i === blocks.length - 1;
+    const spaceNeeded = (currentPageBlocks.length ? BLOCK_GAP : 0) + block.height + (isLastBlock ? BLOCK_GAP + closingBlock.height : 0);
+
+    if (currentUsedHeight + spaceNeeded <= maxPageHeight) {
+      currentPageBlocks.push(block);
+      currentUsedHeight += (currentPageBlocks.length > 1 ? BLOCK_GAP : 0) + block.height;
     } else {
-      fitText(ctx, "تعذر إنشاء QR", qrX + block.qrSize / 2, qrY + block.qrSize / 2, block.qrSize - 10 * scale, 12 * scale, FONT_BODY, 500, "center", colors.muted);
-    }
-    if (block.qrLabel) {
-      fitText(ctx, block.qrLabel, qrX + block.qrSize / 2, qrY + block.qrSize + 22 * scale, block.qrSize + 10 * scale, 13 * scale, FONT_BODY, 600, "center", colors.ink);
-    }
-    if (block.qrUrlLines.length) {
-      ctx.save();
-      ctx.direction = "ltr";
-      drawLines(
-        ctx,
-        block.qrUrlLines,
-        qrX + block.qrSize / 2,
-        qrY + block.qrSize + 36 * scale,
-        block.qrSize + 12 * scale,
-        11 * scale,
-        9 * scale,
-        FONT_BODY,
-        400,
-        "center",
-        colors.muted,
-      );
-      ctx.restore();
+      // Split into Page 2
+      pages.push({
+        pageNumber: pages.length + 1,
+        isContinuation: pages.length > 0,
+        headerHeight,
+        blocks: currentPageBlocks,
+      });
+
+      const continuationHeaderHeight = design === "official" ? 140 : 120;
+      currentPageBlocks = [block];
+      currentUsedHeight = continuationHeaderHeight + block.height;
     }
   }
-  drawLines(
-    ctx,
-    block.lines,
-    textX,
-    cursor + (block.label ? 4 : 0),
-    contentWidth,
-    block.lineHeight,
-    fontSize,
-    family,
-    weight,
-    align,
-    color,
-  );
-}
 
-function drawQrCard(
-  ctx: CanvasRenderingContext2D,
-  block: PreparedQrRow,
-  x: number,
-  y: number,
-  width: number,
-  frameHeight: number,
-  design: CondolenceDesignId,
-) {
-  const colors = colorsFor(design);
-  const height = Math.max(block.height, frameHeight);
-  drawPanel(ctx, x, y, width, height, design);
-  fitText(ctx, "مواقع العزاء والصلاة", x + width - 20, y + 29, width - 40, 15, FONT_BODY, 700, "right", colors.accent);
-
-  const innerWidth = width - 28;
-  const gap = 12;
-  const cellWidth = (innerWidth - gap * (block.columns - 1)) / block.columns;
-  const top = y + 46;
-  block.codes.forEach((code, index) => {
-    const visualIndex = index % block.columns;
-    const rowIndex = Math.floor(index / block.columns);
-    const codeX = x + 14 + (block.columns - 1 - visualIndex) * (cellWidth + gap);
-    const center = codeX + cellWidth / 2;
-    const codeY = top + rowIndex * (block.qrSize + 52);
-    if (code.qr && block.qrSize > 0) {
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(center - block.qrSize / 2 - 4, codeY - 4, block.qrSize + 8, block.qrSize + 8);
-      ctx.drawImage(code.qr.image, center - block.qrSize / 2, codeY, block.qrSize, block.qrSize);
-    }
-    const labelY = codeY + block.qrSize + 21;
-    fitText(ctx, code.label, center, labelY, cellWidth - 8, 15, FONT_BODY, 700, "center", colors.ink);
-    if (!code.qr && code.urlLines.length) {
-      ctx.save();
-      ctx.direction = "ltr";
-      drawLines(ctx, code.urlLines, center, labelY + 16, cellWidth - 12, 12, 9, FONT_BODY, 400, "center", colors.muted);
-      ctx.restore();
-    }
+  // Push closing block on last page
+  currentPageBlocks.push(closingBlock);
+  pages.push({
+    pageNumber: pages.length + 1,
+    isContinuation: pages.length > 0,
+    headerHeight: pages.length > 0 ? (design === "official" ? 140 : 120) : headerHeight,
+    blocks: currentPageBlocks,
   });
-}
 
-function drawPage(
-  canvas: HTMLCanvasElement,
-  page: PageLayout,
-  opening: string,
-  statement: string,
-  names: string,
-  pageIndex: number,
-  pageCount: number,
-  scale: number,
-  design: CondolenceDesignId,
-) {
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("تعذر تجهيز لوحة رسم الصورة");
-  const colors = colorsFor(design);
-  ctx.clearRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
-  ctx.fillStyle = colors.paper;
-  ctx.fillRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
-  setRtl(ctx);
-  drawBrand(ctx, design);
-  if (pageIndex > 0 && names) {
-    fitText(ctx, `متابعة: ${names}`, IMAGE_WIDTH / 2, 101, CONTENT_WIDTH, 14, FONT_BODY, 500, "center", colorsFor(design).muted);
-  }
-  const header = headerLayout(ctx, opening, statement, names, design, scale);
-  drawHeader(ctx, header, design);
+  const totalPages = pages.length;
 
-  const capacity = Math.max(100, CONTENT_BOTTOM - header.bodyTop);
-  let closingRowIndex = -1;
-  if (pageIndex === pageCount - 1) {
-    for (let index = 0; index < page.rows.length; index += 1) {
-      if (page.rows[index].cells.some((cell) => cell.block.kind === "section" && cell.block.id === "closing")) {
-        closingRowIndex = index;
-      }
-    }
-  }
-  const freeSpace = Math.max(0, capacity - page.used);
-  const extraGap = closingRowIndex >= 0 && page.rows.length > 1
-    ? freeSpace / (page.rows.length - 1)
-    : 0;
-  let y = header.bodyTop;
-  for (let rowIndex = 0; rowIndex < page.rows.length; rowIndex += 1) {
-    const row = page.rows[rowIndex];
-    y += row.gap;
-    if (rowIndex > 0 && closingRowIndex >= 0) y += extraGap;
-    if (rowIndex === closingRowIndex && page.rows.length === 1) {
-      y = CONTENT_BOTTOM - row.height;
-    }
-    if (row.label) {
-      const labelHeight = row.labelHeight ?? 0;
-      fitText(
-        ctx,
-        row.label,
-        IMAGE_WIDTH - PAGE_MARGIN,
-        y + Math.min(21 * scale, labelHeight - 4 * scale),
-        CONTENT_WIDTH,
-        17 * scale,
-        FONT_BODY,
-        700,
-        "right",
-        colors.accent,
-      );
-      ctx.fillStyle = colors.secondary;
-      ctx.fillRect(
-        PAGE_MARGIN,
-        y + Math.max(8 * scale, labelHeight - 7 * scale),
-        36 * scale,
-        2 * scale,
-      );
-    }
-    const cardY = y + (row.labelHeight ?? 0);
-    const cardHeight = row.height - (row.labelHeight ?? 0);
-    for (const cell of row.cells) {
-      if (cell.block.kind === "section") {
-        drawSectionCard(ctx, cell.block, cell.x, cardY, cell.width, cardHeight, design);
-      } else {
-        drawQrCard(ctx, cell.block, cell.x, cardY, cell.width, cardHeight, design);
-      }
-    }
-    y += row.height;
-  }
-
-  const footer = pageCount > 1
-    ? `دولة قطر · ${pageIndex + 1} / ${pageCount}`
-    : "دولة قطر";
-  fitText(ctx, footer, IMAGE_WIDTH / 2, 1324, 360, 13, FONT_BODY, 400, "center", colors.muted);
-}
-
-export function renderCondolencePages(options: {
-  designId: CondolenceDesignId;
-  opening: string;
-  statement: string;
-  names: string;
-  items: CondolenceContentItem[];
-  qrImages: Record<string, QrImage>;
-}): HTMLCanvasElement[] {
-  const measureCanvas = document.createElement("canvas");
-  const ctx = measureCanvas.getContext("2d");
-  if (!ctx) throw new Error("تعذر قياس النص");
-  const design = options.designId;
-  const blocks = sourceBlocks(options.items, options.qrImages);
-  const headerScales = [1, 0.97, MIN_READABLE_SCALE];
-  let scale = headerScales[headerScales.length - 1];
-  let rows: LayoutRow[] = [];
-  let header = headerLayout(ctx, options.opening, options.statement, options.names, design, scale);
-  let capacity = CONTENT_BOTTOM - header.bodyTop;
-
-  for (const candidate of headerScales) {
-    const candidateHeader = headerLayout(ctx, options.opening, options.statement, options.names, design, candidate);
-    const candidateRows = planLayout(ctx, blocks, design, candidate);
-    const candidateCapacity = Math.max(100, CONTENT_BOTTOM - candidateHeader.bodyTop);
-    const totalHeight = candidateRows.reduce((sum, row) => sum + row.gap + row.height, 0);
-    scale = candidate;
-    rows = candidateRows;
-    header = candidateHeader;
-    capacity = candidateCapacity;
-    if (totalHeight <= candidateCapacity) break;
-  }
-
-  const pages = paginateRows(rows, Math.max(100, capacity), scale);
-  return pages.map((page, index) => {
+  // 4. DRAW PAGES TO CANVASES
+  return pages.map((page) => {
     const canvas = document.createElement("canvas");
     canvas.width = IMAGE_WIDTH;
     canvas.height = IMAGE_HEIGHT;
-    drawPage(
-      canvas,
-      page,
-      options.opening,
-      options.statement,
-      options.names,
-      index,
-      pages.length,
-      scale,
-      design,
-    );
+    const pageCtx = canvas.getContext("2d")!;
+    setRtl(pageCtx);
+
+    // Background & Outer Framings
+    drawPageBackground(pageCtx, design, page.pageNumber, totalPages);
+
+    // Header (Hero on page 1, Continuation on subsequent pages)
+    let currentY = 0;
+    if (page.isContinuation) {
+      currentY = drawContinuationHeader(pageCtx, {
+        deceasedName: headerDeceased,
+        design,
+        pageNumber: page.pageNumber,
+        totalPages,
+      });
+    } else {
+      currentY = drawHeroHeader(pageCtx, {
+        opening: input.opening,
+        statement: input.statement,
+        nameLines,
+        details: headerDetails,
+        design,
+      });
+    }
+
+    // Render Blocks
+    for (const b of page.blocks) {
+      b.draw(pageCtx, currentY, design);
+      currentY += b.height + BLOCK_GAP;
+    }
+
+    // Footer page count if multi-page
+    if (totalPages > 1) {
+      pageCtx.save();
+      pageCtx.font = font(500, 15, FONT_PLEX);
+      pageCtx.textAlign = "center";
+      pageCtx.fillStyle = design === "official" ? "#9C896B" : "#8A94A0";
+      pageCtx.fillText(`صفحة ${page.pageNumber} من ${totalPages}`, IMAGE_WIDTH / 2, IMAGE_HEIGHT - 26);
+      pageCtx.restore();
+    }
+
     return canvas;
   });
+}
+
+// ==========================================
+// BACKGROUND DRAWING (3 Truly Distinct Styles)
+// ==========================================
+function drawPageBackground(
+  ctx: CanvasRenderingContext2D,
+  design: CondolenceDesignId,
+  pageNumber: number,
+  totalPages: number,
+) {
+  if (design === "official") {
+    // Warm Ivory Parchment
+    const grad = ctx.createLinearGradient(0, 0, 0, IMAGE_HEIGHT);
+    grad.addColorStop(0, "#FCFBF7");
+    grad.addColorStop(1, "#F5EFE3");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
+
+    // Double Elegant Rule Borders
+    ctx.save();
+    // Outer Maroon Rule
+    ctx.strokeStyle = "#671426";
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(36, 36, IMAGE_WIDTH - 72, IMAGE_HEIGHT - 72);
+
+    // Inner Antique Gold Rule
+    ctx.strokeStyle = "#B38E46";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(44, 44, IMAGE_WIDTH - 88, IMAGE_HEIGHT - 88);
+
+    // Corner Geometric Accents
+    const corners = [
+      [40, 40],
+      [IMAGE_WIDTH - 40, 40],
+      [40, IMAGE_HEIGHT - 40],
+      [IMAGE_WIDTH - 40, IMAGE_HEIGHT - 40],
+    ];
+    ctx.fillStyle = "#B38E46";
+    for (const [cx, cy] of corners) {
+      ctx.fillRect(cx - 3, cy - 3, 6, 6);
+    }
+    ctx.restore();
+    return;
+  }
+
+  if (design === "modern") {
+    // Architectural Clean Snow White
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
+
+    // Architectural Minimal Slate Accent (Top-Right)
+    ctx.fillStyle = "#0F172A";
+    ctx.fillRect(IMAGE_WIDTH - 120, 36, 64, 4);
+
+    ctx.save();
+    ctx.font = font(700, 13, FONT_PLEX);
+    ctx.textAlign = "left";
+    ctx.fillStyle = "#64748B";
+    ctx.fillText("إعلان وفاة", 56, 42);
+    ctx.restore();
+    return;
+  }
+
+  // "cards" - Executive Cool Slate Grey
+  ctx.fillStyle = "#EDF2F7";
+  ctx.fillRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
+
+  // Modern subtle top brand indicator
+  ctx.save();
+  ctx.font = font(700, 13, FONT_PLEX);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#475569";
+  ctx.fillText("دولة قطر · إعلان وفاة", IMAGE_WIDTH / 2, 36);
+  ctx.restore();
+}
+
+// ==========================================
+// HERO HEADERS (3 Truly Distinct Styles)
+// ==========================================
+function drawHeroHeader(
+  ctx: CanvasRenderingContext2D,
+  data: {
+    opening: string;
+    statement: string;
+    nameLines: string[];
+    details: string[];
+    design: CondolenceDesignId;
+  },
+): number {
+  const { opening, statement, nameLines, details, design } = data;
+  setRtl(ctx);
+
+  if (design === "official") {
+    // Classical Cartouche Header
+    let y = 82;
+
+    // "إنا لله وإنا إليه راجعون"
+    ctx.save();
+    ctx.font = font(700, 26, FONT_NASKH);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#671426";
+    ctx.fillText(opening, IMAGE_WIDTH / 2, y);
+
+    // Decorative Gold divider
+    y += 18;
+    ctx.strokeStyle = "#B38E46";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(IMAGE_WIDTH / 2 - 120, y);
+    ctx.lineTo(IMAGE_WIDTH / 2 + 120, y);
+    ctx.stroke();
+
+    ctx.fillStyle = "#B38E46";
+    ctx.fillRect(IMAGE_WIDTH / 2 - 4, y - 4, 8, 8);
+    ctx.restore();
+
+    // Death statement
+    y += 38;
+    ctx.save();
+    ctx.font = font(500, 21, FONT_PLEX);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#4A4644";
+    ctx.fillText(statement, IMAGE_WIDTH / 2, y);
+    ctx.restore();
+
+    // Deceased Name(s) with Title inline
+    y += 48;
+    ctx.save();
+    ctx.font = font(700, 44, FONT_NASKH);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#671426";
+    for (const line of nameLines) {
+      ctx.fillText(line, IMAGE_WIDTH / 2, y);
+      y += 56;
+    }
+    ctx.restore();
+
+    // Details inline
+    if (details.length) {
+      y -= 6;
+      ctx.save();
+      ctx.font = font(500, 18, FONT_PLEX);
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#6E6963";
+      ctx.fillText(details.join("   ◆   "), IMAGE_WIDTH / 2, y);
+      y += 32;
+      ctx.restore();
+    } else {
+      y += 10;
+    }
+
+    return y;
+  }
+
+  if (design === "modern") {
+    // Sharp Architectural Minimal Header
+    let y = 88;
+
+    // Opening
+    ctx.save();
+    ctx.font = font(700, 24, FONT_TAJAWAL);
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#0F172A";
+    ctx.fillText(opening, IMAGE_WIDTH - 56, y);
+    ctx.restore();
+
+    // Statement
+    y += 34;
+    ctx.save();
+    ctx.font = font(500, 20, FONT_PLEX);
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#4B5563";
+    ctx.fillText(statement, IMAGE_WIDTH - 56, y);
+    ctx.restore();
+
+    // Name(s)
+    y += 48;
+    ctx.save();
+    ctx.font = font(800, 42, FONT_TAJAWAL);
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#0F172A";
+    for (const line of nameLines) {
+      ctx.fillText(line, IMAGE_WIDTH - 56, y);
+      y += 50;
+    }
+    ctx.restore();
+
+    // Details chips
+    if (details.length) {
+      ctx.save();
+      ctx.font = font(500, 17, FONT_PLEX);
+      ctx.textAlign = "right";
+      ctx.fillStyle = "#4B5563";
+      ctx.fillText(details.join("   ·   "), IMAGE_WIDTH - 56, y);
+      y += 34;
+      ctx.restore();
+    } else {
+      y += 12;
+    }
+
+    return y;
+  }
+
+  // "cards" - Premium Info-Cards Header
+  const cardX = 56;
+  const cardW = IMAGE_WIDTH - 112;
+  const cardH = 175 + (nameLines.length - 1) * 52 + (details.length ? 36 : 0);
+  const startY = 56;
+
+  // Header Floating White Card
+  ctx.save();
+  ctx.shadowColor = "rgba(15, 23, 42, 0.08)";
+  ctx.shadowBlur = 14;
+  ctx.shadowOffsetY = 4;
+  ctx.fillStyle = "#FFFFFF";
+  roundRect(ctx, cardX, startY, cardW, cardH, 18);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.strokeStyle = "#E2E8F0";
+  ctx.lineWidth = 1;
+  roundRect(ctx, cardX, startY, cardW, cardH, 18);
+  ctx.stroke();
+
+  // Top Dark Ribbon inside card
+  ctx.save();
+  ctx.fillStyle = "#0F172A";
+  ctx.beginPath();
+  ctx.moveTo(cardX + 18, startY);
+  ctx.lineTo(cardX + cardW - 18, startY);
+  ctx.arcTo(cardX + cardW, startY, cardX + cardW, startY + 18, 18);
+  ctx.lineTo(cardX + cardW, startY + 44);
+  ctx.lineTo(cardX, startY + 44);
+  ctx.lineTo(cardX, startY + 18);
+  ctx.arcTo(cardX, startY, cardX + 18, startY, 18);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.font = font(700, 18, FONT_PLEX);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#F8FAFC";
+  ctx.fillText(opening, IMAGE_WIDTH / 2, startY + 29);
+  ctx.restore();
+
+  let textY = startY + 84;
+  ctx.save();
+  ctx.font = font(500, 19, FONT_PLEX);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#475569";
+  ctx.fillText(statement, IMAGE_WIDTH / 2, textY);
+
+  textY += 46;
+  ctx.font = font(800, 40, FONT_PLEX);
+  ctx.fillStyle = "#0F172A";
+  for (const line of nameLines) {
+    ctx.fillText(line, IMAGE_WIDTH / 2, textY);
+    textY += 50;
+  }
+
+  if (details.length) {
+    textY -= 4;
+    ctx.font = font(500, 17, FONT_PLEX);
+    ctx.fillStyle = "#475569";
+    ctx.fillText(details.join("   ·   "), IMAGE_WIDTH / 2, textY);
+  }
+  ctx.restore();
+
+  return startY + cardH + 16;
+}
+
+// Continuation Header on Page 2
+function drawContinuationHeader(
+  ctx: CanvasRenderingContext2D,
+  data: {
+    deceasedName: string;
+    design: CondolenceDesignId;
+    pageNumber: number;
+    totalPages: number;
+  },
+): number {
+  const { deceasedName, design, pageNumber, totalPages } = data;
+  setRtl(ctx);
+
+  if (design === "official") {
+    let y = 84;
+    ctx.save();
+    ctx.font = font(700, 22, FONT_NASKH);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#671426";
+    ctx.fillText(`إعلان وفاة · ${deceasedName}`, IMAGE_WIDTH / 2, y);
+
+    y += 14;
+    ctx.strokeStyle = "#B38E46";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(IMAGE_WIDTH / 2 - 90, y);
+    ctx.lineTo(IMAGE_WIDTH / 2 + 90, y);
+    ctx.stroke();
+
+    y += 28;
+    ctx.font = font(500, 16, FONT_PLEX);
+    ctx.fillStyle = "#7A726A";
+    ctx.fillText(`متابعة البيانات (صفحة ${pageNumber} من ${totalPages})`, IMAGE_WIDTH / 2, y);
+    ctx.restore();
+    return y + 26;
+  }
+
+  if (design === "modern") {
+    let y = 78;
+    ctx.save();
+    ctx.font = font(800, 24, FONT_TAJAWAL);
+    ctx.textAlign = "right";
+    ctx.fillStyle = "#0F172A";
+    ctx.fillText(`تابع إعلان وفاة: ${deceasedName}`, IMAGE_WIDTH - 56, y);
+
+    y += 26;
+    ctx.font = font(500, 16, FONT_PLEX);
+    ctx.fillStyle = "#6B7280";
+    ctx.fillText(`صفحة ${pageNumber} من ${totalPages}`, IMAGE_WIDTH - 56, y);
+    ctx.restore();
+    return y + 24;
+  }
+
+  // Cards continuation
+  const startY = 54;
+  const cardX = 56;
+  const cardW = IMAGE_WIDTH - 112;
+  const cardH = 74;
+
+  ctx.save();
+  ctx.fillStyle = "#FFFFFF";
+  roundRect(ctx, cardX, startY, cardW, cardH, 14);
+  ctx.fill();
+  ctx.strokeStyle = "#E2E8F0";
+  ctx.lineWidth = 1;
+  roundRect(ctx, cardX, startY, cardW, cardH, 14);
+  ctx.stroke();
+
+  ctx.font = font(700, 20, FONT_PLEX);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#0F172A";
+  ctx.fillText(`تابع إعلان وفاة: ${deceasedName}`, IMAGE_WIDTH / 2, startY + 44);
+  ctx.restore();
+
+  return startY + cardH + 16;
+}
+
+// ==========================================
+// CARD RENDERERS (Full, Half, Relatives, Phone)
+// ==========================================
+function drawFullCard(
+  ctx: CanvasRenderingContext2D,
+  params: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    title: string;
+    accentColor: string;
+    rows: string[];
+    qr?: QrImage;
+    qrLabel?: string;
+    design: CondolenceDesignId;
+  },
+) {
+  const { x, y, width, height, title, accentColor, rows, qr, qrLabel, design } = params;
+  setRtl(ctx);
+
+  // Background Panel
+  drawCardSurface(ctx, x, y, width, height, title, accentColor, design);
+
+  // Content Area
+  const paddingX = design === "official" ? 28 : 24;
+  const qrSize = qr ? 120 : 0;
+  const qrTotalWidth = qr ? qrSize + 36 : 0;
+  const textMaxWidth = width - paddingX * 2 - qrTotalWidth;
+
+  const contentStartY = design === "cards" ? y + 72 : y + 64;
+
+  // Draw Text Rows
+  ctx.save();
+  ctx.font = font(500, 20, FONT_PLEX);
+  ctx.fillStyle = design === "official" ? "#2B2625" : "#1F2937";
+
+  let textY = contentStartY;
+  for (const row of rows) {
+    const wrapped = wrapText(ctx, row, textMaxWidth);
+    for (const line of wrapped) {
+      ctx.fillText(line, x + width - paddingX, textY);
+      textY += 30;
+    }
+  }
+  ctx.restore();
+
+  // Draw Real QR Code on Left Side
+  if (qr) {
+    const qrX = x + paddingX;
+    const qrY = y + (height - qrSize - (qrLabel ? 26 : 0)) / 2 + 4;
+    drawQrBox(ctx, qr, qrLabel, qrX, qrY, qrSize, design);
+  }
+}
+
+function drawHalfCard(
+  ctx: CanvasRenderingContext2D,
+  params: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    title: string;
+    accentColor: string;
+    rows: string[];
+    qr?: QrImage;
+    qrLabel?: string;
+    design: CondolenceDesignId;
+  },
+) {
+  const { x, y, width, height, title, accentColor, rows, qr, qrLabel, design } = params;
+  setRtl(ctx);
+
+  // Background Panel
+  drawCardSurface(ctx, x, y, width, height, title, accentColor, design);
+
+  const paddingX = 20;
+  const qrSize = qr ? 104 : 0;
+  const qrTotalWidth = qr ? qrSize + 22 : 0;
+  const textMaxWidth = width - paddingX * 2 - qrTotalWidth;
+
+  const contentStartY = design === "cards" ? y + 70 : y + 62;
+
+  ctx.save();
+  ctx.font = font(500, 19, FONT_PLEX);
+  ctx.fillStyle = design === "official" ? "#2B2625" : "#1F2937";
+
+  let textY = contentStartY;
+  for (const row of rows) {
+    const wrapped = wrapText(ctx, row, textMaxWidth);
+    for (const line of wrapped) {
+      ctx.fillText(line, x + width - paddingX, textY);
+      textY += 28;
+    }
+  }
+  ctx.restore();
+
+  // Draw Real QR Code on Left Side
+  if (qr) {
+    const qrX = x + paddingX;
+    const qrY = y + (height - qrSize - (qrLabel ? 24 : 0)) / 2 + 4;
+    drawQrBox(ctx, qr, qrLabel, qrX, qrY, qrSize, design);
+  }
+}
+
+function drawRelativesCard(
+  ctx: CanvasRenderingContext2D,
+  params: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    relatives: Array<{ heading: string; members: string[] }>;
+    design: CondolenceDesignId;
+  },
+) {
+  const { x, y, width, height, relatives, design } = params;
+  setRtl(ctx);
+
+  const accentColor = design === "official" ? "#671426" : design === "modern" ? "#0F766E" : "#334155";
+  drawCardSurface(ctx, x, y, width, height, "الأقارب وصلات القرابة", accentColor, design);
+
+  const paddingX = design === "official" ? 28 : 24;
+  let textY = design === "cards" ? y + 72 : y + 62;
+
+  ctx.save();
+  for (const group of relatives) {
+    // Bold Relation Label
+    ctx.font = font(700, 19, FONT_PLEX);
+    ctx.fillStyle = accentColor;
+    const label = `${group.heading}: `;
+    const labelWidth = ctx.measureText(label).width;
+    ctx.fillText(label, x + width - paddingX, textY);
+
+    // Members
+    ctx.font = font(500, 19, FONT_PLEX);
+    ctx.fillStyle = design === "official" ? "#2B2625" : "#1F2937";
+    const membersText = group.members.join("، ");
+    const availableWidth = width - paddingX * 2 - labelWidth - 6;
+
+    const wrapped = wrapText(ctx, membersText, availableWidth);
+    if (wrapped.length > 0) {
+      ctx.fillText(wrapped[0], x + width - paddingX - labelWidth, textY);
+      for (let k = 1; k < wrapped.length; k++) {
+        textY += 28;
+        ctx.fillText(wrapped[k], x + width - paddingX, textY);
+      }
+    }
+    textY += 32;
+  }
+  ctx.restore();
+}
+
+function drawPhoneCard(
+  ctx: CanvasRenderingContext2D,
+  params: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    contacts: Array<{ name: string; phone: string }>;
+    design: CondolenceDesignId;
+  },
+) {
+  const { x, y, width, height, contacts, design } = params;
+  setRtl(ctx);
+
+  const accentColor = design === "official" ? "#671426" : design === "modern" ? "#1F2937" : "#475569";
+  drawCardSurface(ctx, x, y, width, height, "التعزية عبر الهاتف", accentColor, design);
+
+  const paddingX = design === "official" ? 28 : 24;
+  let textY = design === "cards" ? y + 72 : y + 64;
+  const colWidth = (width - paddingX * 2 - 20) / 2;
+
+  ctx.save();
+  ctx.font = font(500, 18, FONT_PLEX);
+  ctx.fillStyle = design === "official" ? "#2B2625" : "#1F2937";
+
+  for (let i = 0; i < contacts.length; i += 2) {
+    const c1 = contacts[i];
+    const c2 = contacts[i + 1];
+
+    if (c1) {
+      const line = `${c1.name ? `${c1.name}: ` : ""}${c1.phone}`;
+      ctx.fillText(line, x + width - paddingX, textY);
+    }
+    if (c2) {
+      const line = `${c2.name ? `${c2.name}: ` : ""}${c2.phone}`;
+      ctx.fillText(line, x + width - paddingX - colWidth - 20, textY);
+    }
+    textY += 32;
+  }
+  ctx.restore();
+}
+
+function drawNotesCard(
+  ctx: CanvasRenderingContext2D,
+  params: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    lines: string[];
+    design: CondolenceDesignId;
+  },
+) {
+  const { x, y, width, height, lines, design } = params;
+  setRtl(ctx);
+
+  const accentColor = design === "official" ? "#671426" : design === "modern" ? "#4B5563" : "#64748B";
+  drawCardSurface(ctx, x, y, width, height, "ملاحظات", accentColor, design);
+
+  const paddingX = design === "official" ? 28 : 24;
+  let textY = design === "cards" ? y + 70 : y + 62;
+
+  ctx.save();
+  ctx.font = font(500, 19, FONT_PLEX);
+  ctx.fillStyle = design === "official" ? "#2B2625" : "#1F2937";
+  for (const line of lines) {
+    ctx.fillText(line, x + width - paddingX, textY);
+    textY += 28;
+  }
+  ctx.restore();
+}
+
+function drawClosingCard(
+  ctx: CanvasRenderingContext2D,
+  params: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    lines: string[];
+    design: CondolenceDesignId;
+  },
+) {
+  const { x, y, width, height, lines, design } = params;
+  setRtl(ctx);
+
+  if (design === "official") {
+    ctx.save();
+    ctx.fillStyle = "#FFFFFF";
+    roundRect(ctx, x, y, width, height, 14);
+    ctx.fill();
+    ctx.strokeStyle = "#DFD5C2";
+    ctx.lineWidth = 1;
+    roundRect(ctx, x, y, width, height, 14);
+    ctx.stroke();
+
+    ctx.font = font(600, 22, FONT_NASKH);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#671426";
+    let textY = y + 36;
+    for (const line of lines) {
+      ctx.fillText(line, x + width / 2, textY);
+      textY += 34;
+    }
+    ctx.restore();
+    return;
+  }
+
+  if (design === "modern") {
+    ctx.save();
+    ctx.fillStyle = "#FFFFFF";
+    roundRect(ctx, x, y, width, height, 10);
+    ctx.fill();
+    ctx.strokeStyle = "#E5E7EB";
+    ctx.lineWidth = 1;
+    roundRect(ctx, x, y, width, height, 10);
+    ctx.stroke();
+
+    ctx.font = font(700, 21, FONT_TAJAWAL);
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#0F172A";
+    let textY = y + 34;
+    for (const line of lines) {
+      ctx.fillText(line, x + width / 2, textY);
+      textY += 32;
+    }
+    ctx.restore();
+    return;
+  }
+
+  // Cards
+  ctx.save();
+  ctx.fillStyle = "#FFFFFF";
+  roundRect(ctx, x, y, width, height, 16);
+  ctx.fill();
+  ctx.strokeStyle = "#E2E8F0";
+  ctx.lineWidth = 1;
+  roundRect(ctx, x, y, width, height, 16);
+  ctx.stroke();
+
+  ctx.font = font(700, 21, FONT_PLEX);
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#0F172A";
+  let textY = y + 36;
+  for (const line of lines) {
+    ctx.fillText(line, x + width / 2, textY);
+    textY += 32;
+  }
+  ctx.restore();
+}
+
+// Draw the container and header ribbon for a card
+function drawCardSurface(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  title: string,
+  accentColor: string,
+  design: CondolenceDesignId,
+) {
+  if (design === "official") {
+    // Luxury White Card with Gold top-accent
+    ctx.save();
+    ctx.shadowColor = "rgba(40, 30, 20, 0.05)";
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = "#FFFFFF";
+    roundRect(ctx, x, y, width, height, 14);
+    ctx.fill();
+    ctx.restore();
+
+    ctx.strokeStyle = "#E2D9C8";
+    ctx.lineWidth = 1.2;
+    roundRect(ctx, x, y, width, height, 14);
+    ctx.stroke();
+
+    // Top Gold Accent Line
+    ctx.fillStyle = "#B38E46";
+    ctx.fillRect(x + 24, y, width - 48, 3.5);
+
+    // Title
+    ctx.save();
+    ctx.font = font(700, 21, FONT_NASKH);
+    ctx.fillStyle = accentColor || "#671426";
+    ctx.fillText(`◆  ${title}`, x + width - 24, y + 36);
+    ctx.restore();
+    return;
+  }
+
+  if (design === "modern") {
+    // Sharp Flat White Card with crisp 1px border
+    ctx.fillStyle = "#FFFFFF";
+    roundRect(ctx, x, y, width, height, 10);
+    ctx.fill();
+
+    ctx.strokeStyle = "#E5E7EB";
+    ctx.lineWidth = 1;
+    roundRect(ctx, x, y, width, height, 10);
+    ctx.stroke();
+
+    // Small Clean Title
+    ctx.save();
+    ctx.font = font(800, 20, FONT_TAJAWAL);
+    ctx.fillStyle = accentColor;
+    ctx.fillText(title, x + width - 22, y + 36);
+
+    // Thin divider line under title
+    ctx.strokeStyle = "#F1F5F9";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x + 20, y + 46);
+    ctx.lineTo(x + width - 20, y + 46);
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+
+  // "cards" - Premium Info-Cards with top colored header ribbon
+  ctx.save();
+  ctx.shadowColor = "rgba(15, 23, 42, 0.06)";
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 3;
+  ctx.fillStyle = "#FFFFFF";
+  roundRect(ctx, x, y, width, height, 16);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.strokeStyle = "#E2E8F0";
+  ctx.lineWidth = 1;
+  roundRect(ctx, x, y, width, height, 16);
+  ctx.stroke();
+
+  // Top Colored Ribbon
+  const ribbonH = 42;
+  ctx.save();
+  ctx.fillStyle = accentColor;
+  ctx.beginPath();
+  ctx.moveTo(x + 16, y);
+  ctx.lineTo(x + width - 16, y);
+  ctx.arcTo(x + width, y, x + width, y + 16, 16);
+  ctx.lineTo(x + width, y + ribbonH);
+  ctx.lineTo(x, y + ribbonH);
+  ctx.lineTo(x, y + 16);
+  ctx.arcTo(x, y, x + 16, y, 16);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.font = font(700, 18, FONT_PLEX);
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillText(title, x + width - 20, y + 27);
+  ctx.restore();
+}
+
+// Draw a Real, High-Contrast Scannable QR Box
+function drawQrBox(
+  ctx: CanvasRenderingContext2D,
+  qr: QrImage,
+  qrLabel: string | undefined,
+  x: number,
+  y: number,
+  size: number,
+  design: CondolenceDesignId,
+) {
+  const quietZone = 8;
+  const boxW = size + quietZone * 2;
+  const boxH = size + quietZone * 2 + (qrLabel ? 26 : 0);
+
+  ctx.save();
+  // White high-contrast background with crisp quiet zone
+  ctx.fillStyle = "#FFFFFF";
+  roundRect(ctx, x, y, boxW, boxH, 8);
+  ctx.fill();
+
+  // Subtle border matching design
+  ctx.strokeStyle = design === "official" ? "#C5A869" : design === "modern" ? "#E5E7EB" : "#CBD5E1";
+  ctx.lineWidth = 1.2;
+  roundRect(ctx, x, y, boxW, boxH, 8);
+  ctx.stroke();
+
+  // Draw the real QR Code Image (Black on White)
+  ctx.drawImage(qr.image, x + quietZone, y + quietZone, size, size);
+
+  // Label below QR
+  if (qrLabel) {
+    ctx.font = font(700, 13, design === "official" ? FONT_NASKH : FONT_PLEX);
+    ctx.textAlign = "center";
+    ctx.fillStyle = design === "official" ? "#671426" : design === "modern" ? "#1F2937" : "#1E293B";
+    ctx.fillText(qrLabel, x + boxW / 2, y + boxH - 8);
+  }
+  ctx.restore();
 }

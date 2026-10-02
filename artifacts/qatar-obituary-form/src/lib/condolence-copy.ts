@@ -89,7 +89,7 @@ export function formatDeceasedIdentity(title: string | undefined, fullName: stri
   if (/^(?:حرم|زوجة)(?:\s|\/|$)/u.test(cleanTitle)) {
     return `${cleanTitle}، ${cleanName}`;
   }
-  return `${cleanTitle} ${cleanName}`;
+  return `${cleanTitle} / ${cleanName}`;
 }
 
 export function makeDeathStatement(people: DeceasedForWording[]): string {
@@ -137,15 +137,15 @@ export function formatRelativePerson(
   person: RelativeForWording,
   relation: string,
 ): string {
-  const details = [
-    clean(person.name),
-    person.occupation && `العمل: ${clean(person.occupation)}`,
-  ].filter(Boolean);
+  const parts: string[] = [clean(person.name)];
   if (person.deceased) {
     const gender = inferRelativeGender(relation);
-    details.push(gender === "feminine" ? "رحمها الله تعالى" : "رحمه الله تعالى");
+    parts.push(gender === "feminine" ? "(رحمها الله تعالى)" : "(رحمه الله تعالى)");
   }
-  return details.join(" — ");
+  if (person.occupation && clean(person.occupation)) {
+    parts.push(`- ${clean(person.occupation)}`);
+  }
+  return parts.filter(Boolean).join(" ");
 }
 
 export function formatRelativeGroups(request: ObituaryRequest): string {
@@ -172,17 +172,17 @@ export function formatRelativeGroups(request: ObituaryRequest): string {
     .join("\n\n");
 }
 
-function detailsForPerson(person: ObituaryRequest["deceasedPeople"][number]): string {
-  return [
-    person.age != null ? `العمر: ${person.age}` : "",
-    person.nationality && `الجنسية: ${clean(person.nationality)}`,
-    person.deathPlace && `مكان الوفاة: ${clean(person.deathPlace)}`,
-    person.occupation && `الجهة / الصفة: ${clean(person.occupation)}`,
-    person.note && `ملاحظة: ${clean(person.note)}`,
-  ].filter(Boolean).join("\n");
+function detailsForPerson(person: ObituaryRequest["deceasedPeople"][number]): string[] {
+  const list: string[] = [];
+  if (person.age != null) list.push(`العمر: ${person.age} سنة`);
+  if (person.nationality && clean(person.nationality)) list.push(`الجنسية: ${clean(person.nationality)}`);
+  if (person.deathPlace && clean(person.deathPlace)) list.push(`مكان الوفاة: ${clean(person.deathPlace)}`);
+  if (person.occupation && clean(person.occupation)) list.push(`الجهة: ${clean(person.occupation)}`);
+  if (person.note && clean(person.note)) list.push(clean(person.note));
+  return list;
 }
 
-function formatDuration(value: string): string {
+export function formatDuration(value: string): string {
   const days = Number(value);
   if (!Number.isFinite(days) || days <= 0) return clean(value);
   if (days === 1) return "يوم واحد";
@@ -191,34 +191,29 @@ function formatDuration(value: string): string {
   return `${days} يومًا`;
 }
 
-function cardText(card: EditableCard | undefined): string {
-  if (!card) return "";
-  return [
-    card.start.trim() && `بداية العزاء: ${card.start.trim()}`,
-    card.durationDays.trim() && `المدة: ${formatDuration(card.durationDays.trim())}`,
-    card.time.trim() && `الفترة: ${card.time.trim()}`,
-    card.location.trim() && `المجلس: ${card.location.trim()}`,
-    card.address.trim(),
-  ].filter(Boolean).join("\n");
-}
-
 export function createCondolenceImageDraft(request: ObituaryRequest): ImageDraft {
-  const men = request.condolences.find((card) => card.audience === "men");
-  const women = request.condolences.find((card) => card.audience === "women");
+  const men = request.condolences?.find((card) => card.audience === "men");
+  const women = request.condolences?.find((card) => card.audience === "women");
   const people = request.deceasedPeople || [];
-  const prayerText = [
-    request.prayer?.day && `اليوم: ${request.prayer.day}`,
-    request.prayer?.time && `الوقت: ${request.prayer.time}`,
-    request.prayer?.place && `المسجد / مكان الصلاة: ${request.prayer.place}`,
-  ].filter(Boolean).join("\n");
-  const burialText = [
-    request.burial?.status && `حالة الدفن: ${request.burial.status === "completed" ? "تم الدفن" : "سيتم الدفن"}`,
-    request.burial?.day && `اليوم / التاريخ: ${request.burial.day}`,
-    request.burial?.time && `الوقت: ${request.burial.time}`,
-    request.burial?.outsideQatar
-      ? request.burial.outsideLocation && `مكان الدفن خارج قطر: ${request.burial.outsideLocation}`
-      : request.burial?.cemetery && `المقبرة: ${request.burial.cemetery}`,
-  ].filter(Boolean).join("\n");
+
+  const prayerLines: string[] = [];
+  if (request.prayer?.day) prayerLines.push(`اليوم: ${request.prayer.day}`);
+  if (request.prayer?.time) prayerLines.push(`الوقت: ${request.prayer.time}`);
+  if (request.prayer?.place) prayerLines.push(`المسجد: ${request.prayer.place}`);
+  const prayerText = prayerLines.join("\n");
+
+  const burialLines: string[] = [];
+  if (request.burial?.status) {
+    burialLines.push(request.burial.status === "completed" ? "تم الدفن" : "سيتم الدفن");
+  }
+  if (request.burial?.day) burialLines.push(`اليوم: ${request.burial.day}`);
+  if (request.burial?.time) burialLines.push(`الوقت: ${request.burial.time}`);
+  if (request.burial?.outsideQatar) {
+    if (request.burial.outsideLocation) burialLines.push(`المكان: ${request.burial.outsideLocation} (خارج قطر)`);
+  } else if (request.burial?.cemetery) {
+    burialLines.push(`المقبرة: ${request.burial.cemetery}`);
+  }
+  const burialText = burialLines.join("\n");
 
   const cardToDraft = (card: ObituaryRequest["condolences"][number] | undefined): EditableCard | undefined => {
     if (!card) return undefined;
@@ -231,9 +226,9 @@ export function createCondolenceImageDraft(request: ObituaryRequest): ImageDraft
         card.area && `المنطقة: ${card.area}`,
         card.street && `الشارع: ${card.street}`,
         card.houseNumber && `رقم المنزل: ${card.houseNumber}`,
-        card.buildingNumber && `رقم المبنى: ${card.buildingNumber}`,
+        card.buildingNumber && `المبنى: ${card.buildingNumber}`,
         card.floor && `الطابق: ${card.floor}`,
-        card.apartmentNumber && `رقم الشقة: ${card.apartmentNumber}`,
+        card.apartmentNumber && `الشقة: ${card.apartmentNumber}`,
         card.locationNotes,
       ].filter(Boolean).join("، "),
       mapLink: card.mapLink || "",
@@ -259,95 +254,201 @@ export function createCondolenceImageDraft(request: ObituaryRequest): ImageDraft
   };
 }
 
+export type CondolencePosterStructured = {
+  opening: string;
+  statement: string;
+  names: string;
+  deceasedPeople: Array<{
+    fullName: string;
+    title?: string;
+    identity: string;
+    details: string[];
+  }>;
+  prayer: {
+    day?: string;
+    time?: string;
+    place?: string;
+    text: string;
+    qrKey?: string;
+    qrLabel?: string;
+    qrUrl?: string;
+  } | null;
+  burial: {
+    statusText: string;
+    day?: string;
+    time?: string;
+    cemetery?: string;
+    text: string;
+    qrKey?: string;
+    qrLabel?: string;
+    qrUrl?: string;
+  } | null;
+  menCondolence: {
+    start?: string;
+    duration?: string;
+    time?: string;
+    location?: string;
+    address?: string;
+    qrKey?: string;
+    qrLabel?: string;
+    qrUrl?: string;
+  } | null;
+  womenCondolence: {
+    start?: string;
+    duration?: string;
+    time?: string;
+    location?: string;
+    address?: string;
+    qrKey?: string;
+    qrLabel?: string;
+    qrUrl?: string;
+  } | null;
+  phoneContacts: Array<{ name: string; phone: string }>;
+  relatives: Array<{
+    heading: string;
+    members: string[];
+  }>;
+  notes: string | null;
+  closing: string;
+  items: CondolenceContentItem[];
+};
+
 export function buildCondolencePosterContent(
   request: ObituaryRequest,
   draft: ImageDraft,
   qrUrls: Record<string, string>,
-): {
-  opening: string;
-  statement: string;
-  names: string;
-  items: CondolenceContentItem[];
-} {
+): CondolencePosterStructured {
   const people = request.deceasedPeople || [];
-  const identities = people.map((person, index) => formatDeceasedIdentity(
-    draft.deceasedTitles[index] ?? person.title,
-    draft.deceasedNames[index] ?? person.fullName,
-  ));
-  const items: CondolenceContentItem[] = [];
-  const section = (
-    id: string,
-    text: string,
-    label?: string,
-    tone: "body" | "identity" | "closing" = "body",
-    qr?: { key: string; label: string; url: string },
-  ) => {
-    if (text.trim() || qr?.url.trim()) items.push({ kind: "section", id, text, label, tone, qr });
-  };
+  const deceasedData = people.map((person, index) => {
+    const title = draft.deceasedTitles[index] ?? person.title;
+    const name = draft.deceasedNames[index] ?? person.fullName;
+    const identity = formatDeceasedIdentity(title, name);
+    const details = detailsForPerson(person);
+    return {
+      fullName: name,
+      title: title || undefined,
+      identity,
+      details,
+    };
+  });
+
+  const identities = deceasedData.map((d) => d.identity).filter(Boolean);
+
   const qrFor = (key: string, label: string) => {
     const url = qrUrls[key]?.trim();
     return url ? { key, label, url } : undefined;
   };
 
-  const deceasedDetails = people.map((person, index) => {
-    const details = detailsForPerson(person);
-    const identity = identities[index];
-    return [
-      identity,
-      details,
-    ].filter(Boolean).join("\n");
-  }).filter(Boolean).join("\n\n");
-  section(
-    "deceased-details",
-    deceasedDetails,
-    people.length > 1 ? "بيانات المتوفين" : "بيانات المتوفى",
-    "identity",
-  );
-
-  if (draft.prayerText.trim() || qrUrls.prayer?.trim()) {
-    section("prayer", draft.prayerText, "صلاة الجنازة", "body", qrFor("prayer", "موقع الصلاة"));
-  }
-  if (draft.burialText.trim() || qrUrls.burial?.trim()) {
-    section("burial", draft.burialText, "الدفن", "body", qrFor("burial", "موقع الدفن"));
+  // Prayer
+  let prayer: CondolencePosterStructured["prayer"] = null;
+  if (draft.prayerText.trim() || qrUrls.prayer?.trim() || request.prayer?.enabled) {
+    const qrInfo = qrFor("prayer", "مسح موقع الصلاة");
+    prayer = {
+      day: request.prayer?.day,
+      time: request.prayer?.time,
+      place: request.prayer?.place,
+      text: draft.prayerText.trim(),
+      qrKey: qrInfo?.key,
+      qrLabel: qrInfo?.label,
+      qrUrl: qrInfo?.url,
+    };
   }
 
-  const menText = cardText(draft.men);
-  const womenText = cardText(draft.women);
-  section("men", menText, "عزاء الرجال", "body", qrFor("men", "موقع الرجال"));
-  section("women", womenText, "عزاء النساء", "body", qrFor("women", "موقع النساء"));
+  // Burial
+  let burial: CondolencePosterStructured["burial"] = null;
+  if (draft.burialText.trim() || qrUrls.burial?.trim() || request.burial) {
+    const qrInfo = qrFor("burial", "مسح موقع الدفن");
+    const statusText = request.burial?.status === "completed" ? "تم الدفن" : "سيتم الدفن";
+    const cemetery = request.burial?.outsideQatar
+      ? `${request.burial.outsideLocation || ""} (خارج قطر)`
+      : request.burial?.cemetery;
+    burial = {
+      statusText,
+      day: request.burial?.day,
+      time: request.burial?.time,
+      cemetery,
+      text: draft.burialText.trim(),
+      qrKey: qrInfo?.key,
+      qrLabel: qrInfo?.label,
+      qrUrl: qrInfo?.url,
+    };
+  }
 
-  const relativeGroups = (request.relatives || []).filter((group) =>
-    clean(group.relation)
-    || clean(group.familyReference)
-    || group.people.some((person) => clean(person.name) || clean(person.occupation)),
-  );
-  if (relativeGroups.length) {
-    const familyText = relativeGroups.map((group) => {
-      const peopleText = group.people
-        .map((person) => formatRelativePerson(person, group.relation))
-        .filter(Boolean)
-        .map((person) => `• ${person}`)
-        .join("\n");
+  // Men
+  let menCondolence: CondolencePosterStructured["menCondolence"] = null;
+  if (draft.men && (draft.men.location || draft.men.time || draft.men.start || draft.men.address || qrUrls.men?.trim())) {
+    const qrInfo = qrFor("men", "موقع مجلس الرجال");
+    menCondolence = {
+      start: draft.men.start.trim() || undefined,
+      duration: draft.men.durationDays.trim() ? formatDuration(draft.men.durationDays.trim()) : undefined,
+      time: draft.men.time.trim() || undefined,
+      location: draft.men.location.trim() || undefined,
+      address: draft.men.address.trim() || undefined,
+      qrKey: qrInfo?.key,
+      qrLabel: qrInfo?.label,
+      qrUrl: qrInfo?.url,
+    };
+  }
+
+  // Women
+  let womenCondolence: CondolencePosterStructured["womenCondolence"] = null;
+  if (draft.women && (draft.women.location || draft.women.time || draft.women.start || draft.women.address || qrUrls.women?.trim())) {
+    const qrInfo = qrFor("women", "موقع عزاء النساء");
+    womenCondolence = {
+      start: draft.women.start.trim() || undefined,
+      duration: draft.women.durationDays.trim() ? formatDuration(draft.women.durationDays.trim()) : undefined,
+      time: draft.women.time.trim() || undefined,
+      location: draft.women.location.trim() || undefined,
+      address: draft.women.address.trim() || undefined,
+      qrKey: qrInfo?.key,
+      qrLabel: qrInfo?.label,
+      qrUrl: qrInfo?.url,
+    };
+  }
+
+  // Relatives
+  const relatives: CondolencePosterStructured["relatives"] = (request.relatives || [])
+    .filter((group) =>
+      clean(group.relation)
+      || clean(group.familyReference)
+      || group.people.some((person) => clean(person.name) || clean(person.occupation)),
+    )
+    .map((group) => {
       const heading = [
         clean(group.relation) || "الأقارب",
         clean(group.familyReference),
       ].filter(Boolean).join(" — ");
-      return [heading, peopleText].filter(Boolean).join("\n");
-    }).join("\n\n");
-    section("relatives", familyText, "الأقارب وصلات القرابة");
-  }
+      const members = group.people
+        .map((person) => formatRelativePerson(person, group.relation))
+        .filter(Boolean);
+      return { heading, members };
+    })
+    .filter((g) => g.members.length > 0);
 
-  const contacts = draft.phoneContacts
-    .filter((contact) => contact.name.trim() || contact.phone.trim())
-    .map((contact) => [contact.name.trim(), contact.phone.trim()].filter(Boolean).join(" — "));
-  if (contacts.length) section("phone", contacts.join("\n"), "التعزية عبر الهاتف");
-  if (draft.notes.trim()) section("notes", draft.notes, "ملاحظات");
-  section("closing", draft.closing, undefined, "closing");
+  // Phone Contacts
+  const phoneContacts = draft.phoneContacts
+    .filter((c) => c.name.trim() || c.phone.trim())
+    .map((c) => ({ name: c.name.trim(), phone: c.phone.trim() }));
+
+  // Notes
+  const notes = draft.notes.trim() || null;
+
+  // Legacy items array for backwards compatibility
+  const items: CondolenceContentItem[] = [];
 
   return {
-    opening: draft.opening,
+    opening: draft.opening || "إنا لله وإنا إليه راجعون",
     statement: makeDeathStatement(people),
-    names: identities.filter(Boolean).join("، "),
+    names: identities.join("، "),
+    deceasedPeople: deceasedData,
+    prayer,
+    burial,
+    menCondolence,
+    womenCondolence,
+    phoneContacts,
+    relatives,
+    notes,
+    closing: draft.closing || makeClosingPrayer(people),
     items,
   };
 }

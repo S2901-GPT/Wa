@@ -4,47 +4,30 @@
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `npm run dev` — runs unified backend and frontend on port 3000
+- `npm run typecheck` — full TypeScript build check across packages
+- `npm run build` — builds frontend applet
+- Database: Cloud Firestore (connected via `firebase-applet-config.json`, no `DATABASE_URL` required)
 
 ## Stack
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
+- npm workspaces, Node.js 22, TypeScript
+- Frontend: Vite 7 + React 19 + Tailwind CSS + Lucide Icons
 - API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
+- DB: Google Cloud Firestore (Native integration via `@workspace/db`)
+- Validation: Zod schemas (`@workspace/api-zod`)
+- API Client: React Query hooks (`@workspace/api-client-react`)
 
 ## Where things live
 
 - واجهة التطبيق: `artifacts/qatar-obituary-form`
 - واجهة API: `artifacts/api-server/src/routes/obituary-requests.ts`
-- عقد API: `lib/api-spec/openapi.yaml`
-- مخطط قاعدة البيانات: `lib/db/src/schema/obituary-requests.ts`
-
-## Architecture decisions
-
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- طبقة قاعدة البيانات: `lib/db/src/index.ts`
+- قواعد أمان Firestore: `firestore.rules`
+- مخطط البيانات: `firebase-blueprint.json`
 
 ## Product
 
 - نموذج عربي متجاوب بصفحة مراجعة قبل الإرسال.
 - حقول ديناميكية للأقارب، صلاة الجنازة، وعزاء الرجال والنساء.
-- رقم طلب بعد الإرسال ولوحة داخلية لعرض الطلبات ونسخها.
-
-## User preferences
-
-_Populate as you build — explicit user instructions worth remembering across sessions._
-
-## Gotchas
-
-_Populate as you build — sharp edges, "always run X before Y" rules._
-
-## Pointers
-
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+- رقم طلب بعد الإرسال ولوحة داخلية لعرض الطلبات وتعديل حالتها ونسخها.

@@ -10,6 +10,12 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = Number(process.env.PORT) || 3000;
 
+app.use(express.json());
+app.post("/api/client-log", (req, res) => {
+  console.error("BROWSER_CLIENT_ERROR:", JSON.stringify(req.body, null, 2));
+  res.json({ ok: true });
+});
+
 // Mount API app (handles /api/*)
 app.use(apiApp);
 

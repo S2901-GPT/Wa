@@ -1,5 +1,4 @@
 import { Router, type IRouter } from "express";
-import { desc, eq } from "drizzle-orm";
 import {
   CreateObituaryRequestBody,
   CreateObituaryRequestResponse,
@@ -10,7 +9,7 @@ import {
   UpdateObituaryRequestParams,
   UpdateObituaryRequestResponse,
 } from "@workspace/api-zod";
-import { db, obituaryRequestsTable, type ObituaryRequestRow } from "@workspace/db";
+import { obituaryRequestsDb, type ObituaryRequestRow } from "@workspace/db";
 
 const router: IRouter = Router();
 type RequestPayload = Record<string, unknown>;
@@ -155,8 +154,7 @@ function makeRequestNumber() {
 }
 
 router.get("/obituary-requests", async (_req, res): Promise<void> => {
-  const rows = await db.select().from(obituaryRequestsTable)
-    .orderBy(desc(obituaryRequestsTable.createdAt));
+  const rows = await obituaryRequestsDb.list();
   res.json(ListObituaryRequestsResponse.parse(rows.map(serialize)));
 });
 
@@ -167,12 +165,12 @@ router.post("/obituary-requests", async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const [row] = await db.insert(obituaryRequestsTable).values({
+  const row = await obituaryRequestsDb.create({
     requestNumber: makeRequestNumber(),
     deceasedName: parsed.data.deceasedPeople[0]?.fullName ?? "",
     payload: normalizePayload(parsed.data as RequestPayload),
-  }).returning();
-  if (!row) throw new Error("Failed to create obituary request");
+    status: "new",
+  });
   res.status(201).json(CreateObituaryRequestResponse.parse(serialize(row)));
 });
 
@@ -182,8 +180,7 @@ router.get("/obituary-requests/:requestNumber", async (req, res): Promise<void> 
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const [row] = await db.select().from(obituaryRequestsTable)
-    .where(eq(obituaryRequestsTable.requestNumber, params.data.requestNumber));
+  const row = await obituaryRequestsDb.getByRequestNumber(params.data.requestNumber);
   if (!row) {
     res.status(404).json({ error: "الطلب غير موجود" });
     return;
@@ -204,12 +201,11 @@ router.put("/obituary-requests/:requestNumber", async (req, res): Promise<void> 
   }
   const { status, ...inputPayload } = parsed.data;
   const payload = normalizePayload(inputPayload as RequestPayload);
-  const [row] = await db.update(obituaryRequestsTable).set({
+  const row = await obituaryRequestsDb.update(params.data.requestNumber, {
     deceasedName: payload.deceasedPeople[0]?.fullName ?? "",
     payload,
     status,
-    updatedAt: new Date(),
-  }).where(eq(obituaryRequestsTable.requestNumber, params.data.requestNumber)).returning();
+  });
   if (!row) {
     res.status(404).json({ error: "الطلب غير موجود" });
     return;

@@ -2,7 +2,8 @@ import { Link } from "wouter";
 import { useListObituaryRequests } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileText, ChevronLeft, Loader2, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { FileText, ChevronLeft, Loader2, AlertCircle, Sliders } from "lucide-react";
 
 export default function AdminPage() {
   const { data: requests, isLoading, error } = useListObituaryRequests();
@@ -23,6 +24,14 @@ export default function AdminPage() {
         <div>
           <h1 className="text-3xl font-bold text-primary mb-2">لوحة الإدارة</h1>
           <p className="text-muted-foreground">عرض وإدارة طلبات إعلان الوفاة</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link href="/admin/templates">
+            <Button variant="outline" className="gap-2 border-primary/40 text-primary hover:bg-primary/5">
+              <Sliders className="h-4 w-4" />
+              محرر القوالب البصري
+            </Button>
+          </Link>
         </div>
       </div>
 

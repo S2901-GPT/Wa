@@ -50,15 +50,53 @@ export default function AdminEditRequestPage() {
   const form = useForm<ObituaryFormValues>({
     resolver: zodResolver(ObituaryFormSchema),
     defaultValues: {
-      deceasedPeople: [],
+      deceasedList: [],
       relatives: [],
-      prayer: { enabled: false },
-      burial: { status: "upcoming", outsideQatar: false },
+      burial: {
+        status: "scheduled",
+        isOutsideQatar: false,
+        locationName: "",
+        dateDescription: "",
+        timeDescription: "",
+      },
+      prayer: {
+        status: "scheduled",
+        isOutsideQatar: false,
+        locationName: "",
+        dateDescription: "",
+        timeDescription: "",
+      },
       condolences: {
-        none: true, phone: false, men: false, women: false,
-        menCard: { audience: "men", location: "", mapLink: "", startType: "", startOther: "", expanded: false, durationDays: null, time: "", houseNumber: "", buildingNumber: "", street: "", area: "", floor: "", apartmentNumber: "", locationNotes: "" },
-        womenCard: { audience: "women", location: "", mapLink: "", startType: "", startOther: "", expanded: false, durationDays: null, time: "", houseNumber: "", buildingNumber: "", street: "", area: "", floor: "", apartmentNumber: "", locationNotes: "" },
-        phoneContacts: [],
+        type: "full",
+        men: {
+          locationName: "",
+          mapsLink: "",
+          durationDays: 3,
+          schedule: {
+            enabled: false,
+            morningFrom: "",
+            morningTo: "",
+            eveningFrom: "",
+            eveningTo: "",
+            fridayNote: "",
+          },
+          windows: [],
+        },
+        women: {
+          locationName: "",
+          mapsLink: "",
+          durationDays: 3,
+          schedule: {
+            enabled: false,
+            morningFrom: "",
+            morningTo: "",
+            eveningFrom: "",
+            eveningTo: "",
+            fridayNote: "",
+          },
+          windows: [],
+        },
+        phones: [],
       },
       notes: ""
     }
@@ -94,7 +132,7 @@ export default function AdminEditRequestPage() {
         data: { 
           ...requestData, 
           status: req.status 
-        } 
+        } as any
       },
       {
         onSuccess: () => {

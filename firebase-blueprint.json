@@ -1,0 +1,48 @@
+{
+  "entities": {
+    "obituaryRequest": {
+      "title": "Obituary Request",
+      "description": "An obituary announcement submission with details of deceased, relatives, prayer, burial, and condolences in Qatar.",
+      "type": "object",
+      "properties": {
+        "requestNumber": {
+          "type": "string",
+          "description": "Unique tracking request number e.g. QTR-20260927-1001",
+          "pattern": "^QTR-[0-9]{8}-[0-9]{4,6}$",
+          "maxLength": 32
+        },
+        "deceasedName": {
+          "type": "string",
+          "description": "Full name of the primary deceased person",
+          "maxLength": 200
+        },
+        "status": {
+          "type": "string",
+          "description": "Workflow processing status",
+          "enum": ["new", "reviewing", "ready", "completed"]
+        },
+        "payload": {
+          "type": "object",
+          "description": "Complete normalized request structure including deceased list, relatives, prayer, burial, and condolence cards"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation ISO timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update ISO timestamp"
+        }
+      },
+      "required": ["requestNumber", "deceasedName", "status", "payload"]
+    }
+  },
+  "firestore": {
+    "/obituary_requests/{requestId}": {
+      "schema": "obituaryRequest",
+      "description": "Collection of all submitted obituary announcements and requests"
+    }
+  }
+}

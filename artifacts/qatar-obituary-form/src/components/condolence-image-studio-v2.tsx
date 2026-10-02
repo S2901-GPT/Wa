@@ -1,6 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import QRCode from "qrcode";
-import { ArrowRight, Download, Loader2, Plus, Save, Trash2, X } from "lucide-react";
+import {
+  Download,
+  Loader2,
+  Save,
+  X,
+  Check,
+  Copy,
+  Sparkles,
+  Sliders,
+  AlertTriangle,
+  ExternalLink,
+} from "lucide-react";
 import {
   getGetObituaryRequestQueryKey,
   getListObituaryRequestsQueryKey,
@@ -14,21 +24,31 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import {
-  buildCondolencePosterContent,
   createCondolenceImageDraft,
-  formatRelativeGroups,
   type Audience,
   type EditableCard,
   type EditableContact,
   type ImageDraft,
 } from "@/lib/condolence-copy";
 import {
+  type CondolenceTemplate,
   IMAGE_HEIGHT,
   IMAGE_WIDTH,
   loadCondolenceFonts,
-  renderCondolencePages,
-  type QrImage,
-} from "@/lib/condolence-poster-renderer";
+} from "@/lib/template-schema";
+import {
+  fetchAllTemplates,
+  getDefaultTemplateId,
+  setDefaultTemplateId,
+} from "@/lib/template-storage";
+import { normalizeObituaryPresentation } from "@/lib/presentation-normalizer";
+import {
+  compileAndRenderSinglePage,
+  generateQrImages,
+  type QrCodeMap,
+  type RenderValidationReport,
+} from "@/lib/single-page-engine";
+import { TemplateDesignerModal } from "./template-designer/template-designer-modal";
 
 function parseAddressDraft(address: string) {
   type AddressField = "area" | "street" | "houseNumber" | "buildingNumber" | "floor" | "apartmentNumber";
@@ -82,29 +102,38 @@ function CardEditor({
   onChange: (key: keyof EditableCard, value: string) => void;
 }) {
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base text-primary">{audience === "men" ? "عزاء الرجال" : "عزاء النساء"}</CardTitle>
+    <Card className="border border-border">
+      <CardHeader className="pb-3 bg-muted/20">
+        <CardTitle className="text-base text-primary font-bold">
+          {audience === "men" ? "عزاء الرجال" : "عزاء النساء"}
+        </CardTitle>
       </CardHeader>
-      <CardContent className="grid gap-3 sm:grid-cols-2">
-        <Field label="بداية العزاء"><Input value={card.start} onChange={(event) => onChange("start", event.target.value)} /></Field>
-        <Field label="المدة بالأيام"><Input value={card.durationDays} onChange={(event) => onChange("durationDays", event.target.value)} inputMode="numeric" /></Field>
-        <Field label="الفترة / الوقت"><Input value={card.time} onChange={(event) => onChange("time", event.target.value)} /></Field>
-        <Field label="المجلس / المكان"><Input value={card.location} onChange={(event) => onChange("location", event.target.value)} /></Field>
-        <Field label="العنوان والتفاصيل"><Textarea rows={3} value={card.address} onChange={(event) => onChange("address", event.target.value)} /></Field>
-        <Field label="رابط موقع المجلس لإنشاء QR"><Input value={card.mapLink} onChange={(event) => onChange("mapLink", event.target.value)} dir="ltr" className="text-left" placeholder="https://maps.google.com/..." /></Field>
+      <CardContent className="grid gap-3 sm:grid-cols-2 pt-4">
+        <Field label="بداية العزاء">
+          <Input value={card.start} onChange={(event) => onChange("start", event.target.value)} placeholder="مثال: الأحد 28 سبتمبر" />
+        </Field>
+        <Field label="المدة بالأيام">
+          <Input value={card.durationDays} onChange={(event) => onChange("durationDays", event.target.value)} inputMode="numeric" placeholder="مثال: 3" />
+        </Field>
+        <Field label="الفترة / الوقت">
+          <Input value={card.time} onChange={(event) => onChange("time", event.target.value)} placeholder="مثال: بعد صلاة العصر حتى العشاء" />
+        </Field>
+        <Field label="المجلس / المكان">
+          <Input value={card.location} onChange={(event) => onChange("location", event.target.value)} placeholder="مثال: مجلس العائلة" />
+        </Field>
+        <div className="sm:col-span-2">
+          <Field label="العنوان والتفاصيل">
+            <Textarea rows={2} value={card.address} onChange={(event) => onChange("address", event.target.value)} placeholder="الدفنة، شارع 850، مبنى 14" />
+          </Field>
+        </div>
+        <div className="sm:col-span-2">
+          <Field label="رابط خرائط جوجل (ينشئ QR Code حقيقي عالي التباين)">
+            <Input value={card.mapLink} onChange={(event) => onChange("mapLink", event.target.value)} dir="ltr" className="text-left font-mono text-xs" placeholder="https://maps.google.com/..." />
+          </Field>
+        </div>
       </CardContent>
     </Card>
   );
-}
-
-function isValidHttpUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return (url.protocol === "https:" || url.protocol === "http:") && !!url.hostname;
-  } catch {
-    return false;
-  }
 }
 
 export function CondolenceImageStudio({
@@ -115,128 +144,107 @@ export function CondolenceImageStudio({
   onClose: () => void;
 }) {
   const previewRef = useRef<HTMLCanvasElement>(null);
-  const pageCanvases = useRef<HTMLCanvasElement[]>([]);
+  const [templates, setTemplates] = useState<Record<string, CondolenceTemplate>>({});
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("official");
   const [draft, setDraft] = useState<ImageDraft>(() => createCondolenceImageDraft(request));
-  const [qrImages, setQrImages] = useState<Record<string, QrImage>>({});
-  const [qrLoading, setQrLoading] = useState(false);
+  const [qrImages, setQrImages] = useState<QrCodeMap>({});
   const [rendering, setRendering] = useState(true);
-  const [qrError, setQrError] = useState(false);
-  const [pagesReady, setPagesReady] = useState(false);
-  const [approved, setApproved] = useState(false);
-  const [pageIndex, setPageIndex] = useState(0);
-  const [pageCount, setPageCount] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [designerModalOpen, setDesignerModalOpen] = useState(false);
+  const [validationReport, setValidationReport] = useState<RenderValidationReport | null>(null);
+
   const queryClient = useQueryClient();
   const updateMutation = useUpdateObituaryRequest();
 
-  const qrLinks = useMemo(() => ({
-    men: draft.men?.mapLink.trim() || "",
-    women: draft.women?.mapLink.trim() || "",
-    prayer: draft.prayerMapLink.trim(),
-    burial: draft.burialMapLink.trim(),
-  }), [draft.men?.mapLink, draft.women?.mapLink, draft.prayerMapLink, draft.burialMapLink]);
-  const posterCopy = useMemo(
-    () => buildCondolencePosterContent(request, draft, qrLinks),
-    [request, draft, qrLinks],
-  );
-  const invalidQrKeys = useMemo(
-    () => Object.entries(qrLinks)
-      .filter(([, link]) => !!link && !isValidHttpUrl(link))
-      .map(([key]) => key),
-    [qrLinks],
-  );
-  const visiblePhoneContacts = useMemo(
-    () => draft.phoneContacts.filter((contact) => contact.name.trim() || contact.phone.trim()),
-    [draft.phoneContacts],
-  );
-
+  // Load templates on mount
   useEffect(() => {
-    let cancelled = false;
-    const entries = Object.entries(qrLinks).filter(([, link]) => !!link && isValidHttpUrl(link));
-    setQrLoading(entries.length > 0);
-    setQrError(false);
-    setQrImages({});
-    if (!entries.length) {
-      setQrLoading(false);
-      return () => { cancelled = true; };
-    }
-    Promise.allSettled(entries.map(async ([key, link]) => {
-      const dataUrl = await QRCode.toDataURL(link, {
-        width: 360,
-        margin: 2,
-        color: { dark: "#000000", light: "#ffffff" },
-        errorCorrectionLevel: "H",
-      });
-      const image = new Image();
-      image.src = dataUrl;
-      if (typeof image.decode === "function") await image.decode();
-      else await new Promise<void>((resolve, reject) => {
-        image.onload = () => resolve();
-        image.onerror = () => reject(new Error("تعذر تحميل QR"));
-      });
-      return [key, { dataUrl, image }] as const;
-    })).then((results) => {
-      if (!cancelled) {
-        const fulfilled = results.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
-        const failed = results.some((result) => result.status === "rejected");
-        setQrImages(Object.fromEntries(fulfilled));
-        setQrError(failed);
-        if (failed) toast.error("تعذر إنشاء أحد رموز QR؛ تحقق من رابط الموقع");
+    void fetchAllTemplates().then((loaded) => {
+      setTemplates(loaded);
+      const def = getDefaultTemplateId();
+      if (loaded[def]) {
+        setSelectedTemplateId(def);
       }
-    }).finally(() => {
-      if (!cancelled) setQrLoading(false);
     });
-    return () => { cancelled = true; };
-  }, [qrLinks]);
+  }, []);
 
+  const currentTemplate = templates[selectedTemplateId] || Object.values(templates)[0];
+
+  // Normalized content via Presentation Normalizer
+  const normalizedContent = useMemo(() => {
+    return normalizeObituaryPresentation(request, {
+      deceasedNames: draft.deceasedNames,
+      deceasedTitles: draft.deceasedTitles,
+      opening: draft.opening,
+      prayerMapLink: draft.prayerMapLink,
+      burialMapLink: draft.burialMapLink,
+      menMapLink: draft.men?.mapLink,
+      womenMapLink: draft.women?.mapLink,
+      notes: draft.notes,
+      closing: draft.closing,
+    });
+  }, [request, draft]);
+
+  // Generate Real High-Contrast QR Images with suppression for known landmarks
   useEffect(() => {
     let cancelled = false;
+    const urls: Record<string, string | undefined> = {
+      prayer: normalizedContent.prayer?.qrUrl,
+      burial: normalizedContent.burial?.qrUrl,
+      prayerBurialCombined: normalizedContent.prayerBurialCombined?.qrUrl,
+      men: normalizedContent.men?.qrUrl,
+      women: normalizedContent.women?.qrUrl,
+    };
+
+    void generateQrImages(urls).then((imgs) => {
+      if (!cancelled) setQrImages(imgs);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [normalizedContent]);
+
+  // Render Strictly Single-Page Canvas (1080 × 1350)
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentTemplate) return;
+
     setRendering(true);
-    pageCanvases.current = [];
-    setPagesReady(false);
-    setPageCount(0);
-    setPageIndex(0);
-    setApproved(false);
     void (async () => {
       try {
         await loadCondolenceFonts();
-        if (cancelled || qrLoading) return;
-        const generatedPages = renderCondolencePages({
-          ...posterCopy,
-          designId: "official",
-          qrImages,
-        });
         if (cancelled) return;
-        pageCanvases.current = generatedPages;
-        setPagesReady(generatedPages.length > 0);
-      } catch (error) {
-        if (!cancelled) {
-          console.error("Condolence image rendering failed", error);
-          toast.error("تعذر تجهيز معاينة الصورة");
+
+        const { canvas: compiled, report } = compileAndRenderSinglePage(
+          currentTemplate,
+          normalizedContent,
+          qrImages
+        );
+        if (cancelled) return;
+
+        setValidationReport(report);
+
+        const target = previewRef.current;
+        if (target) {
+          target.width = IMAGE_WIDTH;
+          target.height = IMAGE_HEIGHT;
+          const ctx = target.getContext("2d");
+          if (ctx) {
+            ctx.clearRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
+            ctx.drawImage(compiled, 0, 0);
+          }
         }
+      } catch (err) {
+        console.error("Single page render error:", err);
       } finally {
         if (!cancelled) setRendering(false);
       }
     })();
-    return () => { cancelled = true; };
-  }, [posterCopy, qrImages, qrLoading]);
 
-  useEffect(() => {
-    const pages = pageCanvases.current;
-    setPageCount(pages.length);
-    if (!pages.length) return;
-    const safeIndex = Math.min(pageIndex, pages.length - 1);
-    if (safeIndex !== pageIndex) setPageIndex(safeIndex);
-    const canvas = previewRef.current;
-    const context = canvas?.getContext("2d");
-    const page = pages[safeIndex];
-    if (canvas && context && page) {
-      canvas.width = IMAGE_WIDTH;
-      canvas.height = IMAGE_HEIGHT;
-      context.clearRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
-      context.drawImage(page, 0, 0);
-    }
-  }, [pageIndex, pagesReady]);
+    return () => {
+      cancelled = true;
+    };
+  }, [currentTemplate, normalizedContent, qrImages]);
 
   const updateCard = (audience: Audience, key: keyof EditableCard, value: string) => {
     setDraft((current) => ({
@@ -244,25 +252,20 @@ export function CondolenceImageStudio({
       [audience]: current[audience] ? { ...current[audience], [key]: value } : undefined,
     }));
   };
+
   const updateContact = (index: number, key: keyof EditableContact, value: string) => {
     setDraft((current) => ({
       ...current,
       phoneContacts: current.phoneContacts.map((contact, contactIndex) =>
-        contactIndex === index ? { ...contact, [key]: value } : contact),
+        contactIndex === index ? { ...contact, [key]: value } : contact
+      ),
     }));
   };
 
-  const downloadPage = (index: number) => {
-    const pages = pageCanvases.current;
-    const canvas = pages[index];
-    if (
-      !canvas
-      || rendering
-      || qrLoading
-      || qrError
-      || invalidQrKeys.length > 0
-      || !approved
-    ) return;
+  const downloadSinglePage = () => {
+    const canvas = previewRef.current;
+    if (!canvas || rendering) return;
+
     canvas.toBlob((blob) => {
       if (!blob) {
         toast.error("تعذر إنشاء ملف PNG");
@@ -271,11 +274,32 @@ export function CondolenceImageStudio({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${request.requestNumber}-بطاقة-تعزية-${index + 1}.png`;
+      link.download = `${request.requestNumber}-${selectedTemplateId}.png`;
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-      toast.success(`تم تنزيل الصورة ${index + 1} من ${pages.length}`);
+      toast.success("تم تنزيل صورة التعزية بصيغة PNG عالية الدقة (1080 × 1350)");
     }, "image/png");
+  };
+
+  const copyImageToClipboard = async () => {
+    const canvas = previewRef.current;
+    if (!canvas || rendering) return;
+
+    try {
+      canvas.toBlob(async (blob) => {
+        if (!blob) return;
+        if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+          setCopied(true);
+          toast.success("تم نسخ صورة التعزية للحافظة بنجاح للصق في واتساب");
+          setTimeout(() => setCopied(false), 2500);
+        } else {
+          downloadSinglePage();
+        }
+      }, "image/png");
+    } catch {
+      downloadSinglePage();
+    }
   };
 
   const saveToRequest = () => {
@@ -303,217 +327,414 @@ export function CondolenceImageStudio({
         mapLink: edited.mapLink.trim() || undefined,
       };
     });
-    updateMutation.mutate({
-      requestNumber: request.requestNumber,
-      data: {
-        ...request,
-        deceasedPeople: updatedPeople,
-        condolences: updatedCondolences,
-        prayer: { ...request.prayer, mapLink: draft.prayerMapLink.trim() || undefined },
-        burial: { ...request.burial, mapLink: draft.burialMapLink.trim() || undefined },
-        condolencePhoneContacts: request.condolenceOptions.includes("phone") || request.condolencePhoneContacts.length > 0
-          ? visiblePhoneContacts.map((contact) => ({
-              ...(contact.name.trim() ? { name: contact.name.trim() } : {}),
-              ...(contact.phone.trim() ? { phone: contact.phone.trim() } : {}),
-            }))
-          : request.condolencePhoneContacts,
-        notes: draft.notes.trim() || undefined,
-        status: request.status,
+
+    updateMutation.mutate(
+      {
+        requestNumber: request.requestNumber,
+        data: {
+          ...request,
+          deceasedPeople: updatedPeople,
+          condolences: updatedCondolences,
+          prayer: { ...request.prayer, mapLink: draft.prayerMapLink.trim() || undefined },
+          burial: { ...request.burial, mapLink: draft.burialMapLink.trim() || undefined },
+          condolencePhoneContacts:
+            request.condolenceOptions.includes("phone") || request.condolencePhoneContacts.length > 0
+              ? draft.phoneContacts
+                  .filter((c) => c.name.trim() || c.phone.trim())
+                  .map((c) => ({
+                    ...(c.name.trim() ? { name: c.name.trim() } : {}),
+                    ...(c.phone.trim() ? { phone: c.phone.trim() } : {}),
+                  }))
+              : request.condolencePhoneContacts,
+          notes: draft.notes.trim() || undefined,
+          status: request.status,
+        },
       },
-    }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetObituaryRequestQueryKey(request.requestNumber) });
-        queryClient.invalidateQueries({ queryKey: getListObituaryRequestsQueryKey() });
-        toast.success("تم حفظ بيانات الطلب المعدّلة");
-      },
-      onError: () => toast.error("تعذر حفظ التعديلات في الطلب"),
-      onSettled: () => setSaving(false),
-    });
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetObituaryRequestQueryKey(request.requestNumber) });
+          queryClient.invalidateQueries({ queryKey: getListObituaryRequestsQueryKey() });
+          toast.success("تم حفظ بيانات الطلب المعدّلة");
+        },
+        onError: () => toast.error("تعذر حفظ التعديلات في الطلب"),
+        onSettled: () => setSaving(false),
+      }
+    );
   };
 
-  const familyText = formatRelativeGroups(request);
-  const selectedPages = pageCanvases.current;
-  const hasInvalidName = draft.deceasedNames.some((name) => name.trim().length < 2);
-  const exportReady = !rendering
-    && !qrLoading
-    && !qrError
-    && !hasInvalidName
-    && invalidQrKeys.length === 0
-    && approved
-    && selectedPages.length > 0;
-  const pageCountLabel = rendering
-    ? "جارٍ تجهيز المعاينة"
-    : pageCount === 1
-      ? "صورة واحدة"
-      : pageCount === 2
-        ? "صورتان"
-        : `${pageCount} صور`;
-
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-[#24171c]/70 p-2 sm:p-6" dir="rtl">
-      <div className="mx-auto min-h-full max-w-7xl rounded-2xl bg-background shadow-2xl">
-        <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur sm:px-6">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/80 p-2 sm:p-5 backdrop-blur-sm" dir="rtl">
+      <div className="mx-auto min-h-full max-w-7xl rounded-2xl bg-background shadow-2xl border border-border flex flex-col overflow-hidden">
+        {/* TOP HEADER */}
+        <header className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b bg-background/95 px-4 py-3.5 backdrop-blur sm:px-6">
           <div>
-            <p className="text-xs text-muted-foreground">لوحة الإدارة · {request.requestNumber}</p>
-            <h2 className="text-lg font-bold text-primary sm:text-xl">إنشاء صورة التعزية</h2>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                {request.requestNumber}
+              </span>
+              <span className="text-xs text-muted-foreground">·</span>
+              <span className="text-xs text-green-700 dark:text-green-400 font-bold bg-green-500/10 px-2 py-0.5 rounded">
+                صفحة واحدة فقط (1080 × 1350 px)
+              </span>
+            </div>
+            <h2 className="text-lg font-bold text-foreground sm:text-xl mt-0.5">
+              استوديو إنشاء صورة التعزية الذكي
+            </h2>
           </div>
-          <Button type="button" variant="ghost" onClick={onClose} className="gap-2"><X className="h-4 w-4" />رجوع / إلغاء</Button>
-        </header>
-        <div className="grid gap-6 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_430px]">
-          <section className="order-1 flex flex-col items-center rounded-xl border bg-muted/20 p-3 sm:p-6 lg:order-2">
-            <div className="mb-3 flex w-full items-center justify-between gap-2 text-sm">
-              <span className="font-semibold text-primary">بطاقة التعزية · قالب ثابت</span>
-              <span className="text-muted-foreground"><span dir="ltr" className="inline-block">1080 × 1350 px</span></span>
-            </div>
-            <div className="w-full max-w-[540px] rounded-lg border bg-background px-4 py-3 text-sm leading-6 text-muted-foreground">
-              ترتيب البطاقة ثابت: بيانات المتوفى، الصلاة والدفن، عزاء الرجال، عزاء النساء، الأقارب والاتصال، الملاحظات، ثم الدعاء.
-            </div>
-            <div className="mb-3 mt-5 flex w-full max-w-[540px] items-center justify-between gap-2 text-sm">
-              <span className="font-semibold text-primary">معاينة الصورة النهائية</span>
-              <span className="text-muted-foreground">{pageCountLabel}</span>
-            </div>
-            <div className="relative w-full max-w-[540px] overflow-hidden rounded-lg bg-white shadow-xl">
-              <canvas ref={previewRef} className="block h-auto w-full" aria-label="معاينة صورة التعزية" />
-              {(rendering || qrLoading) && <div className="absolute inset-0 grid place-items-center bg-background/75"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>}
-            </div>
-            {qrError && <p role="alert" className="mt-3 text-sm text-destructive">تعذر إنشاء QR لبعض الروابط. راجع روابط المواقع قبل التنزيل.</p>}
-            {invalidQrKeys.length > 0 && (
-              <p role="alert" className="mt-3 w-full max-w-[540px] text-sm text-destructive">
-                توجد روابط غير صالحة في: {invalidQrKeys.map((key) => ({
-                  men: "موقع الرجال",
-                  women: "موقع النساء",
-                  prayer: "موقع الصلاة",
-                  burial: "موقع الدفن",
-                }[key] || key)).join("، ")}. صححها أو احذفها قبل اعتماد الصورة.
-              </p>
-            )}
-            {hasInvalidName && (
-              <p role="alert" className="mt-3 w-full max-w-[540px] text-sm text-destructive">
-                أدخل اسم كل متوفى بطول حرفين على الأقل قبل اعتماد الصورة.
-              </p>
-            )}
-            {pageCount > 1 && (
-              <div className="mt-4 flex w-full max-w-[540px] flex-wrap justify-center gap-2">
-                {selectedPages.map((_, index) => (
-                  <div key={index} className="flex overflow-hidden rounded-md border">
-                    <Button type="button" variant={pageIndex === index ? "secondary" : "ghost"} size="sm" onClick={() => setPageIndex(index)}>
-                      معاينة {index + 1}
-                    </Button>
-                    <Button type="button" variant="ghost" size="icon" aria-label={`تنزيل الصورة ${index + 1}`} title={`تنزيل الصورة ${index + 1}`} disabled={!exportReady} onClick={() => downloadPage(index)}>
-                      <Download className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-            {pageCount > 1 && (
-              <p className="mt-2 w-full max-w-[540px] text-center text-xs leading-5 text-muted-foreground">
-                قُسّمت البيانات على صور متعددة للحفاظ على وضوحها بعد ضبط الخط والمسافات.
-              </p>
-            )}
+
+          <div className="flex items-center gap-2">
             <Button
               type="button"
-              variant={approved ? "secondary" : "default"}
-              onClick={() => setApproved(true)}
-              disabled={rendering || qrLoading || !pagesReady || hasInvalidName}
-              className="mt-4 w-full max-w-[540px] gap-2 sm:w-auto"
+              variant="outline"
+              size="sm"
+              onClick={() => setDesignerModalOpen(true)}
+              className="gap-1.5 border-primary/40 hover:bg-primary/10 text-primary font-semibold text-xs"
             >
-              {approved ? "تم اعتماد البطاقة" : "اعتماد بطاقة التعزية"}
+              <Sliders className="h-4 w-4 text-primary" />
+              محرر القوالب البصري
             </Button>
-            <Button type="button" onClick={() => downloadPage(pageIndex)} disabled={!exportReady} className="mt-2 w-full max-w-[540px] gap-2 sm:w-auto">
-              <Download className="h-4 w-4" />
-              {pageCount > 1 ? `تنزيل PNG للصورة ${pageIndex + 1}` : "تنزيل صورة التعزية PNG"}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={saveToRequest}
+              disabled={saving}
+              className="gap-1.5 border-primary/20 hover:bg-primary/10 text-xs"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 text-primary" />}
+              حفظ التعديلات للطلب
             </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={onClose} className="gap-1 text-muted-foreground">
+              <X className="h-4 w-4" />
+              إغلاق
+            </Button>
+          </div>
+        </header>
+
+        {/* MAIN STUDIO GRID */}
+        <div className="grid gap-6 p-4 sm:p-6 lg:grid-cols-[minmax(0,1.2fr)_440px]">
+          {/* PREVIEW & TEMPLATE SWITCHER COLUMN */}
+          <section className="order-1 flex flex-col items-center rounded-xl border bg-muted/20 p-4 sm:p-6 lg:order-1">
+            {/* TEMPLATE SWITCHER TOOLBAR */}
+            <div className="w-full max-w-[560px] mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                  <Sparkles className="w-4 h-4 text-primary" />
+                  القالب المعتمد:
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDesignerModalOpen(true)}
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                >
+                  تخصيص القالب في المحرر
+                  <ExternalLink className="w-3 h-3" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {Object.values(templates).slice(0, 3).map((t) => {
+                  const isSelected = selectedTemplateId === t.id;
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTemplateId(t.id);
+                        setDefaultTemplateId(t.id);
+                      }}
+                      className={`relative flex flex-col text-right p-3 rounded-xl border transition-all text-xs ${
+                        isSelected
+                          ? "border-primary bg-primary/10 text-primary ring-2 ring-primary/20 shadow-sm font-semibold"
+                          : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full mb-1">
+                        <span className="font-bold text-sm text-foreground">{t.name}</span>
+                        {isSelected && <Check className="w-4 h-4 text-primary shrink-0" />}
+                      </div>
+                      <span className="text-[11px] leading-4 opacity-80 line-clamp-2">{t.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* PREVIEW STATUS BAR */}
+            <div className="mb-3 flex w-full max-w-[560px] items-center justify-between text-xs text-muted-foreground px-1">
+              <span className="font-medium text-foreground flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-green-500" />
+                معاينة الصورة النهائية (صفحة واحدة فقط)
+              </span>
+
+              {validationReport?.isCompactMode && (
+                <span className="text-[11px] text-amber-600 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded font-medium flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" />
+                  وضع الضغط التلقائي نشط
+                </span>
+              )}
+            </div>
+
+            {/* HIGH-RES CANVAS PREVIEW */}
+            <div className="relative w-full max-w-[560px] overflow-hidden rounded-xl bg-white shadow-2xl border border-border/80">
+              <canvas
+                ref={previewRef}
+                className="block h-auto w-full transition-opacity duration-200"
+                style={{ aspectRatio: "1080 / 1350" }}
+                aria-label="معاينة صورة التعزية"
+              />
+              {rendering && (
+                <div className="absolute inset-0 grid place-items-center bg-background/80 backdrop-blur-sm">
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="h-9 w-9 animate-spin text-primary" />
+                    <p className="text-sm font-medium text-foreground">تجهيز الرسم الذكي والـQR Codes...</p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* DOWNLOAD ACTION BUTTONS */}
+            <div className="mt-5 flex w-full max-w-[560px] flex-col sm:flex-row items-center gap-2.5">
+              <Button
+                type="button"
+                onClick={downloadSinglePage}
+                disabled={rendering}
+                className="w-full sm:flex-1 gap-2 h-11 bg-primary text-primary-foreground font-semibold shadow hover:bg-primary/90"
+              >
+                <Download className="h-4 w-4" />
+                تنزيل صورة التعزية (PNG عالية الدقة)
+              </Button>
+
+              <Button
+                type="button"
+                variant="outline"
+                onClick={copyImageToClipboard}
+                disabled={rendering}
+                className="w-full sm:w-auto gap-2 h-11 border-border"
+              >
+                {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                {copied ? "تم النسخ" : "نسخ للحافظة"}
+              </Button>
+            </div>
+
+            {/* QR Status & Known Landmarks suppression notice */}
+            <div className="mt-4 w-full max-w-[560px] rounded-lg border bg-card/60 p-3 text-xs space-y-1.5">
+              <p className="font-semibold text-foreground">حالة رموز الـQR Codes:</p>
+              <div className="grid grid-cols-2 gap-2 text-muted-foreground">
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      normalizedContent.hasCombinedPrayerBurial
+                        ? normalizedContent.prayerBurialCombined?.qrUrl
+                          ? "bg-green-500"
+                          : "bg-muted"
+                        : normalizedContent.prayer?.qrUrl
+                        ? "bg-green-500"
+                        : "bg-muted"
+                    }`}
+                  />
+                  {normalizedContent.hasCombinedPrayerBurial
+                    ? normalizedContent.prayerBurialCombined?.qrUrl
+                      ? "صلاة ودَفن: QR نشط"
+                      : "صلاة ودَفن: معالم معروفة (بدون QR)"
+                    : normalizedContent.prayer?.qrUrl
+                    ? "صلاة الجنازة: QR نشط"
+                    : "صلاة الجنازة: بدون QR"}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      normalizedContent.burial?.qrUrl ? "bg-green-500" : "bg-muted"
+                    }`}
+                  />
+                  {normalizedContent.burial?.qrUrl ? "الدفن: QR نشط" : "الدفن: بدون QR"}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      normalizedContent.men?.qrUrl ? "bg-green-500" : "bg-muted"
+                    }`}
+                  />
+                  عزاء الرجال: {normalizedContent.men?.qrUrl ? "QR نشط" : "بدون QR"}
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      normalizedContent.women?.qrUrl ? "bg-green-500" : "bg-muted"
+                    }`}
+                  />
+                  عزاء النساء: {normalizedContent.women?.qrUrl ? "QR نشط" : "بدون QR"}
+                </div>
+              </div>
+            </div>
           </section>
 
-          <section className="order-2 space-y-4 lg:order-1">
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base text-primary">النصوص الأساسية</CardTitle>
-                <p className="text-xs leading-5 text-muted-foreground">التعديلات تبقى خاصة بالصورة حتى تختار الحفظ. الحفظ يحدّث حقول الطلب المقابلة؛ عبارات البطاقة تبقى خاصة بالصورة.</p>
+          {/* RIGHT SIDEBAR: EDIT DRAFT & CONTENT */}
+          <section className="order-2 space-y-4 lg:order-2 overflow-y-auto max-h-[820px] pr-1">
+            {/* Identity Card */}
+            <Card className="border border-border">
+              <CardHeader className="pb-3 bg-muted/20">
+                <CardTitle className="text-base text-primary font-bold">بيانات المتوفى والاستهلال</CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
-                <Field label="عبارة الاستهلال"><Input value={draft.opening} onChange={(event) => setDraft((current) => ({ ...current, opening: event.target.value }))} /></Field>
-                <div className="space-y-1.5">
-                  <p className="text-sm font-medium text-foreground">صياغة الوفاة المولّدة</p>
-                  <p className="rounded-md border bg-muted/30 px-3 py-2 text-sm leading-6">{posterCopy.statement}</p>
-                </div>
-                <Field label="أسماء المتوفين">
-                  <div className="space-y-2">
-                    {draft.deceasedNames.map((name, index) => (
-                      <div key={index} className="space-y-2">
-                        <Field label={draft.deceasedNames.length > 1 ? `الاسم ${index + 1}` : "الاسم"}>
-                          <Input value={name} onChange={(event) => setDraft((current) => ({ ...current, deceasedNames: current.deceasedNames.map((item, itemIndex) => itemIndex === index ? event.target.value : item) }))} />
-                        </Field>
-                        <Field label="اللقب أو التعريف">
-                          <Input value={draft.deceasedTitles[index] || ""} onChange={(event) => setDraft((current) => ({ ...current, deceasedTitles: current.deceasedTitles.map((item, itemIndex) => itemIndex === index ? event.target.value : item) }))} />
-                        </Field>
-                        {(() => {
-                          const person = request.deceasedPeople[index];
-                          if (!person) return null;
-                          const details = [
-                            person.age != null ? `العمر: ${person.age}` : "",
-                            person.nationality && `الجنسية: ${person.nationality}`,
-                            person.deathPlace && `مكان الوفاة: ${person.deathPlace}`,
-                            person.occupation && `الجهة / الصفة: ${person.occupation}`,
-                            person.note && `ملاحظة: ${person.note}`,
-                          ].filter(Boolean).join("\n");
-                          return details ? <p className="whitespace-pre-wrap text-xs leading-5 text-muted-foreground">{details}</p> : null;
-                        })()}
-                      </div>
-                    ))}
-                  </div>
+              <CardContent className="space-y-3 pt-4">
+                <Field label="عبارة الاستهلال">
+                  <Input value={draft.opening} onChange={(event) => setDraft((c) => ({ ...c, opening: event.target.value }))} />
                 </Field>
-                <Field label="الدعاء الختامي"><Textarea value={draft.closing} onChange={(event) => setDraft((current) => ({ ...current, closing: event.target.value }))} rows={2} /></Field>
+                <div className="space-y-1">
+                  <span className="text-xs text-muted-foreground">صياغة الوفاة التلقائية:</span>
+                  <p className="rounded-md border bg-muted/30 px-3 py-1.5 text-xs text-foreground font-medium">
+                    {normalizedContent.statement}
+                  </p>
+                </div>
+                <div className="space-y-3 pt-1">
+                  {draft.deceasedNames.map((name, index) => (
+                    <div key={index} className="grid grid-cols-1 sm:grid-cols-2 gap-2 p-2.5 rounded-lg border bg-muted/10">
+                      <Field label={draft.deceasedNames.length > 1 ? `الاسم ${index + 1}` : "الاسم الكامل"}>
+                        <Input
+                          value={name}
+                          onChange={(e) =>
+                            setDraft((c) => ({
+                              ...c,
+                              deceasedNames: c.deceasedNames.map((n, i) => (i === index ? e.target.value : n)),
+                            }))
+                          }
+                        />
+                      </Field>
+                      <Field label="اللقب أو الصفة (يندمج مع الاسم)">
+                        <Input
+                          value={draft.deceasedTitles[index] || ""}
+                          placeholder="مثال: الوالد"
+                          onChange={(e) =>
+                            setDraft((c) => ({
+                              ...c,
+                              deceasedTitles: c.deceasedTitles.map((t, i) => (i === index ? e.target.value : t)),
+                            }))
+                          }
+                        />
+                      </Field>
+                    </div>
+                  ))}
+                </div>
               </CardContent>
             </Card>
 
-            {!!familyText.trim() && (
-              <Card><CardHeader className="pb-2"><CardTitle className="text-base text-primary">الأقارب</CardTitle></CardHeader>
-                <CardContent><p className="whitespace-pre-wrap text-sm leading-6">{familyText}</p></CardContent>
-              </Card>
-            )}
-            {!!(draft.prayerText || draft.prayerMapLink) && (
-              <Card><CardHeader className="pb-2"><CardTitle className="text-base text-primary">صلاة الجنازة</CardTitle></CardHeader>
-                <CardContent className="space-y-2"><p className="whitespace-pre-wrap text-sm leading-6">{draft.prayerText}</p>
-                  <Field label="رابط موقع الصلاة"><Input value={draft.prayerMapLink} onChange={(event) => setDraft((current) => ({ ...current, prayerMapLink: event.target.value }))} dir="ltr" className="text-left" /></Field>
-                </CardContent>
-              </Card>
-            )}
-            {!!(draft.burialText || draft.burialMapLink) && (
-              <Card><CardHeader className="pb-2"><CardTitle className="text-base text-primary">الدفن</CardTitle></CardHeader>
-                <CardContent className="space-y-2"><p className="whitespace-pre-wrap text-sm leading-6">{draft.burialText}</p>
-                  <Field label="رابط موقع الدفن"><Input value={draft.burialMapLink} onChange={(event) => setDraft((current) => ({ ...current, burialMapLink: event.target.value }))} dir="ltr" className="text-left" /></Field>
-                </CardContent>
-              </Card>
+            {/* Prayer & Burial Maps */}
+            <Card className="border border-border">
+              <CardHeader className="pb-3 bg-muted/20">
+                <CardTitle className="text-base text-primary font-bold">الصلاة والدفن</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 pt-4">
+                {normalizedContent.hasCombinedPrayerBurial && (
+                  <div className="p-2.5 rounded-lg border border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 text-xs text-blue-900 dark:text-blue-300">
+                    تم دمج الصلاة والدفن تلقائيًا في بطاقة واحدة لأن المكان متطابق (
+                    {normalizedContent.prayerBurialCombined?.place}).
+                  </div>
+                )}
+                <Field label="رابط خريطة صلاة الجنازة">
+                  <Input
+                    value={draft.prayerMapLink}
+                    onChange={(e) => setDraft((c) => ({ ...c, prayerMapLink: e.target.value }))}
+                    dir="ltr"
+                    className="font-mono text-xs text-left"
+                    placeholder="https://maps.google.com/..."
+                  />
+                </Field>
+                <Field label="رابط خريطة الدفن">
+                  <Input
+                    value={draft.burialMapLink}
+                    onChange={(e) => setDraft((c) => ({ ...c, burialMapLink: e.target.value }))}
+                    dir="ltr"
+                    className="font-mono text-xs text-left"
+                    placeholder="https://maps.google.com/..."
+                  />
+                </Field>
+              </CardContent>
+            </Card>
+
+            {/* Men Condolence */}
+            {draft.men && (
+              <CardEditor
+                audience="men"
+                card={draft.men}
+                onChange={(key, val) => updateCard("men", key, val)}
+              />
             )}
 
-            {draft.men && <CardEditor audience="men" card={draft.men} onChange={(key, value) => updateCard("men", key, value)} />}
-            {draft.women && <CardEditor audience="women" card={draft.women} onChange={(key, value) => updateCard("women", key, value)} />}
-            {(request.condolenceOptions.includes("phone") || request.condolencePhoneContacts.length > 0) && (
-              <Card>
-                <CardHeader className="pb-3"><CardTitle className="text-base text-primary">التعزية عبر الهاتف</CardTitle></CardHeader>
-                <CardContent className="space-y-3">
+            {/* Women Condolence */}
+            {draft.women && (
+              <CardEditor
+                audience="women"
+                card={draft.women}
+                onChange={(key, val) => updateCard("women", key, val)}
+              />
+            )}
+
+            {/* Phone Contacts */}
+            {draft.phoneContacts.length > 0 && (
+              <Card className="border border-border">
+                <CardHeader className="pb-3 bg-muted/20">
+                  <CardTitle className="text-base text-primary font-bold">التعزية عبر الهاتف (أرقام LTR معزولة)</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2.5 pt-4">
                   {draft.phoneContacts.map((contact, index) => (
-                    <div key={index} className="flex items-end gap-2">
-                      <Field label="الاسم"><Input value={contact.name} onChange={(event) => updateContact(index, "name", event.target.value)} /></Field>
-                      <Field label="رقم الهاتف"><Input value={contact.phone} onChange={(event) => updateContact(index, "phone", event.target.value)} dir="ltr" className="text-left" /></Field>
-                      <Button type="button" variant="ghost" size="icon" onClick={() => setDraft((current) => ({ ...current, phoneContacts: current.phoneContacts.filter((_, itemIndex) => itemIndex !== index) }))} aria-label="حذف الرقم"><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    <div key={index} className="grid grid-cols-2 gap-2">
+                      <Input
+                        value={contact.name}
+                        onChange={(e) => updateContact(index, "name", e.target.value)}
+                        placeholder="الاسم أو القرابة (مثال: محمد - ابنه)"
+                        className="text-xs"
+                      />
+                      <Input
+                        value={contact.phone}
+                        onChange={(e) => updateContact(index, "phone", e.target.value)}
+                        dir="ltr"
+                        className="text-left font-mono text-xs"
+                        placeholder="+974 5512 3456"
+                      />
                     </div>
                   ))}
-                  <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setDraft((current) => ({ ...current, phoneContacts: [...current.phoneContacts, { name: "", phone: "" }] }))}><Plus className="h-4 w-4" />إضافة رقم</Button>
                 </CardContent>
               </Card>
             )}
 
-            <Card><CardContent className="pt-6"><Field label="الملاحظات الإضافية"><Textarea value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))} rows={3} /></Field></CardContent></Card>
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button type="button" variant="outline" onClick={saveToRequest} disabled={saving || hasInvalidName} className="gap-2">{saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}حفظ تعديلات الصورة في الطلب</Button>
-              <Button type="button" variant="ghost" onClick={onClose} className="gap-2"><ArrowRight className="h-4 w-4" />العودة دون حفظ</Button>
-            </div>
+            {/* Notes */}
+            <Card className="border border-border">
+              <CardHeader className="pb-3 bg-muted/20">
+                <CardTitle className="text-base text-primary font-bold">الملاحظات ودعاء الختام</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 pt-4">
+                <Field label="الملاحظات">
+                  <Textarea
+                    rows={2}
+                    value={draft.notes}
+                    onChange={(e) => setDraft((c) => ({ ...c, notes: e.target.value }))}
+                  />
+                </Field>
+                <Field label="دعاء الختام">
+                  <Input
+                    value={draft.closing}
+                    onChange={(e) => setDraft((c) => ({ ...c, closing: e.target.value }))}
+                  />
+                </Field>
+              </CardContent>
+            </Card>
           </section>
         </div>
       </div>
+
+      {/* FULL VISUAL TEMPLATE DESIGNER MODAL */}
+      {designerModalOpen && (
+        <TemplateDesignerModal
+          initialTemplateId={selectedTemplateId}
+          onClose={() => setDesignerModalOpen(false)}
+          onSelectAndApply={(applied) => {
+            setTemplates((prev) => ({ ...prev, [applied.id]: applied }));
+            setSelectedTemplateId(applied.id);
+            setDesignerModalOpen(false);
+            toast.success(`تم تطبيق القالب "${applied.name}" على صورة الطلب الحالية`);
+          }}
+        />
+      )}
     </div>
   );
 }
