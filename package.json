@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
   "workspaces": [
     "artifacts/*",
     "lib/*",
@@ -12,6 +15,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "npm run build --workspace=@workspace/qatar-obituary-form",
+    "gcp-build": "npm run build",
     "start": "tsx server.ts",
     "typecheck": "tsc --build",
     "test": "npm run test --workspace=@workspace/qatar-obituary-form",

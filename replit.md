@@ -7,6 +7,8 @@
 - `npm run dev` — runs unified backend and frontend on port 3000
 - `npm run typecheck` — full TypeScript build check across packages
 - `npm run build` — builds frontend applet
+- `npm start` — production: serves the API and the built frontend with `tsx server.ts` (`NODE_ENV=production`, `PORT`)
+- Deploy (Cloud Run): `Dockerfile` at the root (`npm ci` from `package-lock.json` → `npm run build` → `npm start`); buildpacks also work (`gcp-build`, `engines.node >= 22`). `artifacts/api-server` pins `esbuild ^0.25` so a fresh `npm install` resolves `esbuild-plugin-pino`'s peer range.
 - Database: Cloud Firestore (connected via `firebase-applet-config.json`, no `DATABASE_URL` required)
 
 ## Stack
