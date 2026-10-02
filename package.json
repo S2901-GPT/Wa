@@ -25,8 +25,6 @@
     "cors": "^2.8.5",
     "express": "^5.2.1",
     "firebase": "^12.19.0",
-    "firebase-admin": "^14.5.0",
-    "konva": "^10.7.0",
     "pino": "^9.14.0",
     "pino-http": "^10.5.0",
     "pino-pretty": "^13.1.3",

@@ -1,0 +1,13 @@
+# Keep source uploads to Cloud Run small: dependencies and build output are produced in the cloud.
+.gcloudignore
+.git
+.gitignore
+node_modules
+**/node_modules
+**/dist
+*.tsbuildinfo
+.agents
+docs
+bun.lock
+bun.lockb
+npm-debug.log
