@@ -40,7 +40,7 @@ const cases: Array<[string, () => void]> = [
       }],
       relatives: [{ relation: "", relationKey: "children", people: [{ name: "غانم", deceased: false }, { name: "ناصر", deceased: false }] }],
     }));
-    assert.ok(result.text.startsWith("توفيت أرملة الوالد / سيف سعيد رحمهم الله\nوالدة كل من\nغانم\nوناصر"), result.text);
+    assert.ok(result.text.startsWith("توفيت أرملة الوالد / سيف سعيد رحمهم الله\nوالدة كل من\nغانم وناصر"), result.text);
     assert.ok(result.text.endsWith("الله يرحمها ويغفر لها"));
     // لا يُسجَّل الزوج كأنه المتوفى.
     assert.match(describeDeceased(request({}).deceasedPeople[0]), /محمد علي/u);
@@ -173,7 +173,7 @@ const cases: Array<[string, () => void]> = [
     });
     assert.match(grouped, /وعبدالله وأمين رحمهما الله/u);
   }],
-  ["جهة العمل أولاً ثم (متقاعد)، دون أقواس متداخلة", () => {
+  ["جهة العمل ثم «متقاعد» داخل القوسين نفسيهما: (وزارة الداخلية - متقاعد)", () => {
     const result = text({
       relatives: [{ relation: "", relationKey: "children", people: [
         { name: "أحمد", deceased: false, occupation: "وزارة الداخلية (متقاعد)" },
@@ -181,7 +181,8 @@ const cases: Array<[string, () => void]> = [
         { name: "سعد", deceased: false, occupation: "قطر للطاقة" },
       ] }],
     });
-    includesInOrder(result, ["أحمد (وزارة الداخلية) (متقاعد)", "وخالد (متقاعد)", "وسعد (قطر للطاقة)"]);
+    includesInOrder(result, ["أحمد (وزارة الداخلية - متقاعد) وخالد (متقاعد) وسعد (قطر للطاقة)"]);
+    assert.doesNotMatch(result, /\) \(متقاعد\)/u);
     assert.doesNotMatch(result, /\(\(|\)\)/u);
   }],
   ["11 قريب اسمه «رحمة الله» حيّ لا يُعامل كمتوفى", () => {

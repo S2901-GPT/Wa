@@ -669,7 +669,7 @@ function InlinePersonsManager({ groupIndex }: { groupIndex: number }) {
       name: newName.trim(),
       workplace: newWorkplace.trim() || undefined,
       isDeceased: newIsDeceased,
-      // جهة العمل وحدها تعني «على رأس عمله»؛ زر «متقاعد» يضيف «(متقاعد)» بعدها.
+      // جهة العمل وحدها تعني «على رأس عمله»؛ زر «متقاعد» يكتبها «(جهة العمل - متقاعد)».
       jobStatus: newRetired ? "retired" : "none",
     } as any);
 
@@ -754,13 +754,10 @@ function InlinePersonsManager({ groupIndex }: { groupIndex: number }) {
                     (رحمه الله)
                   </Badge>
                 )}
-                {p.workplace && (
-                  <span className="text-muted-foreground text-[10px] truncate max-w-[80px]">
-                    • {p.workplace}
+                {(p.workplace || p.jobStatus === "retired") && (
+                  <span className="text-muted-foreground text-[10px] truncate max-w-[140px]">
+                    • ({[p.workplace, p.jobStatus === "retired" ? "متقاعد" : ""].filter(Boolean).join(" - ")})
                   </span>
-                )}
-                {p.jobStatus === "retired" && (
-                  <span className="text-muted-foreground text-[10px] shrink-0">(متقاعد)</span>
                 )}
               </div>
               <Button

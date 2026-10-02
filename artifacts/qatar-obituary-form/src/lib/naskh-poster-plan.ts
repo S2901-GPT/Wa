@@ -97,6 +97,8 @@ export function tokenizeArabic(text: string): string[] {
   if (!t) return [];
   t = t.replace(/(\S+) \(\s*(رحمه|رحمها|رحمهما|رحمهم|رحمهن) الله\s*\)/gu, (_, name: string, mercy: string) => `${name}${NBSP}(${mercy}${NBSP}الله)`);
   t = t.replace(/(\S+) (رحمه|رحمها|رحمهما|رحمهم|رحمهن) الله/gu, (_, name: string, mercy: string) => `${name}${NBSP}${mercy}${NBSP}الله`);
+  // جهة العمل مع صاحبها في سطر واحد: «مبارك (وزارة الداخلية - متقاعد)» (للأقواس القصيرة فقط حتى لا يتجاوز السطر)
+  t = t.replace(/(\S+) (\([^()]{1,40}\))/gu, (_, name: string, group: string) => `${name}${NBSP}${group.replace(/ /g, NBSP)}`);
   t = t.replace(/(\d{1,2}:\d{2}) (صباحاً|ظهراً|عصراً|مساءً)/gu, `$1${NBSP}$2`);
   t = t.replace(/(^| )(من|إلى|حتى) (\d)/gu, `$1$2${NBSP}$3`);
   t = t.replace(/⁦[^⁩]*⁩/gu, (isolate) => isolate.replace(/ /g, NBSP));
