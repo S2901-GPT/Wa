@@ -285,17 +285,28 @@ function roleHeading(
   return female ? labels.female : labels.male;
 }
 
-function relativeEntry(person: RelativePerson): string {
-  const name = clean(person.name);
-  const occupation = clean(person.occupation);
-  return occupation ? `${name} (${occupation})` : name;
+/**
+ * جهة العمل بين قوسين، ثم «(متقاعد)» إن وُجد: «(وزارة الداخلية) (متقاعد)».
+ * الصفة تُحفظ «وزارة الداخلية (متقاعد)»، فلا تُكتب أقواس متداخلة.
+ */
+export function formatOccupation(occupation?: string | null): string {
+  const text = clean(occupation);
+  if (!text) return "";
+  const retired = text.match(/^(.*?)\s*\(متقاعد\)$/u);
+  if (!retired) return `(${text})`;
+  const place = clean(retired[1]);
+  return place ? `(${place}) (متقاعد)` : "(متقاعد)";
 }
 
-/** أسماء القائمة مع الترحّم: بجانب كل اسم، أو مجمّعة في آخر القائمة بالمفرد/المثنى/الجمع. */
+function relativeEntry(person: RelativePerson): string {
+  return [clean(person.name), formatOccupation(person.occupation)].filter(Boolean).join(" ");
+}
+
+/** أسماء القائمة مع الترحّم بجانب كل اسم («سالم رحمه الله»)؛ التجميع في آخر القائمة فقط إن طُلب صراحة. */
 function relativeNameLines(people: RelativePerson[], placement: RelativeGroup["deceasedPlacement"]): string[] {
   const named = people.filter((person) => clean(person.name));
   const deceased = named.filter((person) => person.deceased);
-  const grouped = placement === "grouped" || (placement !== "inline" && deceased.length >= 2);
+  const grouped = placement === "grouped";
   if (!grouped) {
     return named.map((person) => (person.deceased ? `${relativeEntry(person)} ${mercyForMen(1)}` : relativeEntry(person)));
   }

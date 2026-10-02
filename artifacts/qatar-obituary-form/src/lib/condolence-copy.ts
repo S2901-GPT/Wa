@@ -1,6 +1,6 @@
 import type { ObituaryRequest } from "@workspace/api-client-react";
 import type { CondolenceContentItem } from "./condolence-poster-renderer";
-import { buildAnnouncement, makeClosingPrayer, makeDeathStatement } from "./announcement";
+import { buildAnnouncement, formatOccupation, makeClosingPrayer, makeDeathStatement } from "./announcement";
 
 // صيغ الوفاة والختام من المولّد الموحّد (تراعي الجنس والعدد والأطفال).
 export { makeClosingPrayer, makeDeathStatement };
@@ -74,10 +74,9 @@ export function formatRelativePerson(
   person: RelativeForWording,
   _relation?: string,
 ): string {
-  const occupation = clean(person.occupation);
   return [
     clean(person.name),
-    occupation ? `(${occupation})` : "",
+    formatOccupation(person.occupation),
     person.deceased ? "رحمه الله" : "",
   ].filter(Boolean).join(" ");
 }

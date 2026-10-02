@@ -53,6 +53,11 @@ const PREFIX_TITLES = [
   { label: "شهيد الوطن", value: "شهيد الوطن" },
 ];
 
+// ألقاب الزوج في «أرملة / حرم»: ألقاب الرجال من القائمة نفسها (دون ألقاب النساء والأطفال)
+const NO_TITLE = "none";
+const NON_HUSBAND_TITLES = ["none", "الوالدة", "الشابة", "الطفل", "الطفلة", "الرضيع", "الرضيعة", "المولودة", "الشيخة", "الدكتورة"];
+const HUSBAND_TITLES = PREFIX_TITLES.map((t) => t.value).filter((value) => !NON_HUSBAND_TITLES.includes(value));
+
 // 1. الجنس: ذكر أو أنثى حصرياً
 const GENDER_OPTIONS = [
   { label: "ذكر", value: "ذكر" },
@@ -469,12 +474,20 @@ function FemaleRelationsSection({ deceasedIndex }: { deceasedIndex: number }) {
                 control={form.control}
                 name={`deceasedList.${deceasedIndex}.femaleRelations.${rIndex}.relatedTitle` as any}
                 render={({ field: titleField }) => (
-                  <Input 
-                    placeholder="اللقب: الوالد، الشيخ" 
-                    className="h-9 text-xs w-full" 
-                    {...titleField} 
-                    value={titleField.value || ""} 
-                  />
+                  <Select
+                    value={titleField.value || NO_TITLE}
+                    onValueChange={(val) => titleField.onChange(val === NO_TITLE ? "" : val)}
+                  >
+                    <SelectTrigger className="h-9 text-xs w-full">
+                      <SelectValue placeholder="اللقب" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={NO_TITLE} className="text-xs">بدون لقب</SelectItem>
+                      {HUSBAND_TITLES.map((title) => (
+                        <SelectItem key={title} value={title} className="text-xs">{title}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 )}
               />
             </div>
@@ -485,7 +498,7 @@ function FemaleRelationsSection({ deceasedIndex }: { deceasedIndex: number }) {
                 name={`deceasedList.${deceasedIndex}.femaleRelations.${rIndex}.relatedName` as any}
                 render={({ field: nameField }) => (
                   <Input 
-                    placeholder="اسم الزوج (مثال: ناصر بن خليفة الكواري)" 
+                    placeholder="اسم الزوج (مثال: فلان بن فلان)" 
                     className="h-9 text-xs w-full" 
                     {...nameField} 
                   />
@@ -621,7 +634,7 @@ function InlinePersonsManager({ groupIndex }: { groupIndex: number }) {
   const [newName, setNewName] = useState("");
   const [newWorkplace, setNewWorkplace] = useState("");
   const [newIsDeceased, setNewIsDeceased] = useState(false);
-  const [newJobStatus, setNewJobStatus] = useState<"active" | "retired" | "former" | "none">("none");
+  const [newRetired, setNewRetired] = useState(false);
 
   const handleAddPerson = () => {
     if (!newName.trim()) return;
@@ -629,13 +642,14 @@ function InlinePersonsManager({ groupIndex }: { groupIndex: number }) {
       name: newName.trim(),
       workplace: newWorkplace.trim() || undefined,
       isDeceased: newIsDeceased,
-      jobStatus: newJobStatus,
+      // جهة العمل وحدها تعني «على رأس عمله»؛ زر «متقاعد» يضيف «(متقاعد)» بعدها.
+      jobStatus: newRetired ? "retired" : "none",
     } as any);
 
     setNewName("");
     setNewWorkplace("");
     setNewIsDeceased(false);
-    setNewJobStatus("none");
+    setNewRetired(false);
   };
 
   return (
@@ -667,19 +681,14 @@ function InlinePersonsManager({ groupIndex }: { groupIndex: number }) {
           }}
         />
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-          <Select 
-            value={newJobStatus} 
-            onValueChange={(val: any) => setNewJobStatus(val)}
-          >
-            <SelectTrigger className="h-9 flex-1 sm:w-28 sm:flex-none bg-background text-xs">
-              <SelectValue placeholder="الصفة" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">على رأس عمله</SelectItem>
-              <SelectItem value="retired">متقاعد</SelectItem>
-              <SelectItem value="former">سابقاً</SelectItem>
-            </SelectContent>
-          </Select>
+          <label className="flex items-center gap-1 px-2.5 py-1 rounded bg-background border text-xs cursor-pointer select-none shrink-0 h-9">
+            <Switch 
+              checked={newRetired} 
+              onCheckedChange={setNewRetired} 
+              className="scale-75" 
+            />
+            <span className={newRetired ? "font-semibold text-foreground text-[11px]" : "text-muted-foreground text-[11px]"}>متقاعد</span>
+          </label>
 
           <label className="flex items-center gap-1 px-2.5 py-1 rounded bg-background border text-xs cursor-pointer select-none shrink-0 h-9">
             <Switch 
@@ -722,6 +731,9 @@ function InlinePersonsManager({ groupIndex }: { groupIndex: number }) {
                   <span className="text-muted-foreground text-[10px] truncate max-w-[80px]">
                     • {p.workplace}
                   </span>
+                )}
+                {p.jobStatus === "retired" && (
+                  <span className="text-muted-foreground text-[10px] shrink-0">(متقاعد)</span>
                 )}
               </div>
               <Button

@@ -17,6 +17,7 @@ import {
   describeRequestDeceased,
   formatAge,
   formatDurationDays,
+  formatOccupation,
   relationKeyOf,
 } from "@/lib/announcement";
 
@@ -250,7 +251,7 @@ export default function AdminRequestDetailsPage() {
                         <li key={i} className="text-sm">
                           • {p.name}
                           {p.deceased && <Badge variant="outline" className="mx-2 text-[10px] h-4">رحمه الله</Badge>}
-                          {p.occupation && <span className="text-muted-foreground mx-1">({p.occupation})</span>}
+                          {p.occupation && <span className="text-muted-foreground mx-1">{formatOccupation(p.occupation)}</span>}
                         </li>
                       ))}
                     </ul>

@@ -5,7 +5,7 @@
  */
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { get, useFieldArray, useFormContext, useFormState, useWatch, type FieldPath } from "react-hook-form";
-import { AlertTriangle, ChevronDown, Mail, MapPin, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import { AlertTriangle, ChevronDown, Mail, MapPin, Plus, Trash2, Users } from "lucide-react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { REFERENCE_LABELS, buildAnnouncement, relationKeyOf, relationTakesReference } from "@/lib/announcement";
+import { buildAnnouncement, relationKeyOf } from "@/lib/announcement";
 import { OTHER_RELATION, mapFormToPayload, relationSelectValue } from "@/lib/mapper";
 import { emptyCondolenceDetails, type ObituaryFormValues } from "@/lib/schema";
 
@@ -242,70 +242,18 @@ export function MessageTypeCard() {
   );
 }
 
-const IDENTIFY_OPTIONS = [
-  { value: "auto", label: "تلقائي (الاسم، أو الزوج إن لم يُذكر الاسم)" },
-  { value: "name", label: "بالاسم" },
-  { value: "kunya", label: "بالكنية (أم فلان / أبو فلان)" },
-  { value: "spouse", label: "عبر الزوج: «أرملة / حرم فلان»" },
-  { value: "father", label: "عبر الأب: «ابنة / ابن فلان»" },
-  { value: "children", label: "عبر الأبناء: «والدة / والد كل من»" },
-] as const;
-
-/** حقول التعريف الإضافية لكل متوفى: طريقة التعريف، الكنية، الأب، وحدة العمر، «ليس له أبناء»، سطر إضافي. */
-export function DeceasedIdentityExtras({ index }: { index: number }) {
-  const form = useFormContext<ObituaryFormValues>();
-  const person = useWatch({ control: form.control, name: `deceasedList.${index}` });
-  const [showFather, setShowFather] = useState(() => !!person?.father?.name);
-  const isFemale = person?.gender === "أنثى";
-  const fatherVisible = showFather || person?.identifyBy === "father";
-  const options = isFemale ? IDENTIFY_OPTIONS : IDENTIFY_OPTIONS.filter((option) => option.value !== "spouse");
-
-  return (
-    <div className="space-y-3 w-full box-border">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full">
-        <SelectInput name={`deceasedList.${index}.identifyBy`} label="التعريف بالمتوفى في رأس الإعلان" options={options} />
-        <TextInput name={`deceasedList.${index}.kunya`} label="الكنية (اختياري)" placeholder="مثال: أم هشام، أو: أم باسل المومني" />
-      </div>
-      {fatherVisible ? (
-        <div className="p-3 rounded-lg border border-border/60 bg-muted/10 space-y-2">
-          <p className="text-xs font-semibold text-foreground">الأب <span className="font-normal text-muted-foreground">(يظهر مع الإخوة «أبناء الوالد /» أو في سطر «ابن/ابنة»)</span></p>
-          <LinkedPersonFields prefix={`deceasedList.${index}.father`} nameLabel="اسم الأب" />
-        </div>
-      ) : (
-        <Button type="button" variant="ghost" size="sm" className="h-8 text-xs text-primary gap-1 px-2" onClick={() => setShowFather(true)}>
-          <UserPlus className="w-3.5 h-3.5" /> إضافة الأب (اختياري)
-        </Button>
-      )}
-    </div>
-  );
-}
-
-export function DeceasedDetailsExtras({ index }: { index: number }) {
-  const form = useFormContext<ObituaryFormValues>();
-  const gender = useWatch({ control: form.control, name: `deceasedList.${index}.gender` });
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full box-border">
-      <SelectInput
-        name={`deceasedList.${index}.ageUnit`}
-        label="وحدة العمر"
-        options={[{ value: "years", label: "سنوات" }, { value: "months", label: "أشهر (للرضّع)" }, { value: "days", label: "أيام" }]}
-      />
-      <SwitchInput name={`deceasedList.${index}.noChildren`} label={gender === "أنثى" ? "ليس لها أبناء" : "ليس له أبناء"} />
-      <TextInput name={`deceasedList.${index}.notes`} label="سطر إضافي (اختياري)" placeholder="مثال: ( أم زوجة ) الشيخ / فلان" />
-    </div>
-  );
-}
-
-/** خانات المتوفى المضافة كلها في قسم «خيارات إضافية» واحد، حتى تبقى البطاقة بشكلها الأصلي. */
+/**
+ * خانة المتوفى الإضافية الوحيدة: سطر يُكتب في الإعلان كما هو (مثل جهة العمل السابقة).
+ * مطوية تحت «خيارات إضافية» حتى تبقى البطاقة بشكلها الأصلي.
+ */
 export function DeceasedExtras({ index }: { index: number }) {
-  const prefix = `deceasedList.${index}`;
   return (
-    <MoreOptions
-      hint="الكنية، طريقة التعريف، الأب، وحدة العمر"
-      paths={[`${prefix}.identifyBy`, `${prefix}.kunya`, `${prefix}.father`, `${prefix}.ageUnit`, `${prefix}.noChildren`, `${prefix}.notes`]}
-    >
-      <DeceasedIdentityExtras index={index} />
-      <DeceasedDetailsExtras index={index} />
+    <MoreOptions hint="سطر إضافي في الإعلان" paths={[`deceasedList.${index}.notes`]}>
+      <TextInput
+        name={`deceasedList.${index}.notes`}
+        label="سطر إضافي (اختياري)"
+        placeholder="مثال: الموظف السابق في وزارة التعليم"
+      />
     </MoreOptions>
   );
 }
@@ -383,47 +331,14 @@ export function RelationSelect({ groupIndex, options }: { groupIndex: number; op
   );
 }
 
-/** «يخص»، موضع «رحمه الله»، وسطر «أبناء /» لكل مجموعة أقارب (مطوية). */
+/** «يخص»: عند تعدد المتوفين فقط، لتحديد المتوفى الذي تخصه مجموعة الأقارب. */
 export function RelativeGroupExtras({ groupIndex }: { groupIndex: number }) {
-  const prefix = `relatives.${groupIndex}`;
-  return (
-    <div className="pt-2 mt-3 border-t border-border/50 w-full box-border">
-      <MoreOptions
-        hint="موضع «رحمه الله»، سطر «أبناء /»"
-        paths={[`${prefix}.deceasedPlacement`, `${prefix}.deceasedTarget`, `${prefix}.reference`]}
-      >
-        <RelativeGroupFields groupIndex={groupIndex} />
-      </MoreOptions>
-    </div>
-  );
-}
-
-function RelativeGroupFields({ groupIndex }: { groupIndex: number }) {
   const form = useFormContext<ObituaryFormValues>();
-  const key = useWatch({ control: form.control, name: `relatives.${groupIndex}.relationKey` });
+  const people = useWatch({ control: form.control, name: "deceasedList" }) ?? [];
+  if (people.length < 2) return null;
   return (
-    <div className="space-y-3 w-full box-border">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <DeceasedTargetSelect name={`relatives.${groupIndex}.deceasedTarget`} label="يخص" />
-        <SelectInput
-          name={`relatives.${groupIndex}.deceasedPlacement`}
-          label="موضع «رحمه الله» للمتوفين منهم"
-          options={[
-            { value: "auto", label: "تلقائي (يُجمَّع إن كانوا اثنين فأكثر)" },
-            { value: "inline", label: "بجانب كل اسم" },
-            { value: "grouped", label: "مجمّعة في آخر القائمة" },
-          ]}
-        />
-      </div>
-      {relationTakesReference(key) && (
-        <div className="p-3 rounded-lg border border-border/60 bg-muted/10 space-y-1">
-          <p className="text-xs font-semibold">سطر «أبناء /» — {REFERENCE_LABELS[key!]} <span className="font-normal text-muted-foreground">(اختياري)</span></p>
-          <LinkedPersonFields prefix={`relatives.${groupIndex}.reference`} nameLabel="الاسم" />
-          {(key === "siblings" || key === "full_siblings") && (
-            <p className="text-[11px] text-muted-foreground">إن تُرك فارغاً يُستعمل الأب المسجل في بيانات المتوفى.</p>
-          )}
-        </div>
-      )}
+    <div className="pt-3 mt-3 border-t border-border/50 w-full box-border sm:max-w-xs">
+      <DeceasedTargetSelect name={`relatives.${groupIndex}.deceasedTarget`} label="يخص" />
     </div>
   );
 }
