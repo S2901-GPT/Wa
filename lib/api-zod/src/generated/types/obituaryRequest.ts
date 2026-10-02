@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * واجهة طلبات بيانات إعلانات الوفاة
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 import type { ObituaryRequestInput } from './obituaryRequestInput';
 import type { ObituaryRequestStatus } from './obituaryRequestStatus';

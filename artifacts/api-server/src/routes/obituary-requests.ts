@@ -19,6 +19,25 @@ function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};
 }
 
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
+function optionalIndex(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+function normalizeLinkedPerson(value: unknown) {
+  const person = objectValue(value);
+  const name = optionalString(person.name);
+  if (!name) return undefined;
+  return {
+    ...(optionalString(person.title) ? { title: String(person.title) } : {}),
+    name,
+    deceased: person.deceased === true,
+  };
+}
+
 function normalizeRelatives(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value.map((group) => {
@@ -28,9 +47,14 @@ function normalizeRelatives(value: unknown) {
       : Array.isArray(relativeGroup.names)
         ? relativeGroup.names.map((name) => ({ name }))
         : [];
+    const reference = normalizeLinkedPerson(relativeGroup.reference);
     return {
       relation: String(relativeGroup.relation ?? ""),
+      ...(optionalString(relativeGroup.relationKey) ? { relationKey: relativeGroup.relationKey } : {}),
       familyReference: String(relativeGroup.familyReference ?? ""),
+      ...(reference ? { reference } : {}),
+      ...(optionalString(relativeGroup.deceasedPlacement) ? { deceasedPlacement: relativeGroup.deceasedPlacement } : {}),
+      deceasedIndex: optionalIndex(relativeGroup.deceasedIndex),
       people: sourcePeople.map((person) => {
         const relativePerson = typeof person === "string" ? { name: person } : objectValue(person);
         return {
@@ -43,8 +67,34 @@ function normalizeRelatives(value: unknown) {
   });
 }
 
+/**
+ * اسم مختصر للعرض في قوائم الإدارة. المتوفاة قد لا يُذكر اسمها، فيُستعمل
+ * طريق التعريف (الكنية أو «حرم/أرملة فلان» أو «ابنة فلان») بدل وضع اسم شخص آخر مكان اسمها.
+ */
+function summarizeDeceased(people: unknown): string {
+  if (!Array.isArray(people)) return "";
+  return people.map((value) => {
+    const person = objectValue(value);
+    const female = person.gender === "woman" || person.gender === "girl";
+    const fullName = optionalString(person.fullName);
+    const kunya = optionalString(person.kunya);
+    const spouse = objectValue(person.spouse);
+    const father = objectValue(person.father);
+    if (person.identifyBy === "kunya" && kunya) return kunya;
+    if (person.identifyBy === "spouse" && optionalString(spouse.name)) {
+      return `${spouse.kind === "widow" ? (female ? "أرملة" : "أرمل") : (female ? "حرم" : "زوج")} ${spouse.name}`;
+    }
+    if (person.identifyBy === "father" && optionalString(father.name)) {
+      return `${female ? "ابنة" : "ابن"} ${father.name}`;
+    }
+    if (person.identifyBy === "children") return female ? "والدة (بلا اسم)" : "والد (بلا اسم)";
+    return fullName ?? kunya ?? "";
+  }).filter(Boolean).join("، ");
+}
+
 function normalizePayload(payload: RequestPayload) {
-  const oldGender = payload.gender === "female" ? "woman" : "man";
+  // السجلات القديمة: لا نفترض «رجل» عند غياب الجنس؛ «other» يُظهر تنبيهاً للمراجع بدل نص بجنس خاطئ.
+  const oldGender = payload.gender === "female" ? "woman" : payload.gender === "male" ? "man" : "other";
   const deceasedPeople = Array.isArray(payload.deceasedPeople)
     ? payload.deceasedPeople
     : [{
@@ -84,8 +134,8 @@ function normalizePayload(payload: RequestPayload) {
       ];
   const legacyType = String(payload.condolenceType ?? "");
   const condolenceOptions = Array.isArray(payload.condolenceOptions)
-    ? payload.condolenceOptions.filter((option): option is "phone" | "men" | "women" =>
-        option === "phone" || option === "men" || option === "women")
+    ? payload.condolenceOptions.filter((option): option is "phone" | "men" | "women" | "men_cemetery" | "tbd" =>
+        option === "phone" || option === "men" || option === "women" || option === "men_cemetery" || option === "tbd")
     : [
         ...(legacyType === "men" || legacyType === "separate" || legacyType === "shared" ? ["men" as const] : []),
         ...(legacyType === "women" || legacyType === "separate" || legacyType === "shared" ? ["women" as const] : []),
@@ -99,7 +149,25 @@ function normalizePayload(payload: RequestPayload) {
     return [{ ...value, audience }];
   }).filter((card) => card.audience === "men" || card.audience === "women");
 
+  const messageType = optionalString(payload.messageType) ?? "announcement";
+  const announcementMode = optionalString(payload.announcementMode)
+    ?? (deceasedPeople.length > 1 ? "unrelated" : "single");
+  const sharedParent = normalizeLinkedPerson(payload.sharedParent);
+  const cancellation = objectValue(payload.cancellation);
+
   return {
+    messageType,
+    ...(optionalString(payload.relatedRequestNumber) ? { relatedRequestNumber: String(payload.relatedRequestNumber) } : {}),
+    announcementMode,
+    ...(sharedParent ? { sharedParent } : {}),
+    ...(messageType === "condolence_cancellation" ? {
+      cancellation: {
+        audience: cancellation.audience === "women" || cancellation.audience === "all" ? cancellation.audience : "men",
+        from: String(cancellation.from ?? ""),
+        reason: String(cancellation.reason ?? ""),
+        phoneOnly: cancellation.phoneOnly === true,
+      },
+    } : {}),
     deceasedPeople,
     relatives: normalizeRelatives(payload.relatives),
     prayer: payload.prayer ?? {
@@ -120,6 +188,10 @@ function normalizePayload(payload: RequestPayload) {
     },
     condolences,
     condolenceOptions,
+    ...(condolenceOptions.includes("phone") ? {
+      phoneAudience: payload.phoneAudience === "men" || payload.phoneAudience === "women" ? payload.phoneAudience : "all",
+    } : {}),
+    ...(optionalString(payload.condolenceNote) ? { condolenceNote: String(payload.condolenceNote) } : {}),
     condolencePhoneContacts: condolenceOptions.includes("phone") && Array.isArray(payload.condolencePhoneContacts)
       ? payload.condolencePhoneContacts.map((contact) => {
           const value = objectValue(contact);
@@ -169,7 +241,7 @@ router.post("/obituary-requests", async (req, res): Promise<void> => {
   }
   const [row] = await db.insert(obituaryRequestsTable).values({
     requestNumber: makeRequestNumber(),
-    deceasedName: parsed.data.deceasedPeople[0]?.fullName ?? "",
+    deceasedName: summarizeDeceased(parsed.data.deceasedPeople),
     payload: normalizePayload(parsed.data as RequestPayload),
   }).returning();
   if (!row) throw new Error("Failed to create obituary request");
@@ -205,7 +277,7 @@ router.put("/obituary-requests/:requestNumber", async (req, res): Promise<void> 
   const { status, ...inputPayload } = parsed.data;
   const payload = normalizePayload(inputPayload as RequestPayload);
   const [row] = await db.update(obituaryRequestsTable).set({
-    deceasedName: payload.deceasedPeople[0]?.fullName ?? "",
+    deceasedName: summarizeDeceased(payload.deceasedPeople),
     payload,
     status,
     updatedAt: new Date(),

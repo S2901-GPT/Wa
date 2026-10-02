@@ -3,19 +3,29 @@
  * Do not edit manually.
  * Api
  * واجهة طلبات بيانات إعلانات الوفاة
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
+import type { DeceasedPersonAgeUnit } from './deceasedPersonAgeUnit';
 import type { DeceasedPersonGender } from './deceasedPersonGender';
+import type { DeceasedPersonIdentifyBy } from './deceasedPersonIdentifyBy';
+import type { LinkedPerson } from './linkedPerson';
+import type { SpouseReference } from './spouseReference';
 
 export interface DeceasedPerson {
-  /** @minLength 2 */
-  fullName: string;
+  fullName?: string;
   gender: DeceasedPersonGender;
+  /** طريقة التعريف بالمتوفى في رأس الإعلان */
+  identifyBy?: DeceasedPersonIdentifyBy;
+  kunya?: string;
   /** @nullable */
   age?: number | null;
+  ageUnit?: DeceasedPersonAgeUnit;
   nationality?: string;
   deathPlace?: string;
   title?: string;
   occupation?: string;
   note?: string;
+  noChildren?: boolean;
+  spouse?: SpouseReference;
+  father?: LinkedPerson;
 }

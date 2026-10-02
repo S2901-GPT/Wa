@@ -3,12 +3,21 @@
  * Do not edit manually.
  * Api
  * واجهة طلبات بيانات إعلانات الوفاة
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
+import type { LinkedPerson } from './linkedPerson';
+import type { RelativeGroupDeceasedPlacement } from './relativeGroupDeceasedPlacement';
+import type { RelativeGroupRelationKey } from './relativeGroupRelationKey';
 import type { RelativePerson } from './relativePerson';
 
 export interface RelativeGroup {
   relation: string;
+  /** صلة الأشخاص بالمتوفى؛ يُشتق منها عنوان الإعلان مثل «والدة كل من» */
+  relationKey?: RelativeGroupRelationKey;
   familyReference?: string;
+  reference?: LinkedPerson;
+  deceasedPlacement?: RelativeGroupDeceasedPlacement;
+  /** @nullable */
+  deceasedIndex?: number | null;
   people: RelativePerson[];
 }

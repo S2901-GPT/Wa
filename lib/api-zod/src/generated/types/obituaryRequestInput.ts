@@ -3,23 +3,37 @@
  * Do not edit manually.
  * Api
  * واجهة طلبات بيانات إعلانات الوفاة
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 import type { BurialDetails } from './burialDetails';
+import type { CondolenceCancellation } from './condolenceCancellation';
 import type { CondolenceCard } from './condolenceCard';
 import type { CondolencePhoneContact } from './condolencePhoneContact';
 import type { DeceasedPerson } from './deceasedPerson';
+import type { LinkedPerson } from './linkedPerson';
+import type { ObituaryRequestInputAnnouncementMode } from './obituaryRequestInputAnnouncementMode';
 import type { ObituaryRequestInputCondolenceOptionsItem } from './obituaryRequestInputCondolenceOptionsItem';
+import type { ObituaryRequestInputMessageType } from './obituaryRequestInputMessageType';
+import type { ObituaryRequestInputPhoneAudience } from './obituaryRequestInputPhoneAudience';
 import type { PrayerDetails } from './prayerDetails';
 import type { RelativeGroup } from './relativeGroup';
 
 export interface ObituaryRequestInput {
+  /** نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء) */
+  messageType?: ObituaryRequestInputMessageType;
+  relatedRequestNumber?: string;
+  /** صيغة الإعلان عند تعدد المتوفين */
+  announcementMode?: ObituaryRequestInputAnnouncementMode;
+  sharedParent?: LinkedPerson;
+  cancellation?: CondolenceCancellation;
   /** @minItems 1 */
   deceasedPeople: DeceasedPerson[];
   relatives: RelativeGroup[];
   prayer: PrayerDetails;
   burial: BurialDetails;
   condolenceOptions: ObituaryRequestInputCondolenceOptionsItem[];
+  phoneAudience?: ObituaryRequestInputPhoneAudience;
+  condolenceNote?: string;
   condolences: CondolenceCard[];
   condolencePhoneContacts: CondolencePhoneContact[];
   notes?: string;

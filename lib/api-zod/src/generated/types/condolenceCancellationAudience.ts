@@ -6,10 +6,11 @@
  * OpenAPI spec version: 0.3.0
  */
 
-export type CondolenceCardAudience = typeof CondolenceCardAudience[keyof typeof CondolenceCardAudience];
+export type CondolenceCancellationAudience = typeof CondolenceCancellationAudience[keyof typeof CondolenceCancellationAudience];
 
 
-export const CondolenceCardAudience = {
+export const CondolenceCancellationAudience = {
   men: 'men',
   women: 'women',
+  all: 'all',
 } as const;

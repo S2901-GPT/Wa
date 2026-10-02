@@ -3,6 +3,7 @@ import { useListObituaryRequests } from "@workspace/api-client-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FileText, ChevronLeft, Loader2, AlertCircle } from "lucide-react";
+import { MESSAGE_TYPE_LABELS, describeRequestDeceased } from "@/lib/announcement";
 
 export default function AdminPage() {
   const { data: requests, isLoading, error } = useListObituaryRequests();
@@ -53,9 +54,12 @@ export default function AdminPage() {
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center gap-3 flex-wrap">
                       <h3 className="font-bold text-lg text-foreground group-hover:text-primary transition-colors">
-                        {req.deceasedPeople.map(d => d.fullName).join("، ")}
+                        {describeRequestDeceased(req)}
                       </h3>
                       {getStatusBadge(req.status)}
+                      {req.messageType && req.messageType !== "announcement" && (
+                        <Badge variant="outline">{MESSAGE_TYPE_LABELS[req.messageType]}</Badge>
+                      )}
                     </div>
                     <div className="text-sm text-muted-foreground flex items-center gap-4 divide-x divide-x-reverse divide-border">
                       <span>رقم: <span className="font-mono">{req.requestNumber}</span></span>

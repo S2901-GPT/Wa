@@ -3,7 +3,7 @@
  * Do not edit manually.
  * Api
  * واجهة طلبات بيانات إعلانات الوفاة
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 
 export type BurialDetailsStatus = typeof BurialDetailsStatus[keyof typeof BurialDetailsStatus];
@@ -12,4 +12,5 @@ export type BurialDetailsStatus = typeof BurialDetailsStatus[keyof typeof Burial
 export const BurialDetailsStatus = {
   upcoming: 'upcoming',
   completed: 'completed',
+  postponed: 'postponed',
 } as const;

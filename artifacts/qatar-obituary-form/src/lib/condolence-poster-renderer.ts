@@ -146,6 +146,7 @@ const ROW_PLANS: Record<
   >
 > = {
   official: [
+    { kind: "full", id: "notice" },
     { kind: "full", id: "deceased-details" },
     { kind: "pair", ids: ["prayer", "burial"], label: "صلاة الجنازة والدفن" },
     { kind: "full", id: "men" },
@@ -156,6 +157,7 @@ const ROW_PLANS: Record<
     { kind: "full", id: "closing" },
   ],
   modern: [
+    { kind: "full", id: "notice" },
     { kind: "pair", ids: ["prayer", "deceased-details"] },
     { kind: "pair", ids: ["relatives", "burial"] },
     { kind: "pair", ids: ["men", "women"] },
@@ -164,6 +166,7 @@ const ROW_PLANS: Record<
     { kind: "full", id: "locations" },
   ],
   editorial: [
+    { kind: "full", id: "notice" },
     { kind: "pair", ids: ["relatives", "deceased-details"], rightFraction: 0.62 },
     { kind: "pair", ids: ["prayer", "burial"], rightFraction: 0.46 },
     { kind: "pair", ids: ["men", "women"] },
@@ -484,10 +487,33 @@ function planLayout(
     width: CONTENT_WIDTH,
   });
 
+  // أقسام بلا موضع ثابت في الخطة: «women-2» و«men-cemetery» تتبع قسم جمهورها، والباقي («سيُحدَّد لاحقاً»…) قبل الدعاء الختامي.
+  const plannedIds = new Set(ROW_PLANS[design].flatMap((plan) => (plan.kind === "full" ? [plan.id] : plan.ids)));
+  const pushFullRow = (source: SourceBlock) => {
+    consumed.add(source.id);
+    rows.push({
+      cells: [source.kind === "qr-row"
+        ? makeQrCell(source)
+        : makeSectionCell(source, PAGE_MARGIN, CONTENT_WIDTH)],
+      height: 0,
+      gap: ROW_GAP * scale,
+    });
+  };
+  const pushUnplanned = (prefixes?: string[]) => {
+    for (const source of blocks) {
+      if (plannedIds.has(source.id) || consumed.has(source.id)) continue;
+      if (!prefixes || prefixes.some((prefix) => source.id.startsWith(`${prefix}-`))) pushFullRow(source);
+    }
+  };
+
   for (const plan of ROW_PLANS[design]) {
+    if (plan.kind === "full" && plan.id === "closing") pushUnplanned();
     if (plan.kind === "full") {
       const source = byId.get(plan.id);
-      if (!source) continue;
+      if (!source) {
+        pushUnplanned([plan.id]);
+        continue;
+      }
       consumed.add(plan.id);
       rows.push({
         cells: [source.kind === "qr-row"
@@ -496,6 +522,7 @@ function planLayout(
         height: 0,
         gap: ROW_GAP * scale,
       });
+      pushUnplanned([plan.id]);
       continue;
     }
 
@@ -505,7 +532,10 @@ function planLayout(
     if (rightSource) consumed.add(rightId);
     if (leftSource) consumed.add(leftId);
     const sources = [rightSource, leftSource].filter((source): source is SourceSection => !!source && source.kind === "section");
-    if (!sources.length) continue;
+    if (!sources.length) {
+      pushUnplanned(plan.ids);
+      continue;
+    }
 
     if (sources.length === 1) {
       rows.push({
@@ -515,6 +545,7 @@ function planLayout(
         label: plan.label,
         labelHeight: plan.label ? 30 * scale : 0,
       });
+      pushUnplanned(plan.ids);
       continue;
     }
 
@@ -532,17 +563,11 @@ function planLayout(
       label: plan.label,
       labelHeight: plan.label ? 30 * scale : 0,
     });
+    pushUnplanned(plan.ids);
   }
 
   for (const source of blocks) {
-    if (consumed.has(source.id)) continue;
-    rows.push({
-      cells: [source.kind === "qr-row"
-        ? makeQrCell(source)
-        : makeSectionCell(source, PAGE_MARGIN, CONTENT_WIDTH)],
-      height: 0,
-      gap: ROW_GAP * scale,
-    });
+    if (!consumed.has(source.id)) pushFullRow(source);
   }
 
   return rows.map((row) => ({

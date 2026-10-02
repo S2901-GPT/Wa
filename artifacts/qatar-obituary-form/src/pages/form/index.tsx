@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useLocation } from "wouter";
 import { useCreateObituaryRequest } from "@workspace/api-client-react";
-import { ObituaryFormValues, ObituaryFormSchema } from "@/lib/schema";
+import { ObituaryFormValues, ObituaryFormSchema, emptyFormValues } from "@/lib/schema";
 import { mapFormToPayload } from "@/lib/mapper";
 
 import { Form } from "@/components/ui/form";
@@ -21,7 +21,7 @@ import {
 } from "@/components/form-steps";
 
 const STEPS = [
-  { id: 1, title: 'المتوفون', fields: ['deceasedPeople'] },
+  { id: 1, title: 'المتوفون', fields: ['messageType', 'relatedRequestNumber', 'cancellation', 'announcementMode', 'sharedParent', 'deceasedPeople'] },
   { id: 2, title: 'الأقارب', fields: ['relatives'] },
   { id: 3, title: 'الدفن والصلاة', fields: ['burial', 'prayer'] },
   { id: 4, title: 'العزاء', fields: ['condolences'] },
@@ -35,19 +35,7 @@ export default function FormPage() {
   
   const form = useForm<ObituaryFormValues>({
     resolver: zodResolver(ObituaryFormSchema),
-    defaultValues: {
-      deceasedPeople: [{ fullName: "", gender: "man", age: null, nationality: "", deathPlace: "", title: "", occupation: "", note: "" }],
-      relatives: [],
-      prayer: { enabled: false },
-      burial: { status: "upcoming", outsideQatar: false },
-      condolences: {
-        none: true, phone: false, men: false, women: false,
-        menCard: { audience: "men", location: "", mapLink: "", startType: "", startOther: "", expanded: false, durationDays: null, time: "", houseNumber: "", buildingNumber: "", street: "", area: "", floor: "", apartmentNumber: "", locationNotes: "" },
-        womenCard: { audience: "women", location: "", mapLink: "", startType: "", startOther: "", expanded: false, durationDays: null, time: "", houseNumber: "", buildingNumber: "", street: "", area: "", floor: "", apartmentNumber: "", locationNotes: "" },
-        phoneContacts: [],
-      },
-      notes: ""
-    },
+    defaultValues: emptyFormValues(),
     mode: "onChange"
   });
 
@@ -156,13 +144,14 @@ export default function FormPage() {
                   السابق
                 </Button>
                 
+                {/* مفتاحان مختلفان حتى لا يعيد React استخدام زر «التالي» نفسه فيصبح submit أثناء النقر ويتخطى المراجعة. */}
                 {currentStep < STEPS.length ? (
-                  <Button type="button" onClick={handleNext} className="gap-2 px-8">
+                  <Button key="next" type="button" onClick={handleNext} className="gap-2 px-8">
                     التالي
                     <ChevronLeft className="w-4 h-4 rtl:rotate-180" />
                   </Button>
                 ) : (
-                  <Button type="submit" disabled={createRequest.isPending} className="gap-2 px-8 bg-green-700 hover:bg-green-800 text-white">
+                  <Button key="submit" type="submit" disabled={createRequest.isPending} className="gap-2 px-8 bg-green-700 hover:bg-green-800 text-white">
                     {createRequest.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckIcon className="w-4 h-4" />}
                     اعتماد وإرسال
                   </Button>

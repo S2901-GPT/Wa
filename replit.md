@@ -29,7 +29,10 @@
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- نص الإعلان يُولَّد بقواعد ثابتة في `artifacts/qatar-obituary-form/src/lib/announcement.ts` (لا نموذج لغوي)، ويستخدمه نص «نسخ كنص للعرض» وصورة التعزية ومعاينة المراجعة معاً حتى لا تتباعد القواعد.
+- الصيغ مأخوذة من أرشيف «وفيات قطر»: «توفي/توفيت»، «والدة كل من»، «أبناء /»، «الله يرحمه ويغفر له»، «شفيعاً لوالديه يارب».
+- اسم المتوفاة اختياري؛ التعريف قد يكون بالكنية أو «حرم/أرملة فلان» أو «ابنة فلان» أو «والدة كل من». الزوج والأب كيانان مستقلان بحالة حياة.
+- صلة القرابة تُخزَّن من منظور الأقارب (`relationKey`) ويحوّلها المولّد إلى منظور المتوفى. جنس الأقارب لا يُسجَّل لأن العرف لا يذكر الإناث في خانة الأقارب، فالترحّم عليهم بالمذكر (رحمه/رحمهما/رحمهم).
 
 ## Product
 
@@ -43,7 +46,8 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- `npm test` يشغّل اختبارات القبول المأخوذة من الأرشيف؛ شغّلها بعد أي تعديل على الصياغة.
+- بعد تعديل `lib/api-spec/openapi.yaml` أعد توليد الأنواع: `npx orval --config ./orval.config.ts` داخل `lib/api-spec`.
 
 ## Pointers
 

@@ -8,7 +8,7 @@ import {
   getGetObituaryRequestQueryKey,
   getListObituaryRequestsQueryKey
 } from "@workspace/api-client-react";
-import { ObituaryFormSchema, type ObituaryFormValues } from "@/lib/schema";
+import { ObituaryFormSchema, emptyFormValues, type ObituaryFormValues } from "@/lib/schema";
 import { mapPayloadToForm, mapFormToPayload } from "@/lib/mapper";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -49,19 +49,7 @@ export default function AdminEditRequestPage() {
 
   const form = useForm<ObituaryFormValues>({
     resolver: zodResolver(ObituaryFormSchema),
-    defaultValues: {
-      deceasedPeople: [],
-      relatives: [],
-      prayer: { enabled: false },
-      burial: { status: "upcoming", outsideQatar: false },
-      condolences: {
-        none: true, phone: false, men: false, women: false,
-        menCard: { audience: "men", location: "", mapLink: "", startType: "", startOther: "", expanded: false, durationDays: null, time: "", houseNumber: "", buildingNumber: "", street: "", area: "", floor: "", apartmentNumber: "", locationNotes: "" },
-        womenCard: { audience: "women", location: "", mapLink: "", startType: "", startOther: "", expanded: false, durationDays: null, time: "", houseNumber: "", buildingNumber: "", street: "", area: "", floor: "", apartmentNumber: "", locationNotes: "" },
-        phoneContacts: [],
-      },
-      notes: ""
-    }
+    defaultValues: emptyFormValues(),
   });
 
   useEffect(() => {
@@ -154,7 +142,7 @@ export default function AdminEditRequestPage() {
 
         <Card className="border-none shadow-lg bg-card/80 backdrop-blur-sm overflow-hidden">
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)}>
+            <form onSubmit={form.handleSubmit(onSubmit, () => toast.error("تعذر الحفظ: راجع الحقول المطلوبة في الخطوات (مثل الجنس أو موعد الدفن)."))}>
               <CardContent className="pt-10 pb-4 px-6 md:px-10 min-h-[400px]">
                 {currentStep === 1 && <DeceasedStep />}
                 {currentStep === 2 && <RelativesStep />}

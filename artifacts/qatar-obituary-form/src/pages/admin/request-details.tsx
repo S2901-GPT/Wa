@@ -2,20 +2,52 @@ import { useRoute, Link, useLocation } from "wouter";
 import { getGetObituaryRequestQueryKey, getListObituaryRequestsQueryKey, useGetObituaryRequest, useUpdateObituaryRequest } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Copy, ChevronRight, Loader2, Check, AlertCircle, Edit, RefreshCw } from "lucide-react";
-import { useState, useCallback } from "react";
+import { Copy, ChevronRight, Loader2, Check, AlertCircle, AlertTriangle, Edit } from "lucide-react";
+import { useState, useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { CondolenceImageStudio } from "@/components/condolence-image-studio-v2";
+import {
+  MESSAGE_TYPE_LABELS,
+  RELATION_OPTIONS,
+  buildAnnouncement,
+  describeDeceased,
+  describeRequestDeceased,
+  formatAge,
+  formatDurationDays,
+  relationKeyOf,
+} from "@/lib/announcement";
 
 const genderLabels = {
   man: "رجل",
   woman: "امرأة",
   boy: "طفل",
   girl: "طفلة",
-  other: "أخرى",
+  other: "غير محدد",
+} as const;
+
+const identifyLabels = {
+  name: "بالاسم",
+  kunya: "بالكنية",
+  spouse: "عبر الزوج",
+  father: "عبر الأب",
+  children: "عبر الأبناء",
+} as const;
+
+const burialStatusLabels = {
+  upcoming: "سيتم الدفن",
+  completed: "تم الدفن",
+  postponed: "مؤجل حتى إشعار آخر",
+} as const;
+
+const optionLabels = {
+  men: "عزاء الرجال",
+  men_cemetery: "عزاء الرجال في المقبرة فقط",
+  women: "عزاء النساء",
+  phone: "عبر الهاتف",
+  tbd: "سيُحدَّد لاحقاً",
 } as const;
 
 export default function AdminRequestDetailsPage() {
@@ -36,85 +68,12 @@ export default function AdminRequestDetailsPage() {
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [imageStudioOpen, setImageStudioOpen] = useState(false);
 
-  const generateText = useCallback(() => {
-    if (!req) return "";
-
-    let text = `إنا لله وإنا إليه راجعون\n\n`;
-    
-    req.deceasedPeople.forEach(d => {
-      text += `انتقل(ت) إلى رحمة الله تعالى: ${d.title ? `${d.title} ` : ""}${d.fullName}\n`;
-      if (d.age) text += `العمر: ${d.age} سنة\n`;
-      if (d.nationality) text += `الجنسية: ${d.nationality}\n`;
-      if (d.deathPlace) text += `مكان الوفاة: ${d.deathPlace}\n`;
-      if (d.occupation) text += `الجهة/الصفة: ${d.occupation}\n`;
-      if (d.note) text += `ملاحظة: ${d.note}\n`;
-    });
-    
-    if (req.relatives && req.relatives.length > 0) {
-      req.relatives.forEach(group => {
-        const names = group.people.map(p => {
-          let parts = [p.name];
-          if (p.deceased) parts.push("(متوفى)");
-          if (p.occupation && p.occupation.trim() !== "") parts.push(`(${p.occupation})`);
-          return parts.join(" ");
-        }).join('، ');
-        text += `${group.relation}${group.familyReference ? ` (${group.familyReference})` : ''}: ${names}\n`;
-      });
-    }
-
-    text += `\nالدفن: ${req.burial.status === "completed" ? "تم الدفن" : "سيتم الدفن"} يوم ${req.burial.day || ""} ${req.burial.time || ""} `;
-    if (!req.burial.outsideQatar && req.burial.cemetery) {
-      text += `في ${req.burial.cemetery}\n`;
-    } else if (req.burial.outsideQatar && req.burial.outsideLocation) {
-      text += `خارج قطر (${req.burial.outsideLocation})\n`;
-    } else {
-      text += `\n`;
-    }
-    
-    if (req.prayer.enabled) {
-      text += `صلاة الجنازة: يوم ${req.prayer.day || ""} ${req.prayer.time || ""} في ${req.prayer.place || ""}\n`;
-      if (req.prayer.mapLink) text += `موقع الصلاة: ${req.prayer.mapLink}\n`;
-    }
-
-    if (req.condolenceOptions.length > 0 && req.condolences.length > 0) {
-      text += `\nالعزاء:\n`;
-      req.condolences.forEach(card => {
-        text += `\n- عزاء ${card.audience === "men" ? "الرجال" : "النساء"}:`;
-        if (card.location) text += `\nالمكان: ${card.location}`;
-        if (card.start) text += `\nالبداية: ${card.start}`;
-        if (card.durationDays) text += `\nالمدة: ${card.durationDays} أيام`;
-        if (card.time) text += `\nالوقت: ${card.time}`;
-        const address = [
-          card.area && `المنطقة: ${card.area}`,
-          card.street && `الشارع: ${card.street}`,
-          card.houseNumber && `المنزل: ${card.houseNumber}`,
-          card.buildingNumber && `المبنى: ${card.buildingNumber}`,
-          card.floor && `الطابق: ${card.floor}`,
-          card.apartmentNumber && `الشقة: ${card.apartmentNumber}`,
-        ].filter(Boolean).join("، ");
-        if (address) text += `\nالعنوان: ${address}`;
-        if (card.locationNotes) text += `\nملاحظات المكان: ${card.locationNotes}`;
-        if (card.mapLink) text += `\nالموقع: ${card.mapLink}`;
-        text += `\n`;
-      });
-    }
-
-    if (req.notes) {
-      text += `\nملاحظات:\n${req.notes}\n`;
-    }
-    if (req.condolenceOptions.includes("phone") && req.condolencePhoneContacts.length > 0) {
-      text += `\nالتواصل:\n`;
-      req.condolencePhoneContacts.forEach(contact => {
-        text += `${contact.name || ""}${contact.name && contact.phone ? ": " : ""}${contact.phone || ""}\n`;
-      });
-    }
-
-    return text;
-  }, [req]);
+  // النص المنسوخ يأتي من المولّد الموحّد نفسه الذي تستخدمه صورة التعزية ومعاينة النموذج.
+  const announcement = useMemo(() => (req ? buildAnnouncement(req) : null), [req]);
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(generateText());
+      await navigator.clipboard.writeText(announcement?.text ?? "");
       setCopied(true);
       toast.success("تم نسخ النص بنجاح");
       setTimeout(() => setCopied(false), 2000);
@@ -177,7 +136,13 @@ export default function AdminRequestDetailsPage() {
         <CardHeader className="bg-muted/20 border-b pb-6">
           <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
             <div>
-              <h2 className="text-2xl font-bold mb-2">{req.deceasedPeople.map(d => d.fullName).join("، ")}</h2>
+              <h2 className="text-2xl font-bold mb-2">{describeRequestDeceased(req)}</h2>
+              {req.messageType && req.messageType !== "announcement" && (
+                <div className="mb-2 text-sm font-medium">
+                  {MESSAGE_TYPE_LABELS[req.messageType]}
+                  {req.relatedRequestNumber && <span className="text-muted-foreground"> — للطلب <span className="font-mono">{req.relatedRequestNumber}</span></span>}
+                </div>
+              )}
               <div className="text-sm font-mono text-muted-foreground">رقم الطلب: {req.requestNumber}</div>
               <div className="text-xs text-muted-foreground mt-2">
                 آخر تعديل: {new Date(req.updatedAt).toLocaleString("ar-QA")}
@@ -202,18 +167,50 @@ export default function AdminRequestDetailsPage() {
         </CardHeader>
         
         <CardContent className="grid gap-8 pt-8">
+          {/* النص النهائي */}
+          {announcement && (
+            <section>
+              <h4 className="text-lg font-bold text-primary mb-4 border-b pb-2">نص الإعلان</h4>
+              {announcement.warnings.length > 0 && (
+                <div className="mb-4 rounded-md border border-amber-300 bg-amber-50 p-4 text-amber-900">
+                  <p className="flex items-center gap-2 font-bold"><AlertTriangle className="h-4 w-4" /> تنبيهات قبل النشر</p>
+                  <ul className="mt-2 list-disc space-y-1 pr-5 text-sm">
+                    {announcement.warnings.map((warning) => <li key={warning}>{warning}</li>)}
+                  </ul>
+                </div>
+              )}
+              <pre dir="rtl" className="whitespace-pre-wrap break-words rounded-md border bg-background p-4 font-sans text-base leading-8">{announcement.text}</pre>
+            </section>
+          )}
+
           {/* المتوفون */}
           <section>
             <h4 className="text-lg font-bold text-primary mb-4 border-b pb-2">بيانات المتوفين</h4>
             <div className="grid sm:grid-cols-2 gap-4">
               {req.deceasedPeople.map((d, i) => (
                 <div key={i} className="bg-muted/10 p-4 rounded-md border">
-                  <p className="font-bold text-lg mb-2">{d.title ? `${d.title} ` : ""}{d.fullName}</p>
+                  <p className="font-bold text-lg mb-2">{describeDeceased(d, req.relatives)}</p>
                   <div className="grid grid-cols-2 gap-2 text-sm text-muted-foreground">
                     <p>الجنس: <span className="font-medium text-foreground">{genderLabels[d.gender]}</span></p>
-                    {d.age && <p>العمر: <span className="font-medium text-foreground">{d.age}</span></p>}
+                    <p>التعريف: <span className="font-medium text-foreground">{identifyLabels[d.identifyBy ?? "name"]}</span></p>
+                    {d.fullName && <p className="col-span-2">الاسم: <span className="font-medium text-foreground">{d.title ? `${d.title} ` : ""}{d.fullName}</span></p>}
+                    {d.kunya && <p>الكنية: <span className="font-medium text-foreground">{d.kunya}</span></p>}
+                    {d.spouse?.name && (
+                      <div className="col-span-2">
+                        {d.spouse.kind === "widow" ? "أرملة" : "حرم"}: <span className="font-medium text-foreground">{[d.spouse.title, d.spouse.name].filter(Boolean).join(" ")}</span>
+                        {(d.spouse.deceased || d.spouse.kind === "widow") && <Badge variant="outline" className="mx-2 text-[10px] h-4">رحمه الله</Badge>}
+                      </div>
+                    )}
+                    {d.father?.name && (
+                      <div className="col-span-2">
+                        الأب: <span className="font-medium text-foreground">{[d.father.title, d.father.name].filter(Boolean).join(" ")}</span>
+                        {d.father.deceased && <Badge variant="outline" className="mx-2 text-[10px] h-4">رحمه الله</Badge>}
+                      </div>
+                    )}
+                    {!!d.age && <p>العمر: <span className="font-medium text-foreground">{formatAge(d.age, d.ageUnit)}</span></p>}
                     {d.nationality && <p>الجنسية: <span className="font-medium text-foreground">{d.nationality}</span></p>}
-                    {d.occupation && <p>المهنة: <span className="font-medium text-foreground">{d.occupation}</span></p>}
+                    {d.occupation && <p>الصفة: <span className="font-medium text-foreground">{d.occupation}</span></p>}
+                    {d.noChildren && <p>ليس له/لها أبناء</p>}
                     {d.deathPlace && <p className="col-span-2">مكان الوفاة: <span className="font-medium text-foreground">{d.deathPlace}</span></p>}
                     {d.note && <p className="col-span-2">ملاحظة: <span className="font-medium text-foreground">{d.note}</span></p>}
                   </div>
@@ -229,12 +226,24 @@ export default function AdminRequestDetailsPage() {
               <div className="grid gap-4">
                 {req.relatives.map((rel, idx) => (
                   <div key={idx} className="bg-muted/10 p-4 rounded-md border">
-                    <p className="font-bold text-primary mb-2">{rel.relation} {rel.familyReference && <span className="text-muted-foreground font-normal">({rel.familyReference})</span>}</p>
+                    <p className="font-bold text-primary mb-2">
+                      {(() => {
+                        const key = relationKeyOf(rel);
+                        return key === "other" ? rel.relation : RELATION_OPTIONS.find((option) => option.key === key)?.label;
+                      })()}
+                      {req.deceasedPeople.length > 1 && rel.deceasedIndex != null && (
+                        <span className="text-muted-foreground font-normal"> — لـ{describeDeceased(req.deceasedPeople[rel.deceasedIndex] ?? req.deceasedPeople[0])}</span>
+                      )}
+                      {rel.familyReference && <span className="text-muted-foreground font-normal"> ({rel.familyReference})</span>}
+                    </p>
+                    {rel.reference?.name && (
+                      <p className="text-sm text-muted-foreground mb-2">أبناء {[rel.reference.title, rel.reference.name].filter(Boolean).join(" ")}{rel.reference.deceased ? " رحمه الله" : ""}</p>
+                    )}
                     <ul className="space-y-1">
                       {rel.people.map((p, i) => (
                         <li key={i} className="text-sm">
                           • {p.name}
-                          {p.deceased && <Badge variant="destructive" className="mx-2 text-[10px] h-4">متوفى</Badge>}
+                          {p.deceased && <Badge variant="outline" className="mx-2 text-[10px] h-4">رحمه الله</Badge>}
                           {p.occupation && <span className="text-muted-foreground mx-1">({p.occupation})</span>}
                         </li>
                       ))}
@@ -250,9 +259,10 @@ export default function AdminRequestDetailsPage() {
             <h4 className="text-lg font-bold text-primary mb-4 border-b pb-2">الدفن والصلاة</h4>
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="bg-muted/10 p-4 rounded-md border">
-                <div className="font-bold mb-3 flex items-center gap-2"><Badge className={req.burial.status === "completed" ? "bg-green-600" : "bg-blue-600"}>{req.burial.status === "completed" ? "تم الدفن" : "سيتم الدفن"}</Badge></div>
+                <div className="font-bold mb-3 flex items-center gap-2"><Badge className={req.burial.status === "completed" ? "bg-green-600" : req.burial.status === "postponed" ? "bg-amber-600" : "bg-blue-600"}>{burialStatusLabels[req.burial.status]}</Badge></div>
                 <div className="space-y-2 text-sm">
-                  {req.burial.day && <p><span className="text-muted-foreground">يوم الدفن:</span> {req.burial.day}</p>}
+                  {req.burial.day && <p><span className="text-muted-foreground">يوم الدفن:</span> {[req.burial.day, req.burial.weekday].filter(Boolean).join(" ")}</p>}
+                  {req.burial.postponeNote && <p><span className="text-muted-foreground">ملاحظة التأجيل:</span> {req.burial.postponeNote}</p>}
                   {req.burial.time && <p><span className="text-muted-foreground">الوقت:</span> {req.burial.time}</p>}
                   {req.burial.outsideQatar ? (
                     <p><span className="text-muted-foreground">مكان الدفن:</span> خارج قطر - {req.burial.outsideLocation}</p>
@@ -267,7 +277,7 @@ export default function AdminRequestDetailsPage() {
                 <div className="bg-primary/5 p-4 rounded-md border border-primary/20">
                   <p className="font-bold text-primary mb-3">صلاة الجنازة</p>
                   <div className="space-y-2 text-sm">
-                    {req.prayer.day && <p><span className="text-muted-foreground">اليوم:</span> {req.prayer.day}</p>}
+                    {req.prayer.day && <p><span className="text-muted-foreground">اليوم:</span> {[req.prayer.day, req.prayer.weekday].filter(Boolean).join(" ")}</p>}
                     {req.prayer.time && <p><span className="text-muted-foreground">الوقت:</span> {req.prayer.time}</p>}
                     {req.prayer.place && <p><span className="text-muted-foreground">المكان:</span> {req.prayer.place}</p>}
                     {req.prayer.mapLink && <a href={req.prayer.mapLink} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline block truncate" dir="ltr">{req.prayer.mapLink}</a>}
@@ -278,17 +288,33 @@ export default function AdminRequestDetailsPage() {
           </section>
 
           {/* العزاء */}
-          {req.condolenceOptions.length > 0 && (req.condolences.length > 0 || req.condolencePhoneContacts.length > 0) && (
-            <section>
-              <h4 className="text-lg font-bold text-primary mb-4 border-b pb-2">العزاء</h4>
+          <section>
+            <h4 className="text-lg font-bold text-primary mb-4 border-b pb-2">العزاء</h4>
+            <p className="text-sm mb-3">
+              {req.condolenceOptions.length
+                ? req.condolenceOptions.map((option) => optionLabels[option]).join("، ")
+                : "لا يوجد عزاء"}
+              {req.condolenceOptions.includes("phone") && req.phoneAudience && req.phoneAudience !== "all" && ` (${req.phoneAudience === "women" ? "للنساء" : "للرجال"})`}
+              {req.condolenceNote && <span className="text-muted-foreground"> — {req.condolenceNote}</span>}
+            </p>
+            {req.condolences.length > 0 && (
               <div className="grid sm:grid-cols-2 gap-4">
                 {req.condolences.map((c, i) => (
                   <div key={i} className="bg-muted/10 p-4 rounded-md border">
-                    <p className="font-bold text-primary mb-3">عزاء {c.audience === "men" ? "الرجال" : "النساء"}</p>
+                    <p className="font-bold text-primary mb-3">
+                      عزاء {c.audience === "men" ? "الرجال" : "النساء"}
+                      {req.deceasedPeople.length > 1 && c.deceasedIndex != null && req.deceasedPeople[c.deceasedIndex] && (
+                        <span className="text-muted-foreground font-normal"> — لـ{describeDeceased(req.deceasedPeople[c.deceasedIndex])}</span>
+                      )}
+                    </p>
                     <div className="space-y-2 text-sm">
                       {c.start && <p><span className="text-muted-foreground">البداية:</span> {c.start}</p>}
-                      {c.durationDays && <p><span className="text-muted-foreground">المدة:</span> {c.durationDays} أيام</p>}
+                      {!!c.durationDays && <p><span className="text-muted-foreground">المدة:</span> {formatDurationDays(c.durationDays)}</p>}
                       {c.time && <p><span className="text-muted-foreground">الوقت:</span> {c.time}</p>}
+                      {c.until && <p><span className="text-muted-foreground">حتى:</span> {c.until}</p>}
+                      {c.schedule?.map((entry, entryIndex) => (
+                        <p key={entryIndex}><span className="text-muted-foreground">الجدول:</span> {[entry.days, entry.time].filter(Boolean).join(" ")}</p>
+                      ))}
                       {c.location && <p><span className="text-muted-foreground">الموقع:</span> {c.location}</p>}
                       {(c.area || c.street || c.houseNumber || c.buildingNumber || c.floor || c.apartmentNumber) && (
                         <p>
@@ -309,8 +335,8 @@ export default function AdminRequestDetailsPage() {
                   </div>
                 ))}
               </div>
-            </section>
-          )}
+            )}
+          </section>
 
           {/* أرقام التعزية عبر الهاتف */}
           {req.condolenceOptions.includes("phone") && req.condolencePhoneContacts.length > 0 && (

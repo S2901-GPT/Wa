@@ -3,10 +3,37 @@
  * Do not edit manually.
  * Api
  * واجهة طلبات بيانات إعلانات الوفاة
- * OpenAPI spec version: 0.2.0
+ * OpenAPI spec version: 0.3.0
  */
 export interface HealthStatus {
   status: string;
+}
+
+/**
+ * شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته
+ */
+export interface LinkedPerson {
+  title?: string;
+  name?: string;
+  deceased?: boolean;
+}
+
+export type SpouseReferenceKind = typeof SpouseReferenceKind[keyof typeof SpouseReferenceKind];
+
+
+export const SpouseReferenceKind = {
+  harem: 'harem',
+  widow: 'widow',
+} as const;
+
+/**
+ * زوج المتوفاة؛ النوع يحدد «حرم» أو «أرملة»
+ */
+export interface SpouseReference {
+  kind?: SpouseReferenceKind;
+  title?: string;
+  name?: string;
+  deceased?: boolean;
 }
 
 export type DeceasedPersonGender = typeof DeceasedPersonGender[keyof typeof DeceasedPersonGender];
@@ -20,17 +47,46 @@ export const DeceasedPersonGender = {
   other: 'other',
 } as const;
 
+/**
+ * طريقة التعريف بالمتوفى في رأس الإعلان
+ */
+export type DeceasedPersonIdentifyBy = typeof DeceasedPersonIdentifyBy[keyof typeof DeceasedPersonIdentifyBy];
+
+
+export const DeceasedPersonIdentifyBy = {
+  name: 'name',
+  kunya: 'kunya',
+  spouse: 'spouse',
+  father: 'father',
+  children: 'children',
+} as const;
+
+export type DeceasedPersonAgeUnit = typeof DeceasedPersonAgeUnit[keyof typeof DeceasedPersonAgeUnit];
+
+
+export const DeceasedPersonAgeUnit = {
+  years: 'years',
+  months: 'months',
+  days: 'days',
+} as const;
+
 export interface DeceasedPerson {
-  /** @minLength 2 */
-  fullName: string;
+  fullName?: string;
   gender: DeceasedPersonGender;
+  /** طريقة التعريف بالمتوفى في رأس الإعلان */
+  identifyBy?: DeceasedPersonIdentifyBy;
+  kunya?: string;
   /** @nullable */
   age?: number | null;
+  ageUnit?: DeceasedPersonAgeUnit;
   nationality?: string;
   deathPlace?: string;
   title?: string;
   occupation?: string;
   note?: string;
+  noChildren?: boolean;
+  spouse?: SpouseReference;
+  father?: LinkedPerson;
 }
 
 export interface RelativePerson {
@@ -39,15 +95,53 @@ export interface RelativePerson {
   deceased: boolean;
 }
 
+/**
+ * صلة الأشخاص بالمتوفى؛ يُشتق منها عنوان الإعلان مثل «والدة كل من»
+ */
+export type RelativeGroupRelationKey = typeof RelativeGroupRelationKey[keyof typeof RelativeGroupRelationKey];
+
+
+export const RelativeGroupRelationKey = {
+  children: 'children',
+  full_siblings: 'full_siblings',
+  siblings: 'siblings',
+  grandchildren: 'grandchildren',
+  brothers_children: 'brothers_children',
+  sisters_children: 'sisters_children',
+  father: 'father',
+  grandfather: 'grandfather',
+  paternal_uncles: 'paternal_uncles',
+  maternal_uncles: 'maternal_uncles',
+  daughters_husbands: 'daughters_husbands',
+  sisters_husbands: 'sisters_husbands',
+  other: 'other',
+} as const;
+
+export type RelativeGroupDeceasedPlacement = typeof RelativeGroupDeceasedPlacement[keyof typeof RelativeGroupDeceasedPlacement];
+
+
+export const RelativeGroupDeceasedPlacement = {
+  auto: 'auto',
+  inline: 'inline',
+  grouped: 'grouped',
+} as const;
+
 export interface RelativeGroup {
   relation: string;
+  /** صلة الأشخاص بالمتوفى؛ يُشتق منها عنوان الإعلان مثل «والدة كل من» */
+  relationKey?: RelativeGroupRelationKey;
   familyReference?: string;
+  reference?: LinkedPerson;
+  deceasedPlacement?: RelativeGroupDeceasedPlacement;
+  /** @nullable */
+  deceasedIndex?: number | null;
   people: RelativePerson[];
 }
 
 export interface PrayerDetails {
   enabled: boolean;
   day?: string;
+  weekday?: string;
   time?: string;
   place?: string;
   mapLink?: string;
@@ -59,16 +153,24 @@ export type BurialDetailsStatus = typeof BurialDetailsStatus[keyof typeof Burial
 export const BurialDetailsStatus = {
   upcoming: 'upcoming',
   completed: 'completed',
+  postponed: 'postponed',
 } as const;
 
 export interface BurialDetails {
   status: BurialDetailsStatus;
   day?: string;
+  weekday?: string;
   time?: string;
   cemetery?: string;
   mapLink?: string;
   outsideQatar: boolean;
   outsideLocation?: string;
+  postponeNote?: string;
+}
+
+export interface CondolenceScheduleEntry {
+  days?: string;
+  time?: string;
 }
 
 export type CondolenceCardAudience = typeof CondolenceCardAudience[keyof typeof CondolenceCardAudience];
@@ -94,12 +196,59 @@ export interface CondolenceCard {
   floor?: string;
   apartmentNumber?: string;
   locationNotes?: string;
+  until?: string;
+  schedule?: CondolenceScheduleEntry[];
+  /** @nullable */
+  deceasedIndex?: number | null;
 }
 
 export interface CondolencePhoneContact {
   name?: string;
   phone?: string;
 }
+
+export type CondolenceCancellationAudience = typeof CondolenceCancellationAudience[keyof typeof CondolenceCancellationAudience];
+
+
+export const CondolenceCancellationAudience = {
+  men: 'men',
+  women: 'women',
+  all: 'all',
+} as const;
+
+export interface CondolenceCancellation {
+  audience?: CondolenceCancellationAudience;
+  from?: string;
+  reason?: string;
+  phoneOnly?: boolean;
+}
+
+/**
+ * نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)
+ */
+export type ObituaryRequestInputMessageType = typeof ObituaryRequestInputMessageType[keyof typeof ObituaryRequestInputMessageType];
+
+
+export const ObituaryRequestInputMessageType = {
+  announcement: 'announcement',
+  postponement: 'postponement',
+  amendment: 'amendment',
+  condolence_cancellation: 'condolence_cancellation',
+} as const;
+
+/**
+ * صيغة الإعلان عند تعدد المتوفين
+ */
+export type ObituaryRequestInputAnnouncementMode = typeof ObituaryRequestInputAnnouncementMode[keyof typeof ObituaryRequestInputAnnouncementMode];
+
+
+export const ObituaryRequestInputAnnouncementMode = {
+  single: 'single',
+  unrelated: 'unrelated',
+  siblings: 'siblings',
+  father_first: 'father_first',
+  mother_child: 'mother_child',
+} as const;
 
 export type ObituaryRequestInputCondolenceOptionsItem = typeof ObituaryRequestInputCondolenceOptionsItem[keyof typeof ObituaryRequestInputCondolenceOptionsItem];
 
@@ -108,15 +257,35 @@ export const ObituaryRequestInputCondolenceOptionsItem = {
   phone: 'phone',
   men: 'men',
   women: 'women',
+  men_cemetery: 'men_cemetery',
+  tbd: 'tbd',
+} as const;
+
+export type ObituaryRequestInputPhoneAudience = typeof ObituaryRequestInputPhoneAudience[keyof typeof ObituaryRequestInputPhoneAudience];
+
+
+export const ObituaryRequestInputPhoneAudience = {
+  all: 'all',
+  men: 'men',
+  women: 'women',
 } as const;
 
 export interface ObituaryRequestInput {
+  /** نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء) */
+  messageType?: ObituaryRequestInputMessageType;
+  relatedRequestNumber?: string;
+  /** صيغة الإعلان عند تعدد المتوفين */
+  announcementMode?: ObituaryRequestInputAnnouncementMode;
+  sharedParent?: LinkedPerson;
+  cancellation?: CondolenceCancellation;
   /** @minItems 1 */
   deceasedPeople: DeceasedPerson[];
   relatives: RelativeGroup[];
   prayer: PrayerDetails;
   burial: BurialDetails;
   condolenceOptions: ObituaryRequestInputCondolenceOptionsItem[];
+  phoneAudience?: ObituaryRequestInputPhoneAudience;
+  condolenceNote?: string;
   condolences: CondolenceCard[];
   condolencePhoneContacts: CondolencePhoneContact[];
   notes?: string;

@@ -14,10 +14,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import {
+  applyImageDraft,
   buildCondolencePosterContent,
   createCondolenceImageDraft,
-  formatRelativeGroups,
-  type Audience,
+  draftQrLinks,
+  qrLabelFor,
   type EditableCard,
   type EditableContact,
   type ImageDraft,
@@ -30,39 +31,6 @@ import {
   type QrImage,
 } from "@/lib/condolence-poster-renderer";
 
-function parseAddressDraft(address: string) {
-  type AddressField = "area" | "street" | "houseNumber" | "buildingNumber" | "floor" | "apartmentNumber";
-  const fieldByLabel: Record<string, AddressField> = {
-    "المنطقة": "area",
-    "الشارع": "street",
-    "رقم المنزل": "houseNumber",
-    "رقم المبنى": "buildingNumber",
-    "الطابق": "floor",
-    "رقم الشقة": "apartmentNumber",
-  };
-  const fields: Partial<Record<AddressField, string>> = {};
-  const notes: string[] = [];
-  for (const part of address.split(/،\s*/u).map((value) => value.trim()).filter(Boolean)) {
-    const separator = part.indexOf(":");
-    const label = separator >= 0 ? part.slice(0, separator).trim() : "";
-    const key = fieldByLabel[label];
-    if (key) {
-      fields[key] = part.slice(separator + 1).trim() || undefined;
-    } else {
-      notes.push(part);
-    }
-  }
-  return {
-    area: fields.area,
-    street: fields.street,
-    houseNumber: fields.houseNumber,
-    buildingNumber: fields.buildingNumber,
-    floor: fields.floor,
-    apartmentNumber: fields.apartmentNumber,
-    locationNotes: notes.join("، ") || undefined,
-  };
-}
-
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block space-y-1.5">
@@ -73,18 +41,18 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function CardEditor({
-  audience,
+  title,
   card,
   onChange,
 }: {
-  audience: Audience;
+  title: string;
   card: EditableCard;
-  onChange: (key: keyof EditableCard, value: string) => void;
+  onChange: (key: "location" | "start" | "time" | "durationDays" | "address" | "mapLink", value: string) => void;
 }) {
   return (
     <Card>
       <CardHeader className="pb-3">
-        <CardTitle className="text-base text-primary">{audience === "men" ? "عزاء الرجال" : "عزاء النساء"}</CardTitle>
+        <CardTitle className="text-base text-primary">{title}</CardTitle>
       </CardHeader>
       <CardContent className="grid gap-3 sm:grid-cols-2">
         <Field label="بداية العزاء"><Input value={card.start} onChange={(event) => onChange("start", event.target.value)} /></Field>
@@ -122,6 +90,8 @@ export function CondolenceImageStudio({
   const [rendering, setRendering] = useState(true);
   const [qrError, setQrError] = useState(false);
   const [pagesReady, setPagesReady] = useState(false);
+  // يتغير مع كل توليد ناجح؛ «pagesReady» وحده قد يُدمج false ثم true في تحديث واحد فلا تُرسم المعاينة.
+  const [pagesVersion, setPagesVersion] = useState(0);
   const [approved, setApproved] = useState(false);
   const [pageIndex, setPageIndex] = useState(0);
   const [pageCount, setPageCount] = useState(0);
@@ -129,25 +99,20 @@ export function CondolenceImageStudio({
   const queryClient = useQueryClient();
   const updateMutation = useUpdateObituaryRequest();
 
-  const qrLinks = useMemo(() => ({
-    men: draft.men?.mapLink.trim() || "",
-    women: draft.women?.mapLink.trim() || "",
-    prayer: draft.prayerMapLink.trim(),
-    burial: draft.burialMapLink.trim(),
-  }), [draft.men?.mapLink, draft.women?.mapLink, draft.prayerMapLink, draft.burialMapLink]);
+  const qrLinks = useMemo(
+    () => draftQrLinks(draft),
+    [draft.cards, draft.prayerMapLink, draft.burialMapLink],
+  );
   const posterCopy = useMemo(
     () => buildCondolencePosterContent(request, draft, qrLinks),
     [request, draft, qrLinks],
   );
+  const hasInvalidName = posterCopy.warnings.some((warning) => warning.startsWith("تعذر التعريف"));
   const invalidQrKeys = useMemo(
     () => Object.entries(qrLinks)
       .filter(([, link]) => !!link && !isValidHttpUrl(link))
       .map(([key]) => key),
     [qrLinks],
-  );
-  const visiblePhoneContacts = useMemo(
-    () => draft.phoneContacts.filter((contact) => contact.name.trim() || contact.phone.trim()),
-    [draft.phoneContacts],
   );
 
   useEffect(() => {
@@ -209,6 +174,7 @@ export function CondolenceImageStudio({
         if (cancelled) return;
         pageCanvases.current = generatedPages;
         setPagesReady(generatedPages.length > 0);
+        setPagesVersion((version) => version + 1);
       } catch (error) {
         if (!cancelled) {
           console.error("Condolence image rendering failed", error);
@@ -236,12 +202,12 @@ export function CondolenceImageStudio({
       context.clearRect(0, 0, IMAGE_WIDTH, IMAGE_HEIGHT);
       context.drawImage(page, 0, 0);
     }
-  }, [pageIndex, pagesReady]);
+  }, [pageIndex, pagesReady, pagesVersion]);
 
-  const updateCard = (audience: Audience, key: keyof EditableCard, value: string) => {
+  const updateCard = (sourceIndex: number, key: keyof EditableCard, value: string) => {
     setDraft((current) => ({
       ...current,
-      [audience]: current[audience] ? { ...current[audience], [key]: value } : undefined,
+      cards: current.cards.map((card) => (card.sourceIndex === sourceIndex ? { ...card, [key]: value } : card)),
     }));
   };
   const updateContact = (index: number, key: keyof EditableContact, value: string) => {
@@ -279,45 +245,16 @@ export function CondolenceImageStudio({
   };
 
   const saveToRequest = () => {
-    if (draft.deceasedNames.some((name) => name.trim().length < 2)) {
-      toast.error("أدخل اسم كل متوفى قبل الحفظ");
+    if (hasInvalidName) {
+      toast.error("أكمل التعريف بكل متوفى (الاسم أو طريقة التعريف البديلة) قبل الحفظ");
       return;
     }
     setSaving(true);
-    const updatedPeople = request.deceasedPeople.map((person, index) => ({
-      ...person,
-      fullName: draft.deceasedNames[index]?.trim() ?? person.fullName,
-      title: draft.deceasedTitles[index]?.trim() || undefined,
-    }));
-    const updatedCondolences = request.condolences.map((card) => {
-      const edited = draft[card.audience];
-      if (!edited) return card;
-      const days = Number(edited.durationDays);
-      return {
-        ...card,
-        location: edited.location.trim() || undefined,
-        start: edited.start.trim() || undefined,
-        time: edited.time.trim() || undefined,
-        durationDays: edited.durationDays.trim() && Number.isFinite(days) ? days : null,
-        ...parseAddressDraft(edited.address.trim()),
-        mapLink: edited.mapLink.trim() || undefined,
-      };
-    });
+    const edited = applyImageDraft(request, draft);
     updateMutation.mutate({
       requestNumber: request.requestNumber,
       data: {
-        ...request,
-        deceasedPeople: updatedPeople,
-        condolences: updatedCondolences,
-        prayer: { ...request.prayer, mapLink: draft.prayerMapLink.trim() || undefined },
-        burial: { ...request.burial, mapLink: draft.burialMapLink.trim() || undefined },
-        condolencePhoneContacts: request.condolenceOptions.includes("phone") || request.condolencePhoneContacts.length > 0
-          ? visiblePhoneContacts.map((contact) => ({
-              ...(contact.name.trim() ? { name: contact.name.trim() } : {}),
-              ...(contact.phone.trim() ? { phone: contact.phone.trim() } : {}),
-            }))
-          : request.condolencePhoneContacts,
-        notes: draft.notes.trim() || undefined,
+        ...edited,
         status: request.status,
       },
     }, {
@@ -331,9 +268,8 @@ export function CondolenceImageStudio({
     });
   };
 
-  const familyText = formatRelativeGroups(request);
+  const familyText = posterCopy.relativesText;
   const selectedPages = pageCanvases.current;
-  const hasInvalidName = draft.deceasedNames.some((name) => name.trim().length < 2);
   const exportReady = !rendering
     && !qrLoading
     && !qrError
@@ -379,17 +315,12 @@ export function CondolenceImageStudio({
             {qrError && <p role="alert" className="mt-3 text-sm text-destructive">تعذر إنشاء QR لبعض الروابط. راجع روابط المواقع قبل التنزيل.</p>}
             {invalidQrKeys.length > 0 && (
               <p role="alert" className="mt-3 w-full max-w-[540px] text-sm text-destructive">
-                توجد روابط غير صالحة في: {invalidQrKeys.map((key) => ({
-                  men: "موقع الرجال",
-                  women: "موقع النساء",
-                  prayer: "موقع الصلاة",
-                  burial: "موقع الدفن",
-                }[key] || key)).join("، ")}. صححها أو احذفها قبل اعتماد الصورة.
+                توجد روابط غير صالحة في: {invalidQrKeys.map(qrLabelFor).join("، ")}. صححها أو احذفها قبل اعتماد الصورة.
               </p>
             )}
             {hasInvalidName && (
               <p role="alert" className="mt-3 w-full max-w-[540px] text-sm text-destructive">
-                أدخل اسم كل متوفى بطول حرفين على الأقل قبل اعتماد الصورة.
+                أكمل التعريف بكل متوفى: الاسم، أو اترك الاسم فارغاً إن كان التعريف بالكنية أو الزوج أو الأب أو الأبناء.
               </p>
             )}
             {pageCount > 1 && (
@@ -442,28 +373,22 @@ export function CondolenceImageStudio({
                   <div className="space-y-2">
                     {draft.deceasedNames.map((name, index) => (
                       <div key={index} className="space-y-2">
-                        <Field label={draft.deceasedNames.length > 1 ? `الاسم ${index + 1}` : "الاسم"}>
+                        <Field label={`${draft.deceasedNames.length > 1 ? `الاسم ${index + 1}` : "الاسم"}${request.deceasedPeople[index]?.identifyBy && request.deceasedPeople[index]?.identifyBy !== "name" ? " (اختياري)" : ""}`}>
                           <Input value={name} onChange={(event) => setDraft((current) => ({ ...current, deceasedNames: current.deceasedNames.map((item, itemIndex) => itemIndex === index ? event.target.value : item) }))} />
                         </Field>
                         <Field label="اللقب أو التعريف">
                           <Input value={draft.deceasedTitles[index] || ""} onChange={(event) => setDraft((current) => ({ ...current, deceasedTitles: current.deceasedTitles.map((item, itemIndex) => itemIndex === index ? event.target.value : item) }))} />
                         </Field>
-                        {(() => {
-                          const person = request.deceasedPeople[index];
-                          if (!person) return null;
-                          const details = [
-                            person.age != null ? `العمر: ${person.age}` : "",
-                            person.nationality && `الجنسية: ${person.nationality}`,
-                            person.deathPlace && `مكان الوفاة: ${person.deathPlace}`,
-                            person.occupation && `الجهة / الصفة: ${person.occupation}`,
-                            person.note && `ملاحظة: ${person.note}`,
-                          ].filter(Boolean).join("\n");
-                          return details ? <p className="whitespace-pre-wrap text-xs leading-5 text-muted-foreground">{details}</p> : null;
-                        })()}
                       </div>
                     ))}
                   </div>
                 </Field>
+                {!!posterCopy.detailsText.trim() && (
+                  <div className="space-y-1.5">
+                    <p className="text-sm font-medium text-foreground">بيانات المتوفى كما ستظهر</p>
+                    <p className="whitespace-pre-wrap rounded-md border bg-muted/30 px-3 py-2 text-xs leading-5">{posterCopy.detailsText}</p>
+                  </div>
+                )}
                 <Field label="الدعاء الختامي"><Textarea value={draft.closing} onChange={(event) => setDraft((current) => ({ ...current, closing: event.target.value }))} rows={2} /></Field>
               </CardContent>
             </Card>
@@ -488,8 +413,17 @@ export function CondolenceImageStudio({
               </Card>
             )}
 
-            {draft.men && <CardEditor audience="men" card={draft.men} onChange={(key, value) => updateCard("men", key, value)} />}
-            {draft.women && <CardEditor audience="women" card={draft.women} onChange={(key, value) => updateCard("women", key, value)} />}
+            {draft.cards.map((card) => (
+              <CardEditor
+                key={card.sourceIndex}
+                title={(() => {
+                  const item = posterCopy.items.find((entry) => entry.id === card.sectionId);
+                  return (item?.kind === "section" && item.label) || (card.audience === "men" ? "عزاء الرجال" : "عزاء النساء");
+                })()}
+                card={card}
+                onChange={(key, value) => updateCard(card.sourceIndex, key, value)}
+              />
+            ))}
             {(request.condolenceOptions.includes("phone") || request.condolencePhoneContacts.length > 0) && (
               <Card>
                 <CardHeader className="pb-3"><CardTitle className="text-base text-primary">التعزية عبر الهاتف</CardTitle></CardHeader>
