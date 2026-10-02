@@ -50,6 +50,7 @@ const cases: Array<[string, () => void]> = [
     assert.deepEqual(tokenizeArabic("بدر (رحمه الله) وخالد"), ["بدر (رحمه الله)", "وخالد"]);
     assert.deepEqual(tokenizeArabic("الفترة المسائية من 4:00 مساءً إلى 9:00 مساءً"), ["الفترة", "المسائية", "من 4:00 مساءً", "إلى 9:00 مساءً"]);
     assert.deepEqual(tokenizeArabic("والدها: ⁦55 123 456⁩"), ["والدها:", "⁦55 123 456⁩"]);
+    assert.deepEqual(tokenizeArabic("مبارك (وزارة الداخلية - متقاعد) وعبدالله"), ["مبارك\u00A0(وزارة\u00A0الداخلية\u00A0-\u00A0متقاعد)", "وعبدالله"]);
     assert.deepEqual(tokenizeArabic("   "), []);
   }],
   ["wrapping never splits an atom and respects the width", () => {

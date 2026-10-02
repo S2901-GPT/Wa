@@ -297,7 +297,7 @@ function roleHeading(
 }
 
 /**
- * جهة العمل بين قوسين، ثم «(متقاعد)» إن وُجد: «(وزارة الداخلية) (متقاعد)».
+ * جهة العمل بين قوسين، والمتقاعد داخل القوسين نفسيهما: «(وزارة الداخلية - متقاعد)».
  * الصفة تُحفظ «وزارة الداخلية (متقاعد)»، فلا تُكتب أقواس متداخلة.
  */
 export function formatOccupation(occupation?: string | null): string {
@@ -306,7 +306,7 @@ export function formatOccupation(occupation?: string | null): string {
   const retired = text.match(/^(.*?)\s*\(متقاعد\)$/u);
   if (!retired) return `(${text})`;
   const place = clean(retired[1]);
-  return place ? `(${place}) (متقاعد)` : "(متقاعد)";
+  return place ? `(${place} - متقاعد)` : "(متقاعد)";
 }
 
 function relativeEntry(person: RelativePerson): string {
@@ -366,8 +366,9 @@ function roleBlock(
   return { heading: single ? heading : plural, members: names, reference, single };
 }
 
+/** العنوان في سطر، والأسماء متجاورة في سطر واحد: «مبارك وعبدالله ومحمد وعلي». */
 function blockLines(block: RelativeBlock): string[] {
-  const lines = block.single ? [`${block.heading} / ${block.members[0]}`] : [block.heading, ...prefixAnd(block.members)];
+  const lines = block.single ? [`${block.heading} / ${block.members[0]}`] : [block.heading, prefixAnd(block.members).join(" ")];
   if (block.reference) lines.push(block.reference);
   return lines;
 }

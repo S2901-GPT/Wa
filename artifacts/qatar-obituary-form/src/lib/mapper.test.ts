@@ -73,7 +73,7 @@ const cases: Array<[string, () => void]> = [
     });
     assert.deepEqual(issues(values), []);
     serverAccepts(values);
-    assert.ok(text(values).startsWith("توفيت أرملة الوالد / سيف سعيد رحمهم الله\nوالدة كل من\nغانم\nوناصر"), text(values));
+    assert.ok(text(values).startsWith("توفيت أرملة الوالد / سيف سعيد رحمهم الله\nوالدة كل من\nغانم وناصر"), text(values));
     assert.ok(text(values).endsWith("الله يرحمها ويغفر لها"));
   }],
   ["الطفل يُعرف من اللقب، ووحدة العمر من اللقب: الرضيع بالأشهر والطفل بالسنوات", () => {
@@ -87,7 +87,7 @@ const cases: Array<[string, () => void]> = [
     }));
     assert.ok(child.startsWith("انتقل إلى رحمة الله تعالى الطفل / يوسف\n8 أعوام"), child);
   }],
-  ["الأقارب: «أبناؤه»، جهة العمل ثم (متقاعد)، و«رحمه الله» بجانب كل اسم", () => {
+  ["الأقارب: «أبناؤه»، الأسماء متجاورة، «(جهة العمل - متقاعد)»، و«رحمه الله» بجانب كل اسم", () => {
     const values = form((draft) => {
       draft.relatives = [{
         relationType: "أبناؤه", deceasedPlacement: "auto", deceasedTarget: "all",
@@ -99,7 +99,7 @@ const cases: Array<[string, () => void]> = [
         ],
       }];
     });
-    assert.match(text(values), /والد كل من\nأحمد \(وزارة الداخلية\) \(متقاعد\)\nوخالد \(قطر للطاقة\)\nوسالم رحمه الله\nوحمد رحمه الله/u);
+    assert.match(text(values), /والد كل من\nأحمد \(وزارة الداخلية - متقاعد\) وخالد \(قطر للطاقة\) وسالم رحمه الله وحمد رحمه الله/u);
     const back = mapPayloadToForm(asRequest(values));
     assert.deepEqual(back.relatives[0].persons.slice(0, 2).map((p) => [p.workplace, p.jobStatus]), [["وزارة الداخلية", "retired"], ["قطر للطاقة", "none"]]);
   }],
@@ -226,7 +226,7 @@ const cases: Array<[string, () => void]> = [
       ];
     });
     serverAccepts(values);
-    assert.match(text(values), /والدة كل من\nغانم\nوناصر\nابن عمها \/ خالد/u);
+    assert.match(text(values), /والدة كل من\nغانم وناصر\nابن عمها \/ خالد/u);
 
     const back = mapPayloadToForm(asRequest(values));
     assert.equal(relationSelectValue(back.relatives[0].relationType, back.relatives[0].relationKey, options), "أبناؤه");
