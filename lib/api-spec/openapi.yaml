@@ -344,6 +344,9 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/RelativeGroup"
+        noRelatives:
+          type: boolean
+          description: أكّد المرسل أن المتوفى ليس لديه أقارب يُذكرون
         prayer:
           $ref: "#/components/schemas/PrayerDetails"
         burial:

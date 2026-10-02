@@ -511,25 +511,31 @@ export function describeRequestDeceased(request: Pick<ObituaryRequestInput, "dec
 function personDetailLines(
   person: DeceasedPerson,
   identity: IdentityResult,
-  options: { includeAge: boolean; placeInHeading?: boolean },
+  options: { includeAge: boolean; placeInHeading?: boolean; mergePlace?: boolean },
 ): string[] {
   const lines: string[] = [];
   if (identity.movedTitleLine) lines.push(identity.movedTitleLine);
   if (clean(person.spouse?.name) && !identity.consumedSpouse) lines.push(spouseLine(person));
   if (clean(person.father?.name) && !identity.consumedFather) lines.push(fatherLine(person));
   const nationality = clean(person.nationality);
+  const deathPlace = clean(person.deathPlace);
+  const placeLine = deathPlace && !options.placeInHeading ? `وكانت الوفاة في ${deathPlace}` : "";
+  // رأس قالب النسخ (mergePlace): العمر والجنسية ومكان الوفاة في سطر واحد
   const ageLine = [
     options.includeAge ? formatAge(person.age, person.ageUnit) : "",
     nationality && !isQatari(nationality) ? nationality : "",
+    options.mergePlace ? placeLine : "",
   ].filter(Boolean).join(" — ");
   if (ageLine) lines.push(ageLine);
   if (clean(person.occupation)) lines.push(clean(person.occupation));
-  const deathPlace = clean(person.deathPlace);
-  if (deathPlace && !options.placeInHeading) lines.push(`وكانت الوفاة في ${deathPlace}`);
+  if (placeLine && !options.mergePlace) lines.push(placeLine);
   if (person.noChildren) lines.push(isFemale(person.gender) ? "(ليس لها أبناء)" : "(ليس له أبناء)");
   if (clean(person.note)) lines.push(clean(person.note));
   return lines;
 }
+
+/** اسم رأس الصورة: بلا «/» في أوله عندما لا لقب (النص يبقى «توفي / فلان» كالأرشيف). */
+const headlineName = (value: string) => value.replace(/^\/\s*/u, "").trim();
 
 /** «انتقل/انتقلت إلى رحمة الله تعالى» للأطفال، و«توفي/توفيت» للبالغين كما في الأرشيف. */
 function singleVerb(gender?: Gender): string {
@@ -685,7 +691,7 @@ function composeIdentity(request: ObituaryRequestInput, warnings: string[]): Ide
     const details = personDetailLines(person, identity, { includeAge: true, placeInHeading: !!placeSuffix });
     return {
       identityLines: [`${singleVerb(person.gender)} ${first}${placeSuffix}`.trim(), ...rest, ...details],
-      headline: { verb: singleVerb(person.gender), name: `${first}${placeSuffix}`.trim(), rest: [...rest, ...details] },
+      headline: { verb: singleVerb(person.gender), name: headlineName(first), rest: [...rest, ...personDetailLines(person, identity, { includeAge: true, mergePlace: true })] },
       relativesLines,
       relativeBlocks,
       posterNames: identity.plain,
@@ -760,7 +766,7 @@ function composeIdentity(request: ObituaryRequestInput, warnings: string[]): Ide
     });
     return {
       identityLines: lines,
-      headline: { verb: singleVerb(parent.gender), name: `${first}${placeSuffix}`.trim(), rest: lines.slice(1) },
+      headline: { verb: singleVerb(parent.gender), name: headlineName(first), rest: [...(placeSuffix ? [`وكانت الوفاة${placeSuffix}`] : []), ...lines.slice(1)] },
       relativesLines: parentRoleLines,
       relativeBlocks,
       posterNames: joinWithAnd(posterParts),
@@ -928,6 +934,10 @@ function condolenceSections(request: ObituaryRequestInput, warnings: string[], n
   let noteUsed = false;
 
   const hasMenVenue = options.includes("men") && cards.some((card) => card.audience === "men");
+  // بداية مشتركة لكل المواقع تُكتب مرة واحدة «العزاء من …» قبلها، كما في الأرشيف، بدل تكرارها في كل جملة.
+  const venueCards = cards.filter((card) => options.includes(card.audience));
+  const starts = venueCards.map((card) => clean(card.start));
+  const sharedStart = venueCards.length > 1 && starts[0] && starts.every((start) => start === starts[0]) ? starts[0] : "";
   for (const audience of ["men", "women"] as const) {
     if (!options.includes(audience)) continue;
     const audienceCards = cards
@@ -944,7 +954,7 @@ function condolenceSections(request: ObituaryRequestInput, warnings: string[], n
       } else if (audience === "women" && hasMenVenue) {
         label = "والنساء";
       }
-      const lines = condolenceCardLines(card, label, now);
+      const lines = condolenceCardLines(sharedStart ? { ...card, start: "" } : card, label, now);
       if (!clean(card.location) && !clean(card.area) && !addressPhrase(card) && !clean(card.mapLink)) {
         warnings.push(`مكان ${base}${audienceCards.length > 1 ? ` (${position + 1})` : ""} غير محدد.`);
       }
@@ -958,6 +968,8 @@ function condolenceSections(request: ObituaryRequestInput, warnings: string[], n
       });
     });
   }
+
+  if (sharedStart && sections.length) sections.unshift({ id: "condolence-start", lines: [`العزاء ${startPhrase(sharedStart, now)}`] });
 
   if (options.includes("men_cemetery")) {
     const hasMenCards = sections.some((section) => section.audience === "men");

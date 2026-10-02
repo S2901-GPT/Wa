@@ -73,6 +73,7 @@ export const ListObituaryRequestsResponseItem = zod.object({
   "deceased": zod.boolean()
 }))
 })),
+  "noRelatives": zod.boolean().optional().describe('أكّد المرسل أن المتوفى ليس لديه أقارب يُذكرون'),
   "prayer": zod.object({
   "enabled": zod.boolean(),
   "day": zod.string().optional(),
@@ -191,6 +192,7 @@ export const CreateObituaryRequestBody = zod.object({
   "deceased": zod.boolean()
 }))
 })),
+  "noRelatives": zod.boolean().optional().describe('أكّد المرسل أن المتوفى ليس لديه أقارب يُذكرون'),
   "prayer": zod.object({
   "enabled": zod.boolean(),
   "day": zod.string().optional(),
@@ -301,6 +303,7 @@ export const CreateObituaryRequestResponse = zod.object({
   "deceased": zod.boolean()
 }))
 })),
+  "noRelatives": zod.boolean().optional().describe('أكّد المرسل أن المتوفى ليس لديه أقارب يُذكرون'),
   "prayer": zod.object({
   "enabled": zod.boolean(),
   "day": zod.string().optional(),
@@ -422,6 +425,7 @@ export const GetObituaryRequestResponse = zod.object({
   "deceased": zod.boolean()
 }))
 })),
+  "noRelatives": zod.boolean().optional().describe('أكّد المرسل أن المتوفى ليس لديه أقارب يُذكرون'),
   "prayer": zod.object({
   "enabled": zod.boolean(),
   "day": zod.string().optional(),
@@ -543,6 +547,7 @@ export const UpdateObituaryRequestBody = zod.object({
   "deceased": zod.boolean()
 }))
 })),
+  "noRelatives": zod.boolean().optional().describe('أكّد المرسل أن المتوفى ليس لديه أقارب يُذكرون'),
   "prayer": zod.object({
   "enabled": zod.boolean(),
   "day": zod.string().optional(),
@@ -655,6 +660,7 @@ export const UpdateObituaryRequestResponse = zod.object({
   "deceased": zod.boolean()
 }))
 })),
+  "noRelatives": zod.boolean().optional().describe('أكّد المرسل أن المتوفى ليس لديه أقارب يُذكرون'),
   "prayer": zod.object({
   "enabled": zod.boolean(),
   "day": zod.string().optional(),

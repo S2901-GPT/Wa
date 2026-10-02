@@ -282,6 +282,8 @@ export interface ObituaryRequestInput {
   /** @minItems 1 */
   deceasedPeople: DeceasedPerson[];
   relatives: RelativeGroup[];
+  /** أكّد المرسل أن المتوفى ليس لديه أقارب يُذكرون */
+  noRelatives?: boolean;
   prayer: PrayerDetails;
   burial: BurialDetails;
   condolenceOptions: ObituaryRequestInputCondolenceOptionsItem[];

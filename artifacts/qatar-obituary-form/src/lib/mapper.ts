@@ -302,6 +302,7 @@ export function mapFormToPayload(data: ObituaryFormValues): ObituaryRequestInput
     } : {}),
     deceasedPeople: people.map(deceasedToApi),
     relatives: relativesToApi(data.relatives, count),
+    ...(data.noRelatives && !relativesToApi(data.relatives, count).length ? { noRelatives: true } : {}),
     prayer: {
       enabled: prayerEnabled,
       ...(prayerEnabled ? { day: prayerDay, time: prayerTime, place: clean(prayer?.locationName) } : {}),
@@ -447,6 +448,7 @@ export function mapPayloadToForm(request: ObituaryRequest): ObituaryFormValues {
     announcementMode: request.announcementMode ?? (request.deceasedPeople.length > 1 ? "unrelated" : "single"),
     sharedParent: linkedToForm(request.sharedParent),
     deceasedList: request.deceasedPeople.map(deceasedToForm),
+    noRelatives: !!request.noRelatives,
     relatives: (request.relatives ?? []).map((group) => ({
       relationType: group.relation,
       relationKey: relationKeyOf(group),

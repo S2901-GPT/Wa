@@ -226,6 +226,13 @@ export default function AdminRequestDetailsPage() {
             </div>
           </section>
 
+          {req.noRelatives && !req.relatives?.length && (
+            <section>
+              <h4 className="text-lg font-bold text-primary mb-2 border-b pb-2">الأقارب</h4>
+              <p className="text-sm text-muted-foreground">أكّد المرسل أن المتوفى ليس لديه أقارب يُذكرون.</p>
+            </section>
+          )}
+
           {/* الأقارب */}
           {req.relatives?.length > 0 && (
             <section>
