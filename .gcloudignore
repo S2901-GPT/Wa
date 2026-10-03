@@ -1,10 +1,10 @@
-# Keep source uploads to Cloud Run small: dependencies and build output are produced in the cloud.
+# Keep source uploads to Cloud Run small. The build output (dist) is kept: dist/server.mjs runs without node_modules.
 .gcloudignore
 .git
 .gitignore
 node_modules
 **/node_modules
-**/dist
+**/dist/**/*.map
 *.tsbuildinfo
 .agents
 docs

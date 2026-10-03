@@ -19,8 +19,9 @@ app.post("/api/client-log", (req, res) => {
 // Mount API app (handles /api/*)
 app.use(apiApp);
 
-// Mount frontend
-const clientRoot = path.resolve(__dirname, "artifacts/qatar-obituary-form");
+// Mount frontend. In production this file runs as the bundle dist/server.mjs, one level below the project root.
+const rootDir = path.basename(__dirname) === "dist" ? path.dirname(__dirname) : __dirname;
+const clientRoot = path.resolve(rootDir, "artifacts/qatar-obituary-form");
 const isProduction = process.env.NODE_ENV === "production";
 
 async function startServer() {
