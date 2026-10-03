@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import express from "express";
 import { ADMIN_COOKIE, createSessionToken } from "./admin-auth";
-import { AiError, DEFAULT_MODEL, FALLBACK_MODEL, aiConfig, buildGeminiBody, extractRequest, readJson, toRequest } from "./ai-extract";
+import { AiError, DEFAULT_MODEL, FALLBACK_MODEL, aiConfig, aiEnvHints, buildGeminiBody, extractRequest, readJson, toRequest } from "./ai-extract";
 import aiRouter from "../routes/ai";
 
 /** رد نموذجي كما يُرجعه Gemini لإعلان وهمي (بقيم فارغة وnull كما يحدث فعلاً). */
@@ -93,6 +93,27 @@ const cases: Array<[string, () => void | Promise<void>]> = [
     assert.deepEqual(aiConfig({}), { apiKey: "", model: DEFAULT_MODEL });
     assert.deepEqual(aiConfig({ GEMINI_API_KEY: " k1 ", API_KEY: "k2", GEMINI_MODEL: "gemini-x" }), { apiKey: "k1", model: "gemini-x" });
     assert.equal(aiConfig({ API_KEY: "k2" }).apiKey, "k2");
+    assert.equal(aiConfig({ GOOGLE_API_KEY: "g1", API_KEY: "k2" }).apiKey, "g1");
+    assert.equal(aiConfig({ GEMINI_API_KEY: "   " }).apiKey, "");
+  }],
+  ["aiEnvHints: أسماء المتغيرات فقط، بلا قيم ولا متغيرات غير متعلقة", () => {
+    const hints = aiEnvHints({ APPLET_ID: "secret-applet", ADMIN_PASSWORD: "x", PATH: "/bin", GOOGLE_CLOUD_PROJECT: "p", HTTPS_PROXY: "h" });
+    assert.deepEqual(hints, ["APPLET_ID", "GOOGLE_CLOUD_PROJECT", "HTTPS_PROXY"]);
+    assert.ok(!hints.join(" ").includes("secret-applet"));
+  }],
+  ["extractRequest بلا مفتاح (وسيط AI Studio): لا ترويسة مفتاح، وعنوان الوسيط المعطى", async () => {
+    let seen: { url: string; headers: Record<string, string> } | undefined;
+    await extractRequest("نص", {
+      apiKey: "",
+      model: FALLBACK_MODEL,
+      endpoint: "https://example.run.app/api-proxy/v1beta/models",
+      fetchImpl: async (url, init) => {
+        seen = { url, headers: init.headers as Record<string, string> };
+        return geminiReply(AI_OUTPUT);
+      },
+    });
+    assert.equal(seen?.url, `https://example.run.app/api-proxy/v1beta/models/${FALLBACK_MODEL}:generateContent`);
+    assert.equal(seen?.headers["x-goog-api-key"], undefined);
   }],
   ["extractRequest: يرسل المفتاح في الترويسة، ويجرّب النموذج الثابت إن كان الأول غير متاح", async () => {
     const calls: string[] = [];
@@ -126,10 +147,10 @@ const cases: Array<[string, () => void | Promise<void>]> = [
 
 /** المسار نفسه عبر HTTP: محمي، يرفض النص الفارغ، ويُبلغ إن لم يُضبط المفتاح. */
 async function httpCase() {
-  const saved = { ADMIN_PASSWORD: process.env.ADMIN_PASSWORD, GEMINI_API_KEY: process.env.GEMINI_API_KEY, API_KEY: process.env.API_KEY };
+  const names = ["ADMIN_PASSWORD", "GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENAI_API_KEY", "API_KEY", "GEMINI_KEY", "APPLET_ID"];
+  const saved = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  for (const name of names) delete process.env[name];
   process.env.ADMIN_PASSWORD = "correct-horse-battery";
-  delete process.env.GEMINI_API_KEY;
-  delete process.env.API_KEY;
   const app = express();
   app.use(express.json());
   app.use("/api", aiRouter);
@@ -144,6 +165,14 @@ async function httpCase() {
     const missingKey = await post({ text: "توفي فلان" }, { cookie });
     assert.equal(missingKey.status, 503);
     assert.equal(((await missingKey.json()) as { code: string }).code, "ai_not_configured");
+    // خدمة من AI Studio بلا مفتاح ظاهر: يجرّب وسيطها (غير موجود هنا) ثم يذكر ما يراه التطبيق.
+    process.env.APPLET_ID = "test-applet";
+    const viaStudio = await post({ text: "توفي فلان" }, { cookie });
+    assert.equal(viaStudio.status, 503);
+    const body = (await viaStudio.json()) as { error: string; code: string };
+    assert.equal(body.code, "ai_not_configured");
+    assert.match(body.error, /APPLET_ID/u);
+    assert.ok(!body.error.includes("test-applet"), "لا تظهر قيم المتغيرات");
   } finally {
     server.close();
     for (const [key, value] of Object.entries(saved)) {
