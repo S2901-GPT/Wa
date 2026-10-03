@@ -1,0 +1,5 @@
+# AI Studio installs packages with Bun. For a workspace (monorepo) Bun defaults to the
+# "isolated" layout: node_modules/.bun plus thousands of symlinks, which ends up in the
+# archive AI Studio uploads to Cloud Run. Keep the flat npm-style layout instead.
+[install]
+linker = "hoisted"
