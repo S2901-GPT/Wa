@@ -11,10 +11,13 @@ import {
 } from "lucide-react";
 import {
   getGetObituaryRequestQueryKey,
+  getGetPosterSettingsQueryKey,
   getListObituaryRequestsQueryKey,
+  useGetPosterSettings,
   useUpdateObituaryRequest,
   type ObituaryRequest,
 } from "@workspace/api-client-react";
+import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,7 +31,7 @@ import {
   type EditableContact,
   type ImageDraft,
 } from "@/lib/condolence-copy";
-import { IMAGE_HEIGHT, IMAGE_WIDTH, type RenderValidationReport } from "@/lib/naskh-poster-engine";
+import { IMAGE_HEIGHT, IMAGE_WIDTH, type PosterBranding, type RenderValidationReport } from "@/lib/naskh-poster-engine";
 import { DEFAULT_NASKH_LAYOUT, NASKH_LAYOUTS, isNaskhLayoutId, type NaskhLayoutId } from "@/lib/naskh-poster-plan";
 import { normalizeObituaryPresentation } from "@/lib/presentation-normalizer";
 import { buildAnnouncement } from "@/lib/announcement";
@@ -161,6 +164,14 @@ export function CondolenceImageStudio({
   const queryClient = useQueryClient();
   const updateMutation = useUpdateObituaryRequest();
 
+  // هوية الصورة (الشعار واسم الحساب…) من «الإعدادات»؛ ننتظر وصولها حتى لا يظهر رسم بلا شعار ثم يتبدل
+  const posterSettings = useGetPosterSettings({ query: { queryKey: getGetPosterSettingsQueryKey(), retry: false } });
+  const settingsReady = !posterSettings.isLoading;
+  const branding = useMemo<PosterBranding | undefined>(() => {
+    const data = posterSettings.data;
+    return data ? { logoDataUrl: data.logoDataUrl || undefined, handle: data.handle, socials: data.socials, maxHeight: data.maxHeight } : undefined;
+  }, [posterSettings.data]);
+
   // Normalized content via Presentation Normalizer
   const normalizedContent = useMemo(() => {
     return normalizeObituaryPresentation(request, {
@@ -198,11 +209,12 @@ export function CondolenceImageStudio({
   // رسم الصورة بالتخطيط المختار: 1080 × 1350 وتطول تلقائياً عند كثرة الأسماء
   useEffect(() => {
     let cancelled = false;
+    if (!settingsReady) return;
 
     setRendering(true);
     void (async () => {
       try {
-        const { canvas: compiled, report } = await renderPoster(layout, normalizedContent, qrImages);
+        const { canvas: compiled, report } = await renderPoster(layout, normalizedContent, qrImages, branding);
         if (cancelled) return;
 
         setValidationReport(report);
@@ -228,7 +240,7 @@ export function CondolenceImageStudio({
     return () => {
       cancelled = true;
     };
-  }, [layout, normalizedContent, qrImages]);
+  }, [layout, normalizedContent, qrImages, branding, settingsReady]);
 
   const updateCard = (audience: Audience, key: keyof EditableCard, value: string) => {
     setDraft((current) => ({
@@ -403,6 +415,9 @@ export function CondolenceImageStudio({
                   <Sparkles className="w-4 h-4 text-primary" />
                   تخطيط الصورة:
                 </span>
+                <Link href="/admin/settings" className="text-xs text-primary hover:underline">
+                  الشعار واسم الحساب من الإعدادات
+                </Link>
               </div>
 
               <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="تخطيط الصورة">

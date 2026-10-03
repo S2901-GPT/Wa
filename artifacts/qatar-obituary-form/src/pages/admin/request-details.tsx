@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { CondolenceImageStudio } from "@/components/condolence-image-studio-v2";
+import { DeleteRequestButton } from "@/components/delete-request-button";
 import {
   MESSAGE_TYPE_LABELS,
   RELATION_OPTIONS,
@@ -130,6 +131,12 @@ export default function AdminRequestDetailsPage() {
             <span className="text-base">صورة</span>
             إنشاء صورة التعزية
           </Button>
+          <DeleteRequestButton
+            requestNumber={req.requestNumber}
+            label={describeRequestDeceased(req)}
+            onDeleted={() => setLocation("/admin")}
+            className="h-10 px-4 text-sm"
+          />
         </div>
       </div>
 

@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.3.0
  */
 
+export * from './adminLoginInput';
+export * from './adminSession';
 export * from './burialDetails';
 export * from './burialDetailsStatus';
 export * from './condolenceCancellation';
@@ -29,6 +31,8 @@ export * from './obituaryRequestInputPhoneAudience';
 export * from './obituaryRequestStatus';
 export * from './obituaryRequestUpdate';
 export * from './obituaryRequestUpdateStatus';
+export * from './posterSettings';
+export * from './posterSettingsSocialsItem';
 export * from './prayerDetails';
 export * from './relativeGroup';
 export * from './relativeGroupDeceasedPlacement';

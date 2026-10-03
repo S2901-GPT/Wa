@@ -13,6 +13,9 @@ export const HealthCheckResponse = zod.object({
 })
 
 
+/**
+ * للمسؤول فقط
+ */
 
 
 
@@ -483,6 +486,9 @@ export const GetObituaryRequestResponse = zod.object({
 }))
 
 
+/**
+ * للمسؤول فقط
+ */
 export const UpdateObituaryRequestParams = zod.object({
   "requestNumber": zod.coerce.string()
 })
@@ -716,5 +722,103 @@ export const UpdateObituaryRequestResponse = zod.object({
   "updatedAt": zod.coerce.date(),
   "status": zod.enum(['new', 'reviewing', 'ready', 'completed'])
 }))
+
+
+/**
+ * للمسؤول فقط
+ */
+export const DeleteObituaryRequestParams = zod.object({
+  "requestNumber": zod.coerce.string()
+})
+
+export const DeleteObituaryRequestResponse = zod.void()
+
+
+export const GetAdminSessionResponse = zod.object({
+  "authenticated": zod.boolean(),
+  "configured": zod.boolean().describe('كلمة مرور المسؤول مضبوطة في الخادم وقوية بما يكفي')
+})
+
+
+/**
+ * إعدادات هوية صورة التعزية (الشعار واسم الحساب وأيقونات التواصل والطول الأقصى). للمسؤول فقط
+ */
+export const getPosterSettingsResponseLogoDataUrlMax = 300000;
+
+export const getPosterSettingsResponseHandleMax = 60;
+
+export const getPosterSettingsResponseSocialsMax = 3;
+
+export const getPosterSettingsResponseMaxHeightMin = 1350;
+export const getPosterSettingsResponseMaxHeightMax = 1800;
+
+
+
+export const GetPosterSettingsResponse = zod.object({
+  "logoDataUrl": zod.string().max(getPosterSettingsResponseLogoDataUrlMax).describe('الشعار كـ data URL (PNG أو JPEG أو WebP) أو نص فارغ بلا شعار'),
+  "handle": zod.string().max(getPosterSettingsResponseHandleMax).describe('اسم الحساب الظاهر تحت أيقونات التواصل'),
+  "socials": zod.array(zod.enum(['instagram', 'snapchat', 'x'])).max(getPosterSettingsResponseSocialsMax),
+  "maxHeight": zod.number().int().min(getPosterSettingsResponseMaxHeightMin).max(getPosterSettingsResponseMaxHeightMax).describe('الصورة تبدأ بطول 1350 وتطول عند الحاجة حتى هذا الحد')
+})
+
+
+/**
+ * للمسؤول فقط
+ */
+export const savePosterSettingsBodyLogoDataUrlMax = 300000;
+
+export const savePosterSettingsBodyHandleMax = 60;
+
+export const savePosterSettingsBodySocialsMax = 3;
+
+export const savePosterSettingsBodyMaxHeightMin = 1350;
+export const savePosterSettingsBodyMaxHeightMax = 1800;
+
+
+
+export const SavePosterSettingsBody = zod.object({
+  "logoDataUrl": zod.string().max(savePosterSettingsBodyLogoDataUrlMax).describe('الشعار كـ data URL (PNG أو JPEG أو WebP) أو نص فارغ بلا شعار'),
+  "handle": zod.string().max(savePosterSettingsBodyHandleMax).describe('اسم الحساب الظاهر تحت أيقونات التواصل'),
+  "socials": zod.array(zod.enum(['instagram', 'snapchat', 'x'])).max(savePosterSettingsBodySocialsMax),
+  "maxHeight": zod.number().int().min(savePosterSettingsBodyMaxHeightMin).max(savePosterSettingsBodyMaxHeightMax).describe('الصورة تبدأ بطول 1350 وتطول عند الحاجة حتى هذا الحد')
+})
+
+export const savePosterSettingsResponseLogoDataUrlMax = 300000;
+
+export const savePosterSettingsResponseHandleMax = 60;
+
+export const savePosterSettingsResponseSocialsMax = 3;
+
+export const savePosterSettingsResponseMaxHeightMin = 1350;
+export const savePosterSettingsResponseMaxHeightMax = 1800;
+
+
+
+export const SavePosterSettingsResponse = zod.object({
+  "logoDataUrl": zod.string().max(savePosterSettingsResponseLogoDataUrlMax).describe('الشعار كـ data URL (PNG أو JPEG أو WebP) أو نص فارغ بلا شعار'),
+  "handle": zod.string().max(savePosterSettingsResponseHandleMax).describe('اسم الحساب الظاهر تحت أيقونات التواصل'),
+  "socials": zod.array(zod.enum(['instagram', 'snapchat', 'x'])).max(savePosterSettingsResponseSocialsMax),
+  "maxHeight": zod.number().int().min(savePosterSettingsResponseMaxHeightMin).max(savePosterSettingsResponseMaxHeightMax).describe('الصورة تبدأ بطول 1350 وتطول عند الحاجة حتى هذا الحد')
+})
+
+
+export const adminLoginBodyPasswordMax = 200;
+
+
+
+export const AdminLoginBody = zod.object({
+  "password": zod.string().max(adminLoginBodyPasswordMax)
+})
+
+export const AdminLoginResponse = zod.object({
+  "authenticated": zod.boolean(),
+  "configured": zod.boolean().describe('كلمة مرور المسؤول مضبوطة في الخادم وقوية بما يكفي')
+})
+
+
+export const AdminLogoutResponse = zod.object({
+  "authenticated": zod.boolean(),
+  "configured": zod.boolean().describe('كلمة مرور المسؤول مضبوطة في الخادم وقوية بما يكفي')
+})
 
 

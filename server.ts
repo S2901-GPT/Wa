@@ -8,8 +8,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+app.set("trust proxy", 1);
 const port = Number(process.env.PORT) || 3000;
 
+// الشعار صورة داخل الجسم: مسار الإعدادات وحده يقبل جسماً أكبر من الافتراضي (100KB)، ويجب أن يسبق المحلل العام.
+app.use("/api/admin/settings", express.json({ limit: "1mb" }));
 app.use(express.json());
 app.post("/api/client-log", (req, res) => {
   console.error("BROWSER_CLIENT_ERROR:", JSON.stringify(req.body, null, 2));

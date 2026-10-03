@@ -9,6 +9,7 @@ servers:
 tags:
   - name: health
   - name: requests
+  - name: admin
 paths:
   /healthz:
     get:
@@ -25,6 +26,7 @@ paths:
     get:
       operationId: listObituaryRequests
       tags: [requests]
+      description: للمسؤول فقط
       responses:
         "200":
           description: قائمة الطلبات من الأحدث
@@ -34,6 +36,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ObituaryRequest"
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
     post:
       operationId: createObituaryRequest
       tags: [requests]
@@ -65,6 +69,8 @@ paths:
                 $ref: "#/components/schemas/ObituaryRequest"
         "404":
           description: الطلب غير موجود
+        "429":
+          description: محاولات بحث كثيرة، حاول لاحقاً
     put:
       operationId: updateObituaryRequest
       tags: [requests]
@@ -76,6 +82,7 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/ObituaryRequestUpdate"
+      description: للمسؤول فقط
       responses:
         "200":
           description: تم تحديث الطلب
@@ -83,8 +90,105 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ObituaryRequest"
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
         "404":
           description: الطلب غير موجود
+    delete:
+      operationId: deleteObituaryRequest
+      tags: [requests]
+      description: للمسؤول فقط
+      parameters:
+        - $ref: "#/components/parameters/RequestNumber"
+      responses:
+        "204":
+          description: تم حذف الطلب
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
+        "404":
+          description: الطلب غير موجود
+  /admin/session:
+    get:
+      operationId: getAdminSession
+      tags: [admin]
+      responses:
+        "200":
+          description: حالة جلسة المسؤول
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSession"
+  /admin/settings:
+    get:
+      operationId: getPosterSettings
+      tags: [admin]
+      description: إعدادات هوية صورة التعزية (الشعار واسم الحساب وأيقونات التواصل والطول الأقصى). للمسؤول فقط
+      responses:
+        "200":
+          description: الإعدادات الحالية (أو الافتراضية)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PosterSettings"
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
+    put:
+      operationId: savePosterSettings
+      tags: [admin]
+      description: للمسؤول فقط
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PosterSettings"
+      responses:
+        "200":
+          description: الإعدادات بعد الحفظ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PosterSettings"
+        "400":
+          description: إعدادات غير صالحة
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
+        "500":
+          description: تعذر الحفظ
+  /admin/login:
+    post:
+      operationId: adminLogin
+      tags: [admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminLoginInput"
+      responses:
+        "200":
+          description: تم تسجيل الدخول (تُرسل الجلسة في ملف تعريف ارتباط HttpOnly)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSession"
+        "401":
+          description: كلمة المرور غير صحيحة
+        "429":
+          description: محاولات خاطئة كثيرة، حاول لاحقاً
+        "503":
+          description: كلمة مرور المسؤول لم تُضبط في الخادم أو ضعيفة
+  /admin/logout:
+    post:
+      operationId: adminLogout
+      tags: [admin]
+      responses:
+        "200":
+          description: تم تسجيل الخروج
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSession"
 components:
   parameters:
     RequestNumber:
@@ -100,6 +204,45 @@ components:
       properties:
         status:
           type: string
+    AdminSession:
+      type: object
+      required: [authenticated, configured]
+      properties:
+        authenticated:
+          type: boolean
+        configured:
+          type: boolean
+          description: كلمة مرور المسؤول مضبوطة في الخادم وقوية بما يكفي
+    PosterSettings:
+      type: object
+      required: [logoDataUrl, handle, socials, maxHeight]
+      properties:
+        logoDataUrl:
+          type: string
+          maxLength: 300000
+          description: الشعار كـ data URL (PNG أو JPEG أو WebP) أو نص فارغ بلا شعار
+        handle:
+          type: string
+          maxLength: 60
+          description: اسم الحساب الظاهر تحت أيقونات التواصل
+        socials:
+          type: array
+          maxItems: 3
+          items:
+            type: string
+            enum: [instagram, snapchat, x]
+        maxHeight:
+          type: integer
+          minimum: 1350
+          maximum: 1800
+          description: الصورة تبدأ بطول 1350 وتطول عند الحاجة حتى هذا الحد
+    AdminLoginInput:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          maxLength: 200
     LinkedPerson:
       type: object
       description: شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته

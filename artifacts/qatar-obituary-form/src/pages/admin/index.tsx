@@ -1,10 +1,17 @@
 import { useState, type MouseEvent } from "react";
 import { Link } from "wouter";
-import { useListObituaryRequests, type ObituaryRequest } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  getGetAdminSessionQueryKey,
+  useAdminLogout,
+  useListObituaryRequests,
+  type ObituaryRequest,
+} from "@workspace/api-client-react";
+import { DeleteRequestButton } from "@/components/delete-request-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, ChevronLeft, Loader2, AlertCircle, Copy, Check } from "lucide-react";
+import { FileText, ChevronLeft, Loader2, AlertCircle, Copy, Check, LogOut, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { MESSAGE_TYPE_LABELS, buildAnnouncement, describeRequestDeceased } from "@/lib/announcement";
 
@@ -34,6 +41,19 @@ function QuickCopyButton({ request }: { request: ObituaryRequest }) {
 
 export default function AdminPage() {
   const { data: requests, isLoading, error } = useListObituaryRequests();
+  const queryClient = useQueryClient();
+  const logout = useAdminLogout();
+
+  const signOut = () => {
+    logout.mutate(undefined, {
+      onSuccess: (session) => {
+        // تعود البوابة إلى شاشة الدخول أولاً، ثم نمسح بيانات الطلبات من الذاكرة المؤقتة حتى لا تبقى في المتصفح بعد الخروج
+        queryClient.setQueryData(getGetAdminSessionQueryKey(), session);
+        queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== getGetAdminSessionQueryKey()[0] });
+      },
+      onError: () => toast.error("تعذر تسجيل الخروج، حاول مرة أخرى"),
+    });
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -51,6 +71,18 @@ export default function AdminPage() {
         <div>
           <h1 className="text-3xl font-bold text-primary mb-2">لوحة الإدارة</h1>
           <p className="text-muted-foreground">عرض وإدارة طلبات إعلان الوفاة</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link href="/admin/settings">
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 border-primary/40 text-primary hover:bg-primary/5">
+              <Settings className="h-4 w-4" />
+              الإعدادات
+            </Button>
+          </Link>
+          <Button type="button" variant="outline" size="sm" onClick={signOut} disabled={logout.isPending} className="gap-1.5">
+            {logout.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+            تسجيل الخروج
+          </Button>
         </div>
       </div>
 
@@ -95,6 +127,7 @@ export default function AdminPage() {
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <QuickCopyButton request={req} />
+                    <DeleteRequestButton requestNumber={req.requestNumber} label={describeRequestDeceased(req)} iconOnly />
                     <ChevronLeft className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors rtl:rotate-180" />
                   </div>
                 </CardContent>
