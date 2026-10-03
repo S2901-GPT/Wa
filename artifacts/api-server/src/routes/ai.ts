@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { ParseObituaryTextBody, ParseObituaryTextResponse } from "@workspace/api-zod";
 import { clientKey, createRateLimiter, requireAdmin } from "../lib/admin-auth";
-import { AiError, aiConfig, extractRequest } from "../lib/ai-extract";
+import { AI_STUDIO_PROXY_PATH, AiError, aiConfig, aiEnvHints, extractRequest } from "../lib/ai-extract";
 
 const router: IRouter = Router();
 
@@ -15,8 +15,18 @@ router.post("/admin/parse-text", requireAdmin, async (req, res): Promise<void> =
     return;
   }
   const { apiKey, model } = aiConfig();
-  if (!apiKey) {
-    res.status(503).json({ error: "خدمة الصياغة بالذكاء الاصطناعي غير مفعّلة على الخادم.", code: "ai_not_configured" });
+  const host = req.get("host") ?? "";
+  const viaAiStudio = !apiKey && Boolean(process.env.APPLET_ID) && /^[a-z0-9.-]+(:\d+)?$/iu.test(host);
+  const notConfigured = () => {
+    const seen = aiEnvHints();
+    req.log?.warn({ seen, viaAiStudio }, "Gemini key not visible to the app");
+    res.status(503).json({
+      error: `خدمة الصياغة بالذكاء الاصطناعي غير مفعّلة: مفتاح Gemini (GEMINI_API_KEY) لا يصل إلى التطبيق. المتغيرات التي يراها التطبيق: ${seen.join("، ") || "لا شيء"}.`,
+      code: "ai_not_configured",
+    });
+  };
+  if (!apiKey && !viaAiStudio) {
+    notConfigured();
     return;
   }
   const limit = parses.hit(clientKey(req));
@@ -26,9 +36,17 @@ router.post("/admin/parse-text", requireAdmin, async (req, res): Promise<void> =
     return;
   }
   try {
-    const result = await extractRequest(parsed.data.text.trim(), { apiKey, model });
+    // بلا مفتاح في خدمة من AI Studio: جرّب وسيطها على عنوان الخدمة نفسه، فهو يضيف المفتاح.
+    const endpoint = viaAiStudio ? `${req.protocol}://${host}${AI_STUDIO_PROXY_PATH}` : undefined;
+    const result = await extractRequest(parsed.data.text.trim(), { apiKey, model, endpoint });
     res.json(ParseObituaryTextResponse.parse(result));
   } catch (error) {
+    // وصل الوسيط إلى Gemini (نص بلا متوفى، أو الخدمة مشغولة): رسالته هي الصحيحة. غير ذلك: الوسيط غير موجود.
+    if (viaAiStudio && !(error instanceof AiError && (error.status === 422 || error.status === 429))) {
+      req.log?.warn({ err: error }, "AI Studio proxy attempt failed");
+      notConfigured();
+      return;
+    }
     if (error instanceof AiError) {
       res.status(error.status).json({ error: error.message });
       return;

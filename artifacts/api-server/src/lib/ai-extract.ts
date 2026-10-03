@@ -20,12 +20,27 @@ export class AiError extends Error {
   }
 }
 
+/** أسماء المفتاح المحتملة بالترتيب؛ تختلف بين AI Studio والاستضافات الأخرى. */
+const KEY_NAMES = ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_GENAI_API_KEY", "API_KEY", "GEMINI_KEY"] as const;
+
 export function aiConfig(env: NodeJS.ProcessEnv = process.env): { apiKey: string; model: string } {
+  const name = KEY_NAMES.find((key) => (env[key] ?? "").trim());
   return {
-    apiKey: (env.GEMINI_API_KEY || env.API_KEY || "").trim(),
+    apiKey: name ? (env[name] ?? "").trim() : "",
     model: (env.GEMINI_MODEL || DEFAULT_MODEL).trim(),
   };
 }
+
+/** أسماء (لا قيم) متغيرات البيئة التي قد تخص Gemini أو وكيل AI Studio، لتشخيص غياب المفتاح. */
+export function aiEnvHints(env: NodeJS.ProcessEnv = process.env): string[] {
+  return Object.keys(env)
+    .filter((name) => /GEMINI|GENAI|GOOGLE|API_?KEY|APPLET|PROXY|BASE_?URL/iu.test(name))
+    .sort()
+    .slice(0, 20);
+}
+
+/** خدمة منشورة من AI Studio: يمر الطلب بوسيطها الذي يضيف المفتاح، فلا يحتاج التطبيق أن يراه. */
+export const AI_STUDIO_PROXY_PATH = "/api-proxy/v1beta/models";
 
 // ───────────────────────── مخطط الناتج (صيغة Gemini) ─────────────────────────
 
@@ -331,15 +346,22 @@ type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
 /** يرسل النص إلى Gemini ويعيد طلباً صالحاً مع الملاحظات. */
 export async function extractRequest(
   input: string,
-  { apiKey, model, fetchImpl = fetch, timeoutMs = 45_000 }: { apiKey: string; model: string; fetchImpl?: FetchLike; timeoutMs?: number },
+  {
+    apiKey,
+    model,
+    endpoint = ENDPOINT,
+    fetchImpl = fetch,
+    timeoutMs = 45_000,
+  }: { apiKey: string; model: string; endpoint?: string; fetchImpl?: FetchLike; timeoutMs?: number },
 ): Promise<ExtractResult> {
   const models = model === FALLBACK_MODEL ? [model] : [model, FALLBACK_MODEL];
   for (const [index, name] of models.entries()) {
     let response: Response;
     try {
-      response = await fetchImpl(`${ENDPOINT}/${encodeURIComponent(name)}:generateContent`, {
+      response = await fetchImpl(`${endpoint}/${encodeURIComponent(name)}:generateContent`, {
         method: "POST",
-        headers: { "content-type": "application/json", "x-goog-api-key": apiKey },
+        // بلا مفتاح (عبر وسيط AI Studio) لا تُرسل الترويسة، فالوسيط يضيفها.
+        headers: { "content-type": "application/json", ...(apiKey ? { "x-goog-api-key": apiKey } : {}) },
         body: JSON.stringify(buildGeminiBody(input)),
         signal: AbortSignal.timeout(timeoutMs),
       });
