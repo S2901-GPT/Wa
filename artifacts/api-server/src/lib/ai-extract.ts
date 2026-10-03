@@ -6,7 +6,7 @@
 import { CreateObituaryRequestBody } from "@workspace/api-zod";
 
 export type ObituaryRequestInput = ReturnType<typeof CreateObituaryRequestBody.parse>;
-export type ExtractResult = { request: ObituaryRequestInput; warnings: string[] };
+export type ExtractResult = { request: ObituaryRequestInput; warnings: string[]; debug?: string };
 
 /** الاسم المستعار لأحدث نموذج Flash؛ ويُجرَّب النموذج الثابت إن لم يكن متاحاً للمفتاح. */
 export const DEFAULT_MODEL = "gemini-flash-latest";
@@ -14,9 +14,12 @@ export const FALLBACK_MODEL = "gemini-2.5-flash";
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 
 export class AiError extends Error {
-  constructor(readonly status: number, message: string) {
+  /** ردّ النموذج مختصراً (إن وُجد) ليُعرض للمسؤول ويُسجَّل، فلا يبقى الفشل بلا أثر. */
+  debug?: string;
+  constructor(readonly status: number, message: string, debug?: string) {
     super(message);
     this.name = "AiError";
+    if (debug) this.debug = debug;
   }
 }
 
@@ -54,9 +57,11 @@ const oneOf = (values: readonly string[], description?: string): GeminiSchema =>
   enum: [...values],
   ...(description ? { description } : {}),
 });
+// propertyOrdering: بدونه يرتّب Gemini الحقول أبجدياً، وهو ما يضعف الناتج حين يخالف ترتيب التعليمات والمثال.
 const obj = (properties: Record<string, GeminiSchema>, required?: string[]): GeminiSchema => ({
   type: "OBJECT",
   properties,
+  propertyOrdering: Object.keys(properties),
   ...(required ? { required } : {}),
 });
 const list = (items: GeminiSchema, description?: string): GeminiSchema => ({ type: "ARRAY", items, ...(description ? { description } : {}) });
@@ -165,6 +170,34 @@ export const RESPONSE_SCHEMA: GeminiSchema = obj(
 
 // ───────────────────────── التعليمات ─────────────────────────
 
+/** مثال واحد كامل (أسماء وهمية) يثبّت شكل الناتج وأسماء الحقول مهما كان النموذج. */
+const EXAMPLE_INPUT = `توفيت الوالدة / مريم عبدالله الكواري
+والدة كل من: فهد، سعد (رحمه الله)
+الدفن اليوم الاثنين بعد صلاة العصر في مقبرة مسيمير
+العزاء للرجال من الثلاثاء في مجلس الكواري بالغرافة لمدة 3 أيام الفترة المسائية
+وللنساء في منزل الفقيدة بالغرافة منزل رقم 12
+https://maps.google.com/?q=25.3,51.4`;
+const EXAMPLE_OUTPUT = JSON.stringify(
+  {
+    messageType: "announcement",
+    deceasedPeople: [{ fullName: "مريم عبدالله الكواري", title: "الوالدة", gender: "woman" }],
+    relatives: [
+      { relation: "الأبناء", relationKey: "children", people: [{ name: "فهد", deceased: false }, { name: "سعد", deceased: true }] },
+    ],
+    prayer: { enabled: false },
+    burial: { status: "upcoming", outsideQatar: false, day: "اليوم", weekday: "الاثنين", time: "بعد صلاة العصر", cemetery: "مقبرة مسيمير" },
+    condolences: [
+      { audience: "men", location: "مجلس الكواري", area: "الغرافة", start: "الثلاثاء", durationDays: 3, schedule: [{ days: "الفترة المسائية", time: "" }] },
+      { audience: "women", location: "منزل الفقيدة", area: "الغرافة", houseNumber: "12", mapLink: "https://maps.google.com/?q=25.3,51.4" },
+    ],
+    condolenceOptions: ["men", "women"],
+    condolencePhoneContacts: [],
+    warnings: [],
+  },
+  null,
+  1,
+);
+
 export const SYSTEM_PROMPT = `أنت مساعد يحوّل نص إعلان وفاة من قطر (كما يصل في واتساب) إلى بيانات منظّمة بصيغة JSON حسب المخطط.
 القواعد:
 - لا تخترع شيئاً. ما لم يرد في النص اتركه فارغاً، واذكر النقص المهم في warnings بجملة قصيرة.
@@ -196,15 +229,49 @@ export const SYSTEM_PROMPT = `أنت مساعد يحوّل نص إعلان وف�
 - condolenceOptions: men و/أو women حسب البطاقات، و phone إن ذُكرت أرقام للتعزية (في condolencePhoneContacts)،
   و men_cemetery إن قال «يقتصر العزاء على المقبرة»، و tbd إن قال «يُحدَّد لاحقاً».
 - messageType: announcement للإعلان العادي، postponement لرسالة تأجيل الدفن، amendment لتعديل إعلان سابق، condolence_cancellation لإلغاء عزاء.
-- لا تضع في notes ما وضعته في حقل آخر.`;
+- لا تضع في notes ما وضعته في حقل آخر.
 
-export function buildGeminiBody(text: string) {
+أجب بكائن JSON واحد فقط بهذا الشكل (احذف الحقول التي لا يرد ما يملؤها، ولا تترك المفاتيح الأساسية فارغة إن وردت بياناتها في النص):
+${EXAMPLE_OUTPUT}
+
+مثال كامل. النص:
+"""
+${EXAMPLE_INPUT}
+"""
+الناتج:
+${EXAMPLE_OUTPUT}`;
+
+/**
+ * strict: يفرض المخطط على الناتج (مفاتيح مضمونة). بعض النماذج تُرجع تحت هذا القيد كائناً شبه فارغ،
+ * فتُعاد المحاولة بلا مخطط اعتماداً على المثال في التعليمات.
+ */
+export function buildGeminiBody(text: string, { strict = true }: { strict?: boolean } = {}) {
   return {
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
     contents: [{ role: "user", parts: [{ text: `نص الإعلان:\n"""\n${text}\n"""` }] }],
-    generationConfig: { responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA, temperature: 0.1 },
+    generationConfig: {
+      responseMimeType: "application/json",
+      ...(strict ? { responseSchema: RESPONSE_SCHEMA } : {}),
+      temperature: 0.1,
+    },
   };
 }
+
+export const HOLLOW_WARNING =
+  "لم يستخرج الذكاء الاصطناعي بيانات كافية من النص (الاسم أو الدفن أو العزاء). جرّب مرة أخرى، أو أدخل الطلب من النموذج، وأرسل «تفاصيل تقنية» لمن يتابع التطبيق.";
+
+/** ناتج أجوف: نص طويل عاد منه اسم ناقص، أو إعلان بلا دفن ولا عزاء ولا أقارب. */
+export function isHollow(result: ExtractResult, inputLength: number): boolean {
+  const { request } = result;
+  const named = request.deceasedPeople.some((person) => text(person.fullName) || text(person.title) || text(person.spouse?.name));
+  if (!named) return true;
+  if (inputLength < 80 || (request.messageType ?? "announcement") !== "announcement") return false;
+  const burial = request.burial;
+  const hasBurial = Boolean(burial.day || burial.weekday || burial.time || burial.cemetery || burial.note || burial.outsideLocation);
+  return !hasBurial && request.condolences.length === 0 && request.relatives.length === 0 && !request.prayer.enabled;
+}
+
+const snippet = (reply: string): string => reply.replace(/\s+/gu, " ").trim().slice(0, 700);
 
 // ───────────────────────── تصحيح الناتج ─────────────────────────
 
@@ -355,35 +422,59 @@ export async function extractRequest(
   }: { apiKey: string; model: string; endpoint?: string; fetchImpl?: FetchLike; timeoutMs?: number },
 ): Promise<ExtractResult> {
   const models = model === FALLBACK_MODEL ? [model] : [model, FALLBACK_MODEL];
-  for (const [index, name] of models.entries()) {
-    let response: Response;
-    try {
-      response = await fetchImpl(`${endpoint}/${encodeURIComponent(name)}:generateContent`, {
-        method: "POST",
-        // بلا مفتاح (عبر وسيط AI Studio) لا تُرسل الترويسة، فالوسيط يضيفها.
-        headers: { "content-type": "application/json", ...(apiKey ? { "x-goog-api-key": apiKey } : {}) },
-        body: JSON.stringify(buildGeminiBody(input)),
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-    } catch {
-      throw new AiError(502, "تعذّر الاتصال بخدمة الذكاء الاصطناعي، حاول مرة أخرى.");
-    }
-    // نموذج غير متاح لهذا المفتاح: جرّب النموذج الثابت.
-    if (response.status === 404 && index < models.length - 1) continue;
-    if (response.status === 429) throw new AiError(429, "خدمة الذكاء الاصطناعي مشغولة الآن، حاول بعد دقيقة.");
-    if (response.status === 400 || response.status === 401 || response.status === 403) {
-      const detail = await response.text().catch(() => "");
-      if (/API.?key|PERMISSION|UNAUTHENTICATED/iu.test(detail)) throw new AiError(503, "مفتاح خدمة الذكاء الاصطناعي غير صالح على الخادم.");
-      throw new AiError(502, "رفضت خدمة الذكاء الاصطناعي الطلب، حاول مرة أخرى.");
-    }
-    if (!response.ok) throw new AiError(502, "تعذّر الحصول على نتيجة من الذكاء الاصطناعي، حاول مرة أخرى.");
+  let last: { result?: ExtractResult; failure?: AiError; reply: string } | undefined;
 
-    const data = (await response.json().catch(() => null)) as Loose | null;
-    const candidate = isObject(data) ? array(data.candidates)[0] : undefined;
-    const parts = isObject(candidate) && isObject(candidate.content) ? array(candidate.content.parts) : [];
-    const reply = parts.map((part) => (isObject(part) ? text(part.text) : "")).join("");
-    if (!reply) throw new AiError(502, "لم يُرجع الذكاء الاصطناعي نتيجة لهذا النص، حاول مرة أخرى.");
-    return toRequest(readJson(reply));
+  nextModel: for (const [index, name] of models.entries()) {
+    for (const strict of [true, false]) {
+      let response: Response;
+      try {
+        response = await fetchImpl(`${endpoint}/${encodeURIComponent(name)}:generateContent`, {
+          method: "POST",
+          // بلا مفتاح (عبر وسيط AI Studio) لا تُرسل الترويسة، فالوسيط يضيفها.
+          headers: { "content-type": "application/json", ...(apiKey ? { "x-goog-api-key": apiKey } : {}) },
+          body: JSON.stringify(buildGeminiBody(input, { strict })),
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+      } catch {
+        throw new AiError(502, "تعذّر الاتصال بخدمة الذكاء الاصطناعي، حاول مرة أخرى.");
+      }
+      // نموذج غير متاح لهذا المفتاح: جرّب النموذج الثابت.
+      if (response.status === 404 && index < models.length - 1) continue nextModel;
+      if (response.status === 429) throw new AiError(429, "خدمة الذكاء الاصطناعي مشغولة الآن، حاول بعد دقيقة.");
+      if (response.status === 400 || response.status === 401 || response.status === 403) {
+        const detail = await response.text().catch(() => "");
+        if (/API.?key|PERMISSION|UNAUTHENTICATED/iu.test(detail)) throw new AiError(503, "مفتاح خدمة الذكاء الاصطناعي غير صالح على الخادم.");
+        // المخطط نفسه مرفوض (نموذج لا يدعمه): أعد المحاولة بدونه.
+        if (strict) continue;
+        throw new AiError(502, "رفضت خدمة الذكاء الاصطناعي الطلب، حاول مرة أخرى.", snippet(detail));
+      }
+      if (!response.ok) throw new AiError(502, "تعذّر الحصول على نتيجة من الذكاء الاصطناعي، حاول مرة أخرى.");
+
+      const data = (await response.json().catch(() => null)) as Loose | null;
+      const candidate = isObject(data) ? array(data.candidates)[0] : undefined;
+      const parts = isObject(candidate) && isObject(candidate.content) ? array(candidate.content.parts) : [];
+      const reply = parts.map((part) => (isObject(part) ? text(part.text) : "")).join("");
+      if (!reply) {
+        const finish = isObject(candidate) ? text(candidate.finishReason) : "";
+        last = { failure: new AiError(502, "لم يُرجع الذكاء الاصطناعي نتيجة لهذا النص، حاول مرة أخرى.", snippet(JSON.stringify(data ?? {}))), reply: finish };
+        continue;
+      }
+      try {
+        const result = toRequest(readJson(reply));
+        if (!isHollow(result, input.length)) return result;
+        last = { result, reply };
+      } catch (error) {
+        if (!(error instanceof AiError)) throw error;
+        last = { failure: error, reply };
+      }
+      // ناتج أجوف أو غير مفهوم: المحاولة الثانية بلا مخطط، ثم النموذج التالي.
+    }
+  }
+
+  if (last?.result) return { ...last.result, warnings: [HOLLOW_WARNING, ...last.result.warnings], debug: snippet(last.reply) };
+  if (last?.failure) {
+    if (!last.failure.debug && last.reply) last.failure.debug = snippet(last.reply);
+    throw last.failure;
   }
   throw new AiError(502, "نموذج الذكاء الاصطناعي غير متاح، حاول لاحقاً.");
 }

@@ -924,7 +924,8 @@ export const ParseObituaryTextResponse = zod.object({
 })),
   "notes": zod.string().optional()
 }),
-  "warnings": zod.array(zod.string()).describe('ما لم يتضح في النص ويستحق المراجعة قبل الحفظ')
+  "warnings": zod.array(zod.string()).describe('ما لم يتضح في النص ويستحق المراجعة قبل الحفظ'),
+  "debug": zod.string().optional().describe('ردّ النموذج مختصراً عندما يفشل في استخراج البيانات الأساسية، للتشخيص فقط')
 })
 
 

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import express from "express";
 import { ADMIN_COOKIE, createSessionToken } from "./admin-auth";
-import { AiError, DEFAULT_MODEL, FALLBACK_MODEL, aiConfig, aiEnvHints, buildGeminiBody, extractRequest, readJson, toRequest } from "./ai-extract";
+import { AiError, DEFAULT_MODEL, FALLBACK_MODEL, HOLLOW_WARNING, aiConfig, aiEnvHints, buildGeminiBody, extractRequest, isHollow, readJson, toRequest } from "./ai-extract";
 import aiRouter from "../routes/ai";
 
 /** رد نموذجي كما يُرجعه Gemini لإعلان وهمي (بقيم فارغة وnull كما يحدث فعلاً). */
@@ -83,11 +83,80 @@ const cases: Array<[string, () => void | Promise<void>]> = [
     assert.deepEqual(readJson('```json\n{"a":1}\n```'), { a: 1 });
     assert.throws(() => readJson("ليس JSON"), (error: unknown) => error instanceof AiError && error.status === 502);
   }],
-  ["buildGeminiBody: النص داخل الطلب، والرد JSON بمخطط ثابت", () => {
+  ["buildGeminiBody: النص داخل الطلب، مخطط مرتّب في الوضع الصارم، وبدونه في الوضع الحر، ومثال في التعليمات", () => {
     const body = buildGeminiBody("توفي فلان");
     assert.match(body.contents[0].parts[0].text, /توفي فلان/u);
     assert.equal(body.generationConfig.responseMimeType, "application/json");
-    assert.equal((body.generationConfig.responseSchema as { type: string }).type, "OBJECT");
+    const schema = body.generationConfig.responseSchema as { type: string; propertyOrdering: string[] };
+    assert.equal(schema.type, "OBJECT");
+    assert.equal(schema.propertyOrdering[0], "messageType");
+    assert.equal(buildGeminiBody("x", { strict: false }).generationConfig.responseSchema, undefined);
+    const prompt = body.systemInstruction.parts[0].text;
+    assert.match(prompt, /"deceasedPeople"/u);
+    assert.match(prompt, /مريم عبدالله الكواري/u);
+  }],
+  ["isHollow: اسم ناقص، أو إعلان طويل بلا دفن ولا عزاء ولا أقارب", () => {
+    const full = toRequest(AI_OUTPUT);
+    assert.equal(isHollow(full, 500), false);
+    const bare = toRequest({ deceasedPeople: [{ fullName: "حمد", gender: "man" }], relatives: [], prayer: { enabled: false }, burial: { status: "upcoming", outsideQatar: false }, condolences: [], warnings: [] });
+    assert.equal(isHollow(bare, 30), false, "نص قصير قد لا يحوي أكثر من الاسم");
+    assert.equal(isHollow(bare, 500), true, "نص طويل عاد منه الاسم فقط");
+    const postponed = toRequest({ messageType: "postponement", deceasedPeople: [{ fullName: "حمد", gender: "man" }], relatives: [], prayer: { enabled: false }, burial: { status: "postponed", outsideQatar: false }, condolences: [], warnings: [] });
+    assert.equal(isHollow(postponed, 500), false, "رسائل التأجيل والإلغاء لا دفن فيها");
+    const nameless = { ...full, request: { ...full.request, deceasedPeople: [{ gender: "man" as const, spouse: { kind: "harem" as const, name: "" } }] } };
+    assert.equal(isHollow(nameless, 50), true);
+  }],
+  ["extractRequest: ناتج أجوف بالمخطط → محاولة بلا مخطط تنجح", async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    const hollow = { deceasedPeople: [{ gender: "man", title: "الوالد" }], relatives: [], prayer: { enabled: false }, burial: { status: "upcoming", outsideQatar: false }, condolences: [], warnings: [] };
+    const result = await extractRequest("نص طويل ".repeat(20), {
+      apiKey: "k",
+      model: FALLBACK_MODEL,
+      fetchImpl: async (_url, init) => {
+        const body = JSON.parse(String(init.body)) as { generationConfig: Record<string, unknown> };
+        bodies.push(body.generationConfig);
+        return geminiReply(bodies.length === 1 ? hollow : AI_OUTPUT);
+      },
+    });
+    assert.equal(bodies.length, 2);
+    assert.ok(bodies[0].responseSchema, "الأولى بالمخطط");
+    assert.equal(bodies[1].responseSchema, undefined, "الثانية بدونه");
+    assert.equal(result.request.deceasedPeople[0].fullName, "سالم راشد المهندي");
+    assert.equal(result.debug, undefined);
+  }],
+  ["extractRequest: أجوف في المحاولتين → يعود مع تحذير وردّ النموذج مختصراً", async () => {
+    const hollow = { deceasedPeople: [{ gender: "man", title: "الوالد" }], relatives: [], prayer: { enabled: false }, burial: { status: "upcoming", outsideQatar: false }, condolences: [], warnings: ["x"] };
+    let calls = 0;
+    const result = await extractRequest("نص طويل ".repeat(20), { apiKey: "k", model: FALLBACK_MODEL, fetchImpl: async () => { calls += 1; return geminiReply(hollow); } });
+    assert.equal(calls, 2);
+    assert.equal(result.warnings[0], HOLLOW_WARNING);
+    assert.ok(result.debug?.includes('"title":"الوالد"'), result.debug);
+    assert.equal(result.request.deceasedPeople[0].title, "الوالد");
+  }],
+  ["extractRequest: JSON غير مفهوم بالمخطط → بلا مخطط؛ وإن فشلت كلها فالخطأ يحمل ردّ النموذج", async () => {
+    let calls = 0;
+    const ok = await extractRequest("نص", { apiKey: "k", model: FALLBACK_MODEL, fetchImpl: async () => { calls += 1; return calls === 1 ? geminiReply("ليس JSON") : geminiReply(AI_OUTPUT); } });
+    assert.equal(calls, 2);
+    assert.equal(ok.request.deceasedPeople.length, 1);
+    await assert.rejects(
+      extractRequest("نص", { apiKey: "k", model: FALLBACK_MODEL, fetchImpl: async () => reply({ candidates: [{ content: { parts: [{ text: "<<غير مفهوم>>" }] } }] }) }),
+      (error: unknown) => error instanceof AiError && error.status === 502 && error.debug === "<<غير مفهوم>>",
+    );
+  }],
+  ["extractRequest: 400 على المخطط (نموذج لا يدعمه) → إعادة بلا مخطط؛ ومحاولات النموذج الاحتياطي تُحسب", async () => {
+    const urls: string[] = [];
+    const result = await extractRequest("نص", {
+      apiKey: "k",
+      model: DEFAULT_MODEL,
+      fetchImpl: async (url, init) => {
+        urls.push(url);
+        const strict = Boolean((JSON.parse(String(init.body)) as { generationConfig: { responseSchema?: unknown } }).generationConfig.responseSchema);
+        return strict ? reply({ error: { message: "Invalid JSON schema" } }, 400) : geminiReply(AI_OUTPUT);
+      },
+    });
+    assert.equal(urls.length, 2, "محاولتان على النموذج الأول تكفيان");
+    assert.ok(urls.every((url) => url.includes(DEFAULT_MODEL)));
+    assert.equal(result.request.condolences.length, 2);
   }],
   ["aiConfig: GEMINI_API_KEY أولاً، والنموذج الافتراضي قابل للتغيير", () => {
     assert.deepEqual(aiConfig({}), { apiKey: "", model: DEFAULT_MODEL });

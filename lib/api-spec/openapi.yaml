@@ -285,6 +285,9 @@ components:
           description: ما لم يتضح في النص ويستحق المراجعة قبل الحفظ
           items:
             type: string
+        debug:
+          type: string
+          description: ردّ النموذج مختصراً عندما يفشل في استخراج البيانات الأساسية، للتشخيص فقط
     AdminLoginInput:
       type: object
       required: [password]

@@ -27,10 +27,30 @@ function errorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
+function errorDebug(error: unknown): string {
+  if (error instanceof ApiError) {
+    const data = error.data as { debug?: string } | null;
+    return data?.debug ?? "";
+  }
+  return "";
+}
+
+/** ردّ النموذج الخام عند الفشل: يراه المسؤول ليرسله لمن يتابع التطبيق بدل أن يضيع في السجلات. */
+function DebugDetails({ text }: { text: string }) {
+  if (!text) return null;
+  return (
+    <details className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+      <summary className="cursor-pointer font-semibold">تفاصيل تقنية (ردّ النموذج)</summary>
+      <pre dir="ltr" className="mt-2 whitespace-pre-wrap break-all font-mono text-[11px] leading-5 text-left">{text}</pre>
+    </details>
+  );
+}
+
 export default function AdminFromTextPage() {
   const [source, setSource] = useState("");
   const [result, setResult] = useState<ParseTextResult | null>(null);
   const [copied, setCopied] = useState(false);
+  const [failureDebug, setFailureDebug] = useState("");
   const parse = useParseObituaryText();
   const create = useCreateObituaryRequest();
   const queryClient = useQueryClient();
@@ -43,11 +63,15 @@ export default function AdminFromTextPage() {
     const text = source.trim();
     if (!text) return;
     setResult(null);
+    setFailureDebug("");
     parse.mutate(
       { data: { text } },
       {
         onSuccess: (data) => setResult(data),
-        onError: (error) => toast.error(errorMessage(error, "تعذّرت الصياغة، حاول مرة أخرى.")),
+        onError: (error) => {
+          setFailureDebug(errorDebug(error));
+          toast.error(errorMessage(error, "تعذّرت الصياغة، حاول مرة أخرى."));
+        },
       },
     );
   };
@@ -110,6 +134,12 @@ export default function AdminFromTextPage() {
         </CardContent>
       </Card>
 
+      {!result && failureDebug && (
+        <div className="mb-6">
+          <DebugDetails text={failureDebug} />
+        </div>
+      )}
+
       {result && (
         <Card className="border-primary/30">
           <CardHeader className="pb-3">
@@ -143,6 +173,7 @@ export default function AdminFromTextPage() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">بعد الحفظ تستطيع تعديل الطلب وإنشاء صورته من صفحة الطلب.</p>
+            {result.debug && <DebugDetails text={result.debug} />}
           </CardContent>
         </Card>
       )}

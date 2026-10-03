@@ -39,6 +39,7 @@ router.post("/admin/parse-text", requireAdmin, async (req, res): Promise<void> =
     // بلا مفتاح في خدمة من AI Studio: جرّب وسيطها على عنوان الخدمة نفسه، فهو يضيف المفتاح.
     const endpoint = viaAiStudio ? `${req.protocol}://${host}${AI_STUDIO_PROXY_PATH}` : undefined;
     const result = await extractRequest(parsed.data.text.trim(), { apiKey, model, endpoint });
+    if (result.debug) req.log?.warn({ debug: result.debug, model }, "AI extraction came back hollow");
     res.json(ParseObituaryTextResponse.parse(result));
   } catch (error) {
     // وصل الوسيط إلى Gemini (نص بلا متوفى، أو الخدمة مشغولة): رسالته هي الصحيحة. غير ذلك: الوسيط غير موجود.
@@ -48,7 +49,8 @@ router.post("/admin/parse-text", requireAdmin, async (req, res): Promise<void> =
       return;
     }
     if (error instanceof AiError) {
-      res.status(error.status).json({ error: error.message });
+      if (error.debug) req.log?.warn({ debug: error.debug, status: error.status }, "AI extraction failed");
+      res.status(error.status).json({ error: error.message, ...(error.debug ? { debug: error.debug } : {}) });
       return;
     }
     req.log.error({ err: error }, "AI parse failed");

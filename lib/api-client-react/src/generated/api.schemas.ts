@@ -342,6 +342,8 @@ export interface ParseTextResult {
   request: ObituaryRequestInput;
   /** ما لم يتضح في النص ويستحق المراجعة قبل الحفظ */
   warnings: string[];
+  /** ردّ النموذج مختصراً عندما يفشل في استخراج البيانات الأساسية، للتشخيص فقط */
+  debug?: string;
 }
 
 export interface AdminLoginInput {
