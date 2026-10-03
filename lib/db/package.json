@@ -8,7 +8,8 @@
     "./schema": "./src/schema/index.ts"
   },
   "dependencies": {
-    "firebase": "^12.19.0",
+    "@firebase/app": "0.16.2",
+    "@firebase/firestore": "4.17.2",
     "zod": "^3.25.76"
   },
   "devDependencies": {

@@ -11,6 +11,8 @@ await build({
   bundle: true,
   // vite is only imported in development; native addons cannot be bundled.
   external: ["vite", "*.node", "fsevents", "lightningcss"],
+  // The bundle is production-only: no Vite middleware and no pino-pretty worker, whatever NODE_ENV says.
+  define: { "process.env.NODE_ENV": '"production"' },
   sourcemap: "linked",
   logLevel: "info",
   // CommonJS packages (express and friends) call require/__dirname inside an ESM bundle.
