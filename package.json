@@ -20,7 +20,7 @@
     "gcp-build": "npm run build",
     "start": "if [ -f dist/server.mjs ]; then node --enable-source-maps dist/server.mjs; else tsx server.ts; fi",
     "typecheck": "tsc --build",
-    "test": "cd artifacts/qatar-obituary-form && npm test",
+    "test": "cd artifacts/qatar-obituary-form && npm test && cd ../api-server && npm test",
     "lint": "tsc --build"
   },
   "dependencies": {

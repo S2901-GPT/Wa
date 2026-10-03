@@ -5,6 +5,8 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
+// خلف وسيط Google (Cloud Run): نثق بقفزة واحدة ليكون عنوان العميل آخر عنوان أضافه الوسيط، لا ما يكتبه العميل في X-Forwarded-For.
+app.set("trust proxy", 1);
 
 app.use(
   pinoHttp({

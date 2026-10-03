@@ -9,6 +9,17 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface AdminSession {
+  authenticated: boolean;
+  /** كلمة مرور المسؤول مضبوطة في الخادم وقوية بما يكفي */
+  configured: boolean;
+}
+
+export interface AdminLoginInput {
+  /** @maxLength 200 */
+  password: string;
+}
+
 /**
  * شخص مرجعي (الزوج، الأب، الأب المشترك، أو مرجع «أبناء /») مع حالته
  */

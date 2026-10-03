@@ -13,6 +13,9 @@ export const HealthCheckResponse = zod.object({
 })
 
 
+/**
+ * للمسؤول فقط
+ */
 
 
 
@@ -483,6 +486,9 @@ export const GetObituaryRequestResponse = zod.object({
 }))
 
 
+/**
+ * للمسؤول فقط
+ */
 export const UpdateObituaryRequestParams = zod.object({
   "requestNumber": zod.coerce.string()
 })
@@ -716,5 +722,41 @@ export const UpdateObituaryRequestResponse = zod.object({
   "updatedAt": zod.coerce.date(),
   "status": zod.enum(['new', 'reviewing', 'ready', 'completed'])
 }))
+
+
+/**
+ * للمسؤول فقط
+ */
+export const DeleteObituaryRequestParams = zod.object({
+  "requestNumber": zod.coerce.string()
+})
+
+export const DeleteObituaryRequestResponse = zod.void()
+
+
+export const GetAdminSessionResponse = zod.object({
+  "authenticated": zod.boolean(),
+  "configured": zod.boolean().describe('كلمة مرور المسؤول مضبوطة في الخادم وقوية بما يكفي')
+})
+
+
+export const adminLoginBodyPasswordMax = 200;
+
+
+
+export const AdminLoginBody = zod.object({
+  "password": zod.string().max(adminLoginBodyPasswordMax)
+})
+
+export const AdminLoginResponse = zod.object({
+  "authenticated": zod.boolean(),
+  "configured": zod.boolean().describe('كلمة مرور المسؤول مضبوطة في الخادم وقوية بما يكفي')
+})
+
+
+export const AdminLogoutResponse = zod.object({
+  "authenticated": zod.boolean(),
+  "configured": zod.boolean().describe('كلمة مرور المسؤول مضبوطة في الخادم وقوية بما يكفي')
+})
 
 

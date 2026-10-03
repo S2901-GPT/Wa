@@ -6,6 +6,7 @@ import {
   getDocs,
   getDoc,
   setDoc,
+  deleteDoc,
   query,
   orderBy,
   type Firestore,
@@ -129,41 +130,37 @@ function docDataToRow(data: any, fallbackId: number): ObituaryRequestRow {
   };
 }
 
+/** الحذف الاحتياطي يضع هذه العلامة على المستند بدل حذفه (حين تمنع قواعد قاعدة البيانات الحذف النهائي). */
+function isSoftDeleted(data: any): boolean {
+  return !!data && typeof data === "object" && !!data.deletedAt;
+}
+
 let seedInitialized = false;
 async function ensureSeedData() {
   if (!firestoreDb || seedInitialized) return;
   seedInitialized = true;
   try {
-    const colRef = collection(firestoreDb, "obituary_requests");
-    const snap = await getDocs(colRef);
-    if (snap.empty) {
-      for (const item of inMemoryRequests) {
-        await setDoc(doc(firestoreDb, "obituary_requests", item.requestNumber), {
-          id: item.id,
-          requestNumber: item.requestNumber,
-          deceasedName: item.deceasedName,
-          status: item.status,
-          payload: item.payload,
-          createdAt: item.createdAt.toISOString(),
-          updatedAt: item.updatedAt.toISOString(),
-        });
+    // نسخ ما في Firestore إلى ذاكرة الخدمة (احتياطاً عند انقطاع الاتصال). لا يُكتب سجل تجريبي في قاعدة الإنتاج،
+    // وإلا عاد بعد حذفه كلما بدأت نسخة جديدة من الخدمة والقاعدة فارغة.
+    const snap = await getDocs(collection(firestoreDb, "obituary_requests"));
+    snap.forEach((d) => {
+      if (isSoftDeleted(d.data())) return;
+      const row = docDataToRow(d.data(), nextNumericId++);
+      const idx = inMemoryRequests.findIndex((r) => r.requestNumber === row.requestNumber);
+      if (idx >= 0) {
+        inMemoryRequests[idx] = row;
+      } else {
+        inMemoryRequests.push(row);
       }
-      console.info("[AI Studio] Seeded initial request to Cloud Firestore");
-    } else {
-      // Sync from Firestore into memory cache
-      snap.forEach((d) => {
-        const row = docDataToRow(d.data(), nextNumericId++);
-        const idx = inMemoryRequests.findIndex((r) => r.requestNumber === row.requestNumber);
-        if (idx >= 0) {
-          inMemoryRequests[idx] = row;
-        } else {
-          inMemoryRequests.push(row);
-        }
-      });
-    }
+    });
   } catch (err) {
     console.warn("[AI Studio] Error syncing with Firestore collection:", err);
   }
+}
+
+function forgetInMemory(requestNumber: string) {
+  const idx = inMemoryRequests.findIndex((r) => r.requestNumber === requestNumber);
+  if (idx >= 0) inMemoryRequests.splice(idx, 1);
 }
 
 // Start initial sync in background
@@ -175,14 +172,13 @@ export const obituaryRequestsDb = {
       try {
         const colRef = collection(firestoreDb, "obituary_requests");
         const snap = await getDocs(colRef);
-        if (!snap.empty) {
-          const list: ObituaryRequestRow[] = [];
-          snap.forEach((d) => {
-            list.push(docDataToRow(d.data(), nextNumericId++));
-          });
-          list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-          return list;
-        }
+        // Firestore هو المرجع عند نجاح القراءة، حتى لو كان فارغاً (بعد حذف كل الطلبات مثلاً)
+        const list: ObituaryRequestRow[] = [];
+        snap.forEach((d) => {
+          if (!isSoftDeleted(d.data())) list.push(docDataToRow(d.data(), nextNumericId++));
+        });
+        list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        return list;
       } catch (err) {
         console.warn("[AI Studio] Firestore list error, using cached records:", err);
       }
@@ -195,9 +191,12 @@ export const obituaryRequestsDb = {
       try {
         const docRef = doc(firestoreDb, "obituary_requests", requestNumber);
         const snap = await getDoc(docRef);
-        if (snap.exists()) {
+        if (snap.exists() && !isSoftDeleted(snap.data())) {
           return docDataToRow(snap.data(), nextNumericId++);
         }
+        // غير موجود (أو محذوف) في Firestore: لا نعيده من ذاكرة نسخة أخرى قديمة من الخدمة
+        forgetInMemory(requestNumber);
+        return null;
       } catch (err) {
         console.warn("[AI Studio] Firestore get error, checking memory cache:", err);
       }
@@ -253,12 +252,18 @@ export const obituaryRequestsDb = {
     }
   ): Promise<ObituaryRequestRow | null> {
     let existing = inMemoryRequests.find((r) => r.requestNumber === requestNumber);
-    if (!existing && firestoreDb) {
+    if (firestoreDb) {
       try {
         const snap = await getDoc(doc(firestoreDb, "obituary_requests", requestNumber));
-        if (snap.exists()) {
+        if (snap.exists() && !isSoftDeleted(snap.data())) {
           existing = docDataToRow(snap.data(), nextNumericId++);
-          inMemoryRequests.push(existing);
+          const cached = inMemoryRequests.findIndex((r) => r.requestNumber === requestNumber);
+          if (cached >= 0) inMemoryRequests[cached] = existing;
+          else inMemoryRequests.push(existing);
+        } else {
+          // محذوف أو غير موجود: لا يُعاد إحياؤه بالتعديل من ذاكرة قديمة
+          forgetInMemory(requestNumber);
+          return null;
         }
       } catch (err) {
         console.warn("[AI Studio] Firestore lookup for update failed:", err);
@@ -303,6 +308,45 @@ export const obituaryRequestsDb = {
     }
 
     return updatedRow;
+  },
+
+  /**
+   * حذف طلب. يعيد "hard" إن حُذف نهائياً، و"soft" إن منعت قواعد قاعدة البيانات الحذف فأُخفي الطلب بعلامة
+   * (لا يظهر في أي قائمة أو بحث ولا يمكن تعديله)، و null إن لم يوجد الطلب. يرمي خطأ إن تعذر الحذف والإخفاء معاً.
+   */
+  async remove(requestNumber: string): Promise<"hard" | "soft" | null> {
+    if (!firestoreDb) {
+      const existed = inMemoryRequests.some((r) => r.requestNumber === requestNumber);
+      forgetInMemory(requestNumber);
+      return existed ? "hard" : null;
+    }
+
+    const ref = doc(firestoreDb, "obituary_requests", requestNumber);
+    let existsRemotely = false;
+    try {
+      const snap = await getDoc(ref);
+      existsRemotely = snap.exists() && !isSoftDeleted(snap.data());
+    } catch (err) {
+      console.warn("[AI Studio] Firestore lookup before delete failed:", err);
+      existsRemotely = true; // لا نعرف؛ نجرّب الحذف
+    }
+    if (!existsRemotely) {
+      const existed = inMemoryRequests.some((r) => r.requestNumber === requestNumber);
+      forgetInMemory(requestNumber);
+      return existed ? "hard" : null;
+    }
+
+    try {
+      await deleteDoc(ref);
+      forgetInMemory(requestNumber);
+      return "hard";
+    } catch (err) {
+      console.warn("[AI Studio] Firestore refused to delete; hiding the request instead:", (err as { code?: string })?.code ?? err);
+    }
+    // القواعد تمنع الحذف النهائي: نخفي الطلب بعلامة (التعديل مسموح بالقواعد نفسها)
+    await setDoc(ref, { deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });
+    forgetInMemory(requestNumber);
+    return "soft";
   },
 };
 

@@ -8,6 +8,9 @@ export type BodyType<T> = T;
 
 export type AuthTokenGetter = () => Promise<string | null> | string | null;
 
+/** حدث يُرسل على window عند رد 401 من أي طلب محمي. */
+export const ADMIN_UNAUTHORIZED_EVENT = "wa:admin-unauthorized";
+
 const NO_BODY_STATUS = new Set([204, 205, 304]);
 const DEFAULT_JSON_ACCEPT = "application/json, application/problem+json";
 
@@ -364,6 +367,11 @@ export async function customFetch<T = unknown>(
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
+    // انتهت جلسة المسؤول (أو لم تبدأ): تُبلَّغ الواجهة لتعرض شاشة الدخول بدل صفحة بلا بيانات.
+    // تسجيل الدخول نفسه يرد 401 عند الخطأ في كلمة المرور، فلا يُعدّ انتهاء جلسة.
+    if (response.status === 401 && typeof window !== "undefined" && !requestInfo.url.includes("/admin/login")) {
+      window.dispatchEvent(new Event(ADMIN_UNAUTHORIZED_EVENT));
+    }
     throw new ApiError(response, errorData, requestInfo);
   }
 

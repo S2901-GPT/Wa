@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import {
   CreateObituaryRequestBody,
   CreateObituaryRequestResponse,
+  DeleteObituaryRequestParams,
   GetObituaryRequestParams,
   GetObituaryRequestResponse,
   ListObituaryRequestsResponse,
@@ -10,9 +11,16 @@ import {
   UpdateObituaryRequestResponse,
 } from "@workspace/api-zod";
 import { obituaryRequestsDb, type ObituaryRequestRow } from "@workspace/db";
+import { clientKey, createRateLimiter, isAdminRequest, requireAdmin } from "../lib/admin-auth";
 
 const router: IRouter = Router();
 type RequestPayload = Record<string, unknown>;
+
+/**
+ * البحث برقم الطلب مفتوح لغير المسؤول (يحتاجه المستخدم ليحمّل طلبه السابق فيعدّله)، لكن رقم الطلب من ستة
+ * أرقام فقط، فيُحدّ عدد المحاولات لكل عنوان حتى لا يمكن تجريب الأرقام كلها لقراءة طلبات الآخرين.
+ */
+const publicLookups = createRateLimiter({ windowMs: 10 * 60 * 1000, max: 30 });
 
 function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};
@@ -226,7 +234,7 @@ async function makeRequestNumber(): Promise<string> {
   throw new Error("Could not allocate a unique request number");
 }
 
-router.get("/obituary-requests", async (_req, res): Promise<void> => {
+router.get("/obituary-requests", requireAdmin, async (_req, res): Promise<void> => {
   const rows = await obituaryRequestsDb.list();
   res.json(ListObituaryRequestsResponse.parse(rows.map(serialize)));
 });
@@ -248,6 +256,14 @@ router.post("/obituary-requests", async (req, res): Promise<void> => {
 });
 
 router.get("/obituary-requests/:requestNumber", async (req, res): Promise<void> => {
+  if (!isAdminRequest(req)) {
+    const lookup = publicLookups.hit(clientKey(req));
+    if (!lookup.allowed) {
+      res.setHeader("Retry-After", String(lookup.retryAfterSec));
+      res.status(429).json({ error: "محاولات بحث كثيرة، حاول بعد قليل." });
+      return;
+    }
+  }
   const params = GetObituaryRequestParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -261,7 +277,7 @@ router.get("/obituary-requests/:requestNumber", async (req, res): Promise<void> 
   res.json(GetObituaryRequestResponse.parse(serialize(row)));
 });
 
-router.put("/obituary-requests/:requestNumber", async (req, res): Promise<void> => {
+router.put("/obituary-requests/:requestNumber", requireAdmin, async (req, res): Promise<void> => {
   const params = UpdateObituaryRequestParams.safeParse(req.params);
   const parsed = UpdateObituaryRequestBody.safeParse(req.body);
   if (!params.success) {
@@ -284,6 +300,26 @@ router.put("/obituary-requests/:requestNumber", async (req, res): Promise<void> 
     return;
   }
   res.json(UpdateObituaryRequestResponse.parse(serialize(row)));
+});
+
+router.delete("/obituary-requests/:requestNumber", requireAdmin, async (req, res): Promise<void> => {
+  const params = DeleteObituaryRequestParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  try {
+    const mode = await obituaryRequestsDb.remove(params.data.requestNumber);
+    if (!mode) {
+      res.status(404).json({ error: "الطلب غير موجود" });
+      return;
+    }
+    req.log.info({ requestNumber: params.data.requestNumber, mode }, "Obituary request deleted");
+    res.status(204).end();
+  } catch (err) {
+    req.log.error({ err, requestNumber: params.data.requestNumber }, "Failed to delete obituary request");
+    res.status(500).json({ error: "تعذر حذف الطلب، حاول مرة أخرى." });
+  }
 });
 
 export default router;
