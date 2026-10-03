@@ -5,7 +5,7 @@ import openingCalligraphyUrl from "../assets/poster/opening-calligraphy.png";
 import type { NormalizedContent } from "./presentation-normalizer";
 import { normalizeArabic } from "./presentation-normalizer";
 import type { QrCodeMap } from "./qr-images";
-import { DEFAULT_OPENING, NASKH_COLORS, NASKH_METRICS, planNaskhLayout, type MeasureFn, type NaskhLayoutId, type NaskhPlan, type PlanItem } from "./naskh-poster-plan";
+import { DEFAULT_OPENING, NASKH_COLORS, NASKH_METRICS, planNaskhLayout, type MeasureFn, type NaskhLayoutId, type NaskhPlan, type NaskhQrKey, type PlanItem } from "./naskh-poster-plan";
 
 export const IMAGE_WIDTH: number = NASKH_METRICS.width;
 export const IMAGE_HEIGHT: number = NASKH_METRICS.minHeight;
@@ -313,13 +313,8 @@ export function renderNaskhPoster(options: PosterOptions, content: NormalizedCon
     return ctx.measureText(text).width;
   };
   const openingIsImage = !!assets.opening && normalizeArabic(content.opening) === normalizeArabic(DEFAULT_OPENING);
-  const qrAvailable = {
-    prayer: !!qrImages.prayer,
-    burial: !!qrImages.burial,
-    prayerBurialCombined: !!qrImages.prayerBurialCombined,
-    men: !!qrImages.men,
-    women: !!qrImages.women,
-  };
+  // كل رمز توفرت صورته (الصلاة، الدفن، وكل موقع عزاء بمفتاحه)
+  const qrAvailable: Partial<Record<NaskhQrKey, boolean>> = Object.fromEntries(Object.entries(qrImages).map(([key, image]) => [key, !!image]));
   const plan = planNaskhLayout(content, measure, { layout: options.layout, openingIsImage, qrAvailable, maxHeight: branding.maxHeight });
 
   canvas.height = plan.height;

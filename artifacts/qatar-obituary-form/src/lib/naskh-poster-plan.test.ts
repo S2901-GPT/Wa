@@ -10,6 +10,7 @@ import {
   NASKH_METRICS,
   buildNaskhSections,
   planNaskhLayout,
+  posterQrUrls,
   splitLeadingLabel,
   tokenizeArabic,
   wrapAtoms,
@@ -85,19 +86,60 @@ const cases: Array<[string, () => void]> = [
       { style: "body", text: "الفترة المسائية من 4:00 مساءً إلى 9:00 مساءً" },
     ]);
   }],
-  ["women-only venue keeps «عزاء النساء»; numbered venues get a heading", () => {
+  ["women-only venue keeps «عزاء النساء»; several venues become separate sections, each with its own title", () => {
     const sections = buildNaskhSections(normalizeObituaryPresentation(makeRequest({
       condolenceOptions: ["women"],
       condolences: [{ audience: "women", location: "منزل ابنها أحمد" }, { audience: "women", location: "منزل ابنها محمد" }],
     })));
-    const women = sections.find((section) => section.id === "women");
-    assert.ok(women);
-    assert.deepEqual(women.rows, [
-      { style: "heading", text: "عزاء النساء" },
-      { style: "body", label: "الموقع الأول:", text: "في منزل ابنها أحمد" },
-      { style: "body", label: "الموقع الثاني:", text: "في منزل ابنها محمد" },
-    ]);
+    const women = sections.filter((section) => section.id === "women" || section.id === "women-2");
+    assert.deepEqual(women.map((section) => [section.id, section.title]), [["women", "عزاء النساء الأول"], ["women-2", "عزاء النساء الثاني"]]);
+    assert.deepEqual(women[0].rows, [{ style: "body", label: "عزاء النساء الأول", text: "في منزل ابنها أحمد" }]);
+    assert.deepEqual(women[1].rows, [{ style: "body", label: "عزاء النساء الثاني", text: "في منزل ابنها محمد" }]);
     assert.ok(!sections.some((section) => section.id === "men"));
+  }],
+  ["every venue with a map link gets its own QR code beside its own text", () => {
+    const request = makeRequest({
+      condolences: [
+        { audience: "men", location: "مجلس العائلة", mapLink: "https://maps.google.com/?q=men" },
+        { audience: "women", location: "منزل الفقيد", area: "أم قرن", durationDays: 3, mapLink: "https://maps.google.com/?q=w1" },
+        { audience: "women", location: "منزل عائلة الانصاري", area: "المعمورة", mapLink: "https://maps.google.com/?q=w2" },
+      ],
+    });
+    const content = normalizeObituaryPresentation(request);
+    assert.deepEqual(posterQrUrls(content), {
+      prayer: undefined, burial: undefined, prayerBurialCombined: undefined,
+      men: "https://maps.google.com/?q=men", women: "https://maps.google.com/?q=w1", "women-2": "https://maps.google.com/?q=w2",
+    });
+    const sections = buildNaskhSections(content);
+    assert.deepEqual(sections.filter((section) => section.qrKey).map((section) => section.qrKey), ["men", "women", "women-2"]);
+    const all = { men: true, women: true, "women-2": true } as const;
+    for (const layout of NASKH_LAYOUTS) {
+      const p = plan(request, { layout: layout.id, qrAvailable: all });
+      assert.deepEqual(p.items.filter((item) => item.kind === "qr").map((item) => item.key).sort(), ["men", "women", "women-2"], `${layout.id}: three QR codes`);
+      assert.equal(p.overflow, false, layout.id);
+      // كل رمز على مستوى نص موقعه
+      for (const qr of p.items.filter((item): item is Extract<typeof item, { kind: "qr" }> => item.kind === "qr")) {
+        const own = lineItems(p).filter((item) => item.section === qr.key);
+        assert.ok(own.length > 0, `${layout.id}: text for ${qr.key}`);
+        const top = Math.min(...own.map((item) => item.y));
+        const bottom = Math.max(...own.map((item) => item.y + item.h));
+        assert.ok(qr.y < bottom && qr.y + qr.size > top, `${layout.id}: ${qr.key} QR next to its text`);
+      }
+    }
+    // عمودان لا يُستعملان إلا حين يكون لكل جمهور موقع واحد
+    assert.ok(!plan(request, { layout: "cols", qrAvailable: all }).items.some((item) => item.kind === "vline"), "stacked rows with several venues");
+  }],
+  ["a venue without a map link has no QR key, and a single venue keeps «men»/«women»", () => {
+    const content = normalizeObituaryPresentation(makeRequest({
+      condolences: [
+        { audience: "men", location: "مجلس العائلة" },
+        { audience: "women", location: "منزل العائلة", mapLink: "https://maps.google.com/?q=w" },
+      ],
+    }));
+    const urls = posterQrUrls(content);
+    assert.equal(urls.men, undefined);
+    assert.equal(urls.women, "https://maps.google.com/?q=w");
+    assert.ok(!("women-2" in urls));
   }],
   ["separate mosque prayer, phones and notes appear in order", () => {
     const sections = buildNaskhSections(normalizeObituaryPresentation(makeRequest({

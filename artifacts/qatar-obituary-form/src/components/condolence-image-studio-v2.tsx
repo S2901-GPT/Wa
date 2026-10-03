@@ -32,7 +32,7 @@ import {
   type ImageDraft,
 } from "@/lib/condolence-copy";
 import { IMAGE_HEIGHT, IMAGE_WIDTH, type PosterBranding, type RenderValidationReport } from "@/lib/naskh-poster-engine";
-import { DEFAULT_NASKH_LAYOUT, NASKH_LAYOUTS, isNaskhLayoutId, type NaskhLayoutId } from "@/lib/naskh-poster-plan";
+import { DEFAULT_NASKH_LAYOUT, NASKH_LAYOUTS, isNaskhLayoutId, posterQrUrls, type NaskhLayoutId } from "@/lib/naskh-poster-plan";
 import { normalizeObituaryPresentation } from "@/lib/presentation-normalizer";
 import { buildAnnouncement } from "@/lib/announcement";
 import { generateQrImages, type QrCodeMap } from "@/lib/qr-images";
@@ -190,13 +190,8 @@ export function CondolenceImageStudio({
   // Generate Real High-Contrast QR Images with suppression for known landmarks
   useEffect(() => {
     let cancelled = false;
-    const urls: Record<string, string | undefined> = {
-      prayer: normalizedContent.prayer?.qrUrl,
-      burial: normalizedContent.burial?.qrUrl,
-      prayerBurialCombined: normalizedContent.prayerBurialCombined?.qrUrl,
-      men: normalizedContent.men?.qrUrl,
-      women: normalizedContent.women?.qrUrl,
-    };
+    // لكل موقع رابطه ورمزه، ومنها المواقع الإضافية «women-2»…
+    const urls = posterQrUrls(normalizedContent);
 
     void generateQrImages(urls).then((imgs) => {
       if (!cancelled) setQrImages(imgs);

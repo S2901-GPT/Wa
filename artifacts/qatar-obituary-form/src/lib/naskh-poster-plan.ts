@@ -172,8 +172,34 @@ const LAYOUT_SPECS: Record<NaskhLayoutId, LayoutSpec> = {
 /** «title»: عنوان قسم مستقل (38 بكسل) في تخطيطَي العناوين والعمودين؛ «heading»: عنوان مجموعة الأقارب أو الهاتف (36 بكسل). */
 export type NaskhRowStyle = "statement" | "name" | "body" | "heading" | "title" | "closing";
 export type NaskhRow = { style: NaskhRowStyle; text: string; label?: string };
-export type NaskhSectionId = "head" | "relatives" | "prayer" | "burial" | "condolenceStart" | "men" | "women" | "phone" | "notes" | "closing";
-export type NaskhQrKey = "prayer" | "burial" | "prayerBurialCombined" | "men" | "women";
+/** «men» و«women» لأول موقع عزاء، و«women-2» و«men-2»… لما بعده حين تتعدد المواقع (لكل موقع قسمه ورمزه). */
+export type VenueSectionId = "men" | "women" | `men-${number}` | `women-${number}`;
+export type NaskhSectionId = "head" | "relatives" | "prayer" | "burial" | "condolenceStart" | VenueSectionId | "phone" | "notes" | "closing";
+export type NaskhQrKey = "prayer" | "burial" | "prayerBurialCombined" | VenueSectionId;
+
+export function isVenueId(id: string): id is VenueSectionId {
+  return id === "men" || id === "women" || /^(?:men|women)-\d+$/.test(id);
+}
+
+/**
+ * روابط رموز الموقع لكل أقسام الصورة (الصلاة، الدفن، وكل موقع عزاء بمفتاحه) لتُحوَّل إلى صور QR.
+ * مفتاح أول موقع «men»/«women» والتالي «men-2»/«women-2»، وهو ما يستعمله المخطّط.
+ */
+export function posterQrUrls(content: NormalizedContent): Record<string, string | undefined> {
+  const urls: Record<string, string | undefined> = {
+    prayer: content.prayer?.qrUrl,
+    burial: content.burial?.qrUrl,
+    prayerBurialCombined: content.prayerBurialCombined?.qrUrl,
+    men: content.men?.qrUrl,
+    women: content.women?.qrUrl,
+  };
+  for (const audience of ["men", "women"] as const) {
+    (content[audience]?.sites ?? []).forEach((site, index) => {
+      if (index > 0) urls[`${audience}-${index + 1}`] = site.qrUrl;
+    });
+  }
+  return urls;
+}
 export type NaskhSection = { id: NaskhSectionId; title: string; rows: NaskhRow[]; qrKey?: NaskhQrKey };
 
 export type TextRun = { text: string; weight: 400 | 700; color: string };
@@ -368,13 +394,21 @@ export function buildNaskhSections(content: NormalizedContent): NaskhSection[] {
     sections.push({ id: "condolenceStart", title: "العزاء", rows: [split ? { style: "body", label: split.label, text: split.rest } : { style: "body", text: content.condolenceStart }] });
   }
 
-  if (content.men) {
-    const rows = venueRows(content.men);
-    if (rows.length) sections.push({ id: "men", title: content.men.title, rows, qrKey: content.men.qrUrl ? "men" : undefined });
-  }
-  if (content.women) {
-    const rows = venueRows(content.women);
-    if (rows.length) sections.push({ id: "women", title: content.women.title, rows, qrKey: content.women.qrUrl ? "women" : undefined });
+  for (const audience of ["men", "women"] as const) {
+    const venue = content[audience];
+    if (!venue) continue;
+    if (venue.sites && venue.sites.length > 1) {
+      // مواقع متعددة: لكل موقع قسمه وعنوانه («عزاء النساء الأول») ورمزه بجانبه
+      venue.sites.forEach((site, index) => {
+        const id: VenueSectionId = index === 0 ? audience : `${audience}-${index + 1}`;
+        const [first = "", ...rest] = site.lines.map((line) => line.trim()).filter(Boolean);
+        const rows: NaskhRow[] = [{ style: "body", label: site.label, text: first }, ...rest.map((text) => ({ style: "body" as const, text }))];
+        sections.push({ id, title: site.label, rows, qrKey: site.qrUrl ? id : undefined });
+      });
+      continue;
+    }
+    const rows = venueRows(venue);
+    if (rows.length) sections.push({ id: audience, title: venue.title, rows, qrKey: venue.qrUrl ? audience : undefined });
   }
 
   if (content.phoneContacts.length) {
@@ -574,7 +608,7 @@ function tableRows(sections: NaskhSection[]): TableRow[] {
     const [first, ...rest] = source;
     if (!first) continue;
     if (first.label) {
-      const key = section.id === "men" || section.id === "women" ? section.title : first.label;
+      const key = isVenueId(section.id) ? section.title : first.label;
       rows.push({ key, values: [...(first.text ? [{ style: "body" as const, text: first.text }] : []), ...rest], qrKey: section.qrKey, section: section.id });
     } else if (first.style === "heading") {
       rows.push({ key: stripColon(first.text), values: rest, qrKey: section.qrKey, section: section.id });
@@ -626,7 +660,7 @@ function stripFirstLabel(section: NaskhSection): NaskhSection {
 function withHeading(section: NaskhSection): NaskhSection {
   const first = section.rows[0];
   if (!first?.label) return section;
-  const heading = section.id === "men" || section.id === "women" ? section.title : first.label;
+  const heading = isVenueId(section.id) ? section.title : first.label;
   return { ...section, rows: [{ style: "title", text: heading }, ...stripFirstLabel(section).rows] };
 }
 
@@ -637,7 +671,7 @@ function inlineHead(section: NaskhSection): NaskhSection {
   return { ...section, rows: [{ style: "name", text: `${statement.text} ${name.text}` }, ...rest] };
 }
 
-const HEADED_SECTIONS: ReadonlySet<NaskhSectionId> = new Set(["prayer", "burial", "condolenceStart", "men", "women"]);
+const HEADED_SECTIONS: ReadonlySet<NaskhSectionId> = new Set(["prayer", "burial", "condolenceStart"]);
 
 function buildBlocks(sections: NaskhSection[], ctx: PlanContext): Block[] {
   const { spec, scale } = ctx;
@@ -656,10 +690,11 @@ function buildBlocks(sections: NaskhSection[], ctx: PlanContext): Block[] {
   if (spec.venues === "table") {
     if (middle.length) blocks.push(tableBlock(middle, ctx));
   } else {
-    const venues = middle.filter((section) => section.id === "men" || section.id === "women");
-    const useCols = spec.venues === "cols" && venues.length >= 2;
+    const venues = middle.filter((section) => isVenueId(section.id));
+    // عمودان فقط حين يكون لكل من الرجال والنساء موقع واحد؛ وإلا تُرتَّب المواقع صفوفاً ليبقى لكل موقع رمزه بجانبه
+    const useCols = spec.venues === "cols" && venues.length === 2 && venues[0].id === "men" && venues[1].id === "women";
     for (const section of middle) {
-      const isVenue = section.id === "men" || section.id === "women";
+      const isVenue = isVenueId(section.id);
       if (isVenue && useCols) {
         if (section === venues[0]) blocks.push(colsBlock(venues, ctx));
         continue;
