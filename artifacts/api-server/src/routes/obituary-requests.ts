@@ -216,14 +216,14 @@ function serialize(row: ObituaryRequestRow) {
   };
 }
 
-function makeRequestNumber() {
-  const date = new Date();
-  const stamp = [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, "0"),
-    String(date.getDate()).padStart(2, "0"),
-  ].join("");
-  return `QTR-${stamp}-${Math.floor(1000 + Math.random() * 9000)}`;
+/** رقم الطلب: رقما السنة ثم أربعة أرقام عشوائية («261234»)، مع التأكد من عدم وجود طلب بالرقم نفسه. */
+async function makeRequestNumber(): Promise<string> {
+  const year = String(new Date().getFullYear()).slice(-2);
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    const candidate = `${year}${String(Math.floor(Math.random() * 10000)).padStart(4, "0")}`;
+    if (!(await obituaryRequestsDb.getByRequestNumber(candidate))) return candidate;
+  }
+  throw new Error("Could not allocate a unique request number");
 }
 
 router.get("/obituary-requests", async (_req, res): Promise<void> => {
@@ -239,7 +239,7 @@ router.post("/obituary-requests", async (req, res): Promise<void> => {
     return;
   }
   const row = await obituaryRequestsDb.create({
-    requestNumber: makeRequestNumber(),
+    requestNumber: await makeRequestNumber(),
     deceasedName: summarizeDeceased(parsed.data.deceasedPeople),
     payload: normalizePayload(parsed.data as RequestPayload),
     status: "new",

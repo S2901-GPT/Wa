@@ -99,7 +99,7 @@ const cases: Array<[string, () => void]> = [
         ],
       }];
     });
-    assert.match(text(values), /والد كل من\nأحمد \(وزارة الداخلية - متقاعد\) وخالد \(قطر للطاقة\) وسالم رحمه الله وحمد رحمه الله/u);
+    assert.match(text(values), /والد كل من\nأحمد \(وزارة الداخلية - متقاعد\) وخالد \(قطر للطاقة\) وسالم \(رحمه الله\) وحمد \(رحمه الله\)/u);
     const back = mapPayloadToForm(asRequest(values));
     assert.deepEqual(back.relatives[0].persons.slice(0, 2).map((p) => [p.workplace, p.jobStatus]), [["وزارة الداخلية", "retired"], ["قطر للطاقة", "none"]]);
   }],
@@ -199,7 +199,7 @@ const cases: Array<[string, () => void]> = [
     assert.equal(back.condolences?.extraVenues?.[0]?.deceasedTarget, "1");
     assert.equal(back.condolenceStartDate, "2026-10-02");
     assert.equal(text(back), text(values));
-    assert.match(text(values), /^تعديل \/\nتوفي كل من\nسعود — 22 عاماً\nالرضيع جاسم — 8 أشهر\nأبناء \/ فهد رحمه الله\nأعمامهم كل من\nخالد وحمد رحمهما الله/u);
+    assert.match(text(values), /^تعديل \/\nتوفي كل من\nسعود — 22 عاماً\nالرضيع جاسم — 8 أشهر\nأبناء \/ فهد رحمه الله\nأعمامهم كل من\nخالد وحمد \(رحمهما الله\)/u);
   }],
   ["طلب قديم: «other» لا يصبح «ذكر»، واللقب الحر لا يضيع", () => {
     const legacy = {

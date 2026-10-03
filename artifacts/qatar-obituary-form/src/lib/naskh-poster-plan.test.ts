@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import type { ObituaryRequest } from "@workspace/api-client-react";
 import { normalizeObituaryPresentation } from "./presentation-normalizer";
 import {
+  NASKH_LAYOUTS,
   NASKH_METRICS,
   buildNaskhSections,
   planNaskhLayout,
@@ -179,6 +180,96 @@ const cases: Array<[string, () => void]> = [
     assert.equal(capped.height, 1350);
     assert.equal(capped.overflow, true);
     assert.ok(capped.minTextPx >= 32);
+  }],
+  ["every layout fits the common announcement without overflow and keeps every item inside the image", () => {
+    for (const layout of NASKH_LAYOUTS) {
+      const p = plan(makeRequest(), { layout: layout.id });
+      assert.equal(p.layout, layout.id);
+      assert.equal(p.overflow, false, layout.id);
+      assert.equal(p.height, 1350, layout.id);
+      assert.ok(p.minTextPx >= 32, `${layout.id}: min text ${p.minTextPx}`);
+      for (const item of lineItems(p)) {
+        assert.ok(item.y >= 0 && item.y + item.h <= p.height, `${layout.id}: line outside the image`);
+        assert.ok(item.xRight <= NASKH_METRICS.width && item.runs.every((run) => run.text !== undefined), layout.id);
+      }
+      assert.ok(lineItems(p).some((item) => item.runs.map((run) => run.text).join(" ").includes("نبيل") === false), layout.id);
+      assert.equal(p.items.filter((item) => item.kind === "qr").length, 2, `${layout.id}: both venue QR codes`);
+    }
+  }],
+  ["centered layouts centre the name and box the relatives on the right edge of the widest line", () => {
+    const p = plan(makeRequest(), { layout: "center" });
+    const name = lineItems(p).find((item) => item.section === "head" && item.runs[0]?.weight === 700)!;
+    assert.equal(name.align, "center");
+    assert.ok(name.xRight < NASKH_METRICS.width - NASKH_METRICS.inset && name.xRight > NASKH_METRICS.width / 2, `name xRight ${name.xRight}`);
+    const relatives = lineItems(p).filter((item) => item.section === "relatives");
+    assert.ok(relatives.length >= 2 && relatives.every((item) => item.align === "right" && item.xRight === relatives[0].xRight), "relatives share one right edge");
+    const separators = p.items.filter((item): item is Extract<typeof item, { kind: "separator" }> => item.kind === "separator");
+    assert.ok(separators.every((item) => item.width === NASKH_METRICS.shortSeparator && item.x === (NASKH_METRICS.width - NASKH_METRICS.shortSeparator) / 2), "short centred separators");
+    // العزاء موسّط بين فراغين متساويين ورمزه في اليسار
+    const men = lineItems(p).find((item) => item.section === "men")!;
+    assert.equal(men.align, "center");
+    assert.ok(p.items.some((item) => item.kind === "qr" && item.key === "men" && item.x === NASKH_METRICS.inset));
+  }],
+  ["the table layout puts each group, the burial and each venue in a bordered row with a bold key column", () => {
+    const p = plan(makeRequest(), { layout: "table" });
+    const separators = p.items.filter((item) => item.kind === "separator");
+    // صف الأقارب (مجموعة واحدة) + الدفن + عزاءان = 4 صفوف لها 4 حدود علوية وحد سفلي
+    assert.equal(separators.length, 5);
+    const keys = lineItems(p).filter((item) => item.xRight === NASKH_METRICS.width - NASKH_METRICS.inset && item.runs[0]?.weight === 700 && item.section !== "head");
+    // قد يلتف العنوان الطويل في عمود المفاتيح على سطرين، فنقارن النص المتصل
+    assert.equal(keys.map(lineText).join(" "), "والد كل من الدفن عزاء الرجال عزاء النساء");
+    const values = lineItems(p).filter((item) => item.section === "women" && item.runs[0]?.weight === 400);
+    assert.ok(values.every((item) => item.xRight === NASKH_METRICS.width - NASKH_METRICS.inset - Math.round(NASKH_METRICS.tableKeyWidth * p.scale) - NASKH_METRICS.tableGap));
+    assert.ok(lineItems(p).some((item) => item.section === "head" && item.align === "center"));
+  }],
+  ["the two-column layout places the venues side by side with a vertical rule and the QR codes underneath", () => {
+    const p = plan(makeRequest(), { layout: "cols" });
+    const vline = p.items.find((item): item is Extract<typeof item, { kind: "vline" }> => item.kind === "vline")!;
+    assert.ok(vline && vline.x === NASKH_METRICS.width / 2);
+    const men = lineItems(p).filter((item) => item.section === "men");
+    const women = lineItems(p).filter((item) => item.section === "women");
+    assert.ok(men.every((item) => item.xRight > NASKH_METRICS.width / 2) && women.every((item) => item.xRight < NASKH_METRICS.width / 2), "men right, women left");
+    assert.deepEqual([lineText(men[0]), lineText(women[0])], ["عزاء الرجال", "عزاء النساء"]);
+    const qrs = p.items.filter((item): item is Extract<typeof item, { kind: "qr" }> => item.kind === "qr");
+    assert.ok(qrs.every((qr) => [...men, ...women].filter((item) => item.section === qr.key).every((item) => item.y + item.h <= qr.y + 0.5)), "QR below the column text");
+    // عزاء واحد: لا أعمدة
+    const single = plan(makeRequest({ condolenceOptions: ["men"], condolences: [{ audience: "men", location: "مجلس العائلة", mapLink: "https://maps.google.com/?q=men" }] }), { layout: "cols" });
+    assert.ok(!single.items.some((item) => item.kind === "vline"));
+  }],
+  ["the newspaper layout frames the image, insets the content and joins the verb to the name", () => {
+    const p = plan(makeRequest(), { layout: "paper" });
+    const frame = p.items.find((item): item is Extract<typeof item, { kind: "frame" }> => item.kind === "frame")!;
+    assert.deepEqual([frame.x, frame.y, frame.width, frame.height], [30, 30, 1020, 1290]);
+    const nameLines = lineItems(p).filter((item) => item.section === "head" && Math.abs(item.px - p.namePx * p.scale) < 0.01);
+    assert.equal(nameLines.map(lineText).join(" "), "توفي الوالد / محمد بن عبدالله بن سالم");
+    assert.ok(!lineItems(p).some((item) => lineText(item) === "توفي"), "no separate statement line");
+    assert.ok(p.namePx <= 56 && p.namePx >= 54, `name px ${p.namePx}`);
+    const band = p.items.find((item): item is Extract<typeof item, { kind: "band" }> => item.kind === "band")!;
+    assert.deepEqual([band.position, band.y, band.x], ["bottom", 1350 - 52 - 96, 92]);
+    assert.ok(lineItems(p).every((item) => item.xRight <= NASKH_METRICS.width - 92));
+  }],
+  ["the headings layout writes a bold title line above the burial and each venue", () => {
+    const p = plan(makeRequest(), { layout: "headings" });
+    const headings = lineItems(p).filter((item) => item.runs.length === 1 && item.runs[0].weight === 700 && item.section !== "head" && item.section !== "closing" && item.px > NASKH_METRICS.bodyPx * p.scale + 1);
+    assert.deepEqual(headings.map(lineText), ["الدفن", "عزاء الرجال", "عزاء النساء"]);
+    assert.ok(!lineItems(p).some((item) => lineText(item).startsWith("والنساء")), "no inline «والنساء»");
+  }],
+  ["the letterhead layout moves the opening and the band to the top and starts the text below the double rule", () => {
+    const p = plan(makeRequest(), { layout: "letterhead" });
+    assert.ok(!p.items.some((item) => item.kind === "opening"));
+    const band = p.items.find((item): item is Extract<typeof item, { kind: "band" }> => item.kind === "band")!;
+    assert.deepEqual([band.position, band.y, band.h], ["top", 36, 96]);
+    assert.ok(lineItems(p).every((item) => item.y >= NASKH_METRICS.letterheadTop && item.y + item.h <= 1350 - NASKH_METRICS.letterheadBottom));
+    const rules = p.items.filter((item): item is Extract<typeof item, { kind: "separator" }> => item.kind === "separator" && item.y < NASKH_METRICS.letterheadTop);
+    assert.deepEqual(rules.map((item) => item.y), [148, 152]);
+    assert.ok(lineItems(p).find((item) => item.section === "head")!.align === "center");
+    assert.ok(lineItems(p).find((item) => item.section === "men")!.align === "right");
+  }],
+  ["the hybrid layout centres only the head and the closing", () => {
+    const p = plan(makeRequest(), { layout: "hybrid" });
+    const byAlign = (section: string) => lineItems(p).filter((item) => item.section === section).map((item) => item.align);
+    assert.ok(byAlign("head").every((align) => align === "center") && byAlign("closing").every((align) => align === "center"));
+    assert.ok(byAlign("relatives").every((align) => align === "right") && byAlign("women").every((align) => align === "right"));
   }],
   ["an edited opening phrase is drawn as text", () => {
     const content = normalizeObituaryPresentation(makeRequest(), { opening: "بسم الله الرحمن الرحيم" });

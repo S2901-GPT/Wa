@@ -7,8 +7,8 @@
       "properties": {
         "requestNumber": {
           "type": "string",
-          "description": "Unique tracking request number e.g. QTR-20260927-1001",
-          "pattern": "^QTR-[0-9]{8}-[0-9]{4,6}$",
+          "description": "Unique tracking request number: two year digits then four random digits, e.g. 261234",
+          "pattern": "^[0-9]{6}$",
           "maxLength": 32
         },
         "deceasedName": {

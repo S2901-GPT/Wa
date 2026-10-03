@@ -313,16 +313,16 @@ function relativeEntry(person: RelativePerson): string {
   return [clean(person.name), formatOccupation(person.occupation)].filter(Boolean).join(" ");
 }
 
-/** أسماء القائمة مع الترحّم بجانب كل اسم («سالم رحمه الله»)؛ التجميع في آخر القائمة فقط إن طُلب صراحة. */
+/** أسماء القائمة مع الترحّم بين قوسين بجانب كل اسم («سالم (رحمه الله)»)؛ التجميع في آخر القائمة فقط إن طُلب صراحة. */
 function relativeNameLines(people: RelativePerson[], placement: RelativeGroup["deceasedPlacement"]): string[] {
   const named = people.filter((person) => clean(person.name));
   const deceased = named.filter((person) => person.deceased);
   const grouped = placement === "grouped";
   if (!grouped) {
-    return named.map((person) => (person.deceased ? `${relativeEntry(person)} ${mercyForMen(1)}` : relativeEntry(person)));
+    return named.map((person) => (person.deceased ? `${relativeEntry(person)} (${mercyForMen(1)})` : relativeEntry(person)));
   }
   const lines = named.filter((person) => !person.deceased).map(relativeEntry);
-  if (deceased.length) lines.push(`${joinWithAnd(deceased.map(relativeEntry))} ${mercyForMen(deceased.length)}`);
+  if (deceased.length) lines.push(`${joinWithAnd(deceased.map(relativeEntry))} (${mercyForMen(deceased.length)})`);
   return lines;
 }
 
@@ -520,7 +520,7 @@ function personDetailLines(
   if (clean(person.father?.name) && !identity.consumedFather) lines.push(fatherLine(person));
   const nationality = clean(person.nationality);
   const deathPlace = clean(person.deathPlace);
-  const placeLine = deathPlace && !options.placeInHeading ? `وكانت الوفاة في ${deathPlace}` : "";
+  const placeLine = deathPlace && !options.placeInHeading ? `الوفاة في ${deathPlace}` : "";
   // رأس قالب النسخ (mergePlace): العمر والجنسية ومكان الوفاة في سطر واحد
   const ageLine = [
     options.includeAge ? formatAge(person.age, person.ageUnit) : "",
@@ -696,7 +696,7 @@ function composeIdentity(request: ObituaryRequestInput, warnings: string[]): Ide
       relativesLines,
       relativeBlocks,
       posterNames: identity.plain,
-      posterDetails: [identity.plain, ...rest, ...(placeSuffix ? [`وكانت الوفاة${placeSuffix}`] : []), ...details].filter(Boolean),
+      posterDetails: [identity.plain, ...rest, ...(placeSuffix ? [`الوفاة${placeSuffix}`] : []), ...details].filter(Boolean),
       shortIdentity: first,
     };
   }
@@ -767,11 +767,11 @@ function composeIdentity(request: ObituaryRequestInput, warnings: string[]): Ide
     });
     return {
       identityLines: lines,
-      headline: { verb: singleVerb(parent.gender), name: headlineName(first), rest: [...(placeSuffix ? [`وكانت الوفاة${placeSuffix}`] : []), ...lines.slice(1)] },
+      headline: { verb: singleVerb(parent.gender), name: headlineName(first), rest: [...(placeSuffix ? [`الوفاة${placeSuffix}`] : []), ...lines.slice(1)] },
       relativesLines: parentRoleLines,
       relativeBlocks,
       posterNames: joinWithAnd(posterParts),
-      posterDetails: [parentIdentity.plain, ...(placeSuffix ? [`وكانت الوفاة${placeSuffix}`] : []), ...lines.slice(1)].filter(Boolean),
+      posterDetails: [parentIdentity.plain, ...(placeSuffix ? [`الوفاة${placeSuffix}`] : []), ...lines.slice(1)].filter(Boolean),
       shortIdentity: `${first} و${posterParts.slice(1).join(" و")}`,
     };
   }

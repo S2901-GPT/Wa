@@ -4,7 +4,7 @@ import { useListObituaryRequests, type ObituaryRequest } from "@workspace/api-cl
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, ChevronLeft, Loader2, AlertCircle, Sliders, Copy, Check } from "lucide-react";
+import { FileText, ChevronLeft, Loader2, AlertCircle, Copy, Check } from "lucide-react";
 import { toast } from "sonner";
 import { MESSAGE_TYPE_LABELS, buildAnnouncement, describeRequestDeceased } from "@/lib/announcement";
 
@@ -51,14 +51,6 @@ export default function AdminPage() {
         <div>
           <h1 className="text-3xl font-bold text-primary mb-2">لوحة الإدارة</h1>
           <p className="text-muted-foreground">عرض وإدارة طلبات إعلان الوفاة</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Link href="/admin/templates">
-            <Button variant="outline" className="gap-2 border-primary/40 text-primary hover:bg-primary/5">
-              <Sliders className="h-4 w-4" />
-              محرر القوالب البصري
-            </Button>
-          </Link>
         </div>
       </div>
 

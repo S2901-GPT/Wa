@@ -12,7 +12,6 @@ import {
 import FormPage from '@/pages/form';
 import SuccessPage from '@/pages/success';
 import AdminPage from '@/pages/admin';
-import AdminTemplatesPage from '@/pages/admin/templates';
 import AdminRequestDetailsPage from '@/pages/admin/request-details';
 import AdminEditRequestPage from '@/pages/admin/edit-request';
 
@@ -25,7 +24,6 @@ function Router() {
         <Route path="/" component={FormPage} />
         <Route path="/success/:requestNumber" component={SuccessPage} />
         <Route path="/admin" component={AdminPage} />
-        <Route path="/admin/templates" component={AdminTemplatesPage} />
         <Route path="/admin/:requestNumber" component={AdminRequestDetailsPage} />
         <Route path="/admin/:requestNumber/edit" component={AdminEditRequestPage} />
         <Route component={NotFound} />

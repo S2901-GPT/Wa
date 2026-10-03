@@ -27,7 +27,7 @@ try {
 const inMemoryRequests: ObituaryRequestRow[] = [
   {
     id: 1,
-    requestNumber: "QTR-20260927-1001",
+    requestNumber: "261001",
     deceasedName: "عبدالله بن ناصر",
     status: "new",
     payload: {

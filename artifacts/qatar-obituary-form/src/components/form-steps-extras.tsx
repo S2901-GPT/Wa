@@ -5,7 +5,9 @@
  */
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { get, useFieldArray, useFormContext, useFormState, useWatch, type FieldPath } from "react-hook-form";
-import { AlertTriangle, ChevronDown, Mail, MapPin, Plus, Trash2, Users } from "lucide-react";
+import { AlertTriangle, ChevronDown, Download, Loader2, Mail, MapPin, Plus, Trash2, Users } from "lucide-react";
+import { getObituaryRequest } from "@workspace/api-client-react";
+import { toast } from "sonner";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -14,7 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { buildAnnouncement, relationKeyOf } from "@/lib/announcement";
-import { OTHER_RELATION, mapFormToPayload, relationSelectValue } from "@/lib/mapper";
+import { OTHER_RELATION, mapFormToPayload, mapPayloadToForm, relationSelectValue } from "@/lib/mapper";
 import { emptyCondolenceDetails, type ObituaryFormValues } from "@/lib/schema";
 
 type FormPath = FieldPath<ObituaryFormValues>;
@@ -204,25 +206,64 @@ const MESSAGE_TYPES = [
   { value: "condolence_cancellation", label: "إلغاء عزاء" },
 ] as const;
 
+/**
+ * نوع الرسالة ظاهر دائماً في أول الخطوة الأولى. عند التعديل أو التأجيل أو إلغاء العزاء يكتب المستخدم رقم طلبه
+ * الأصلي ويضغط «تحميل بيانات الطلب» فتُملأ الخطوات كلها ببياناته ليعدّل ما يريد ويرسل طلباً جديداً مرتبطاً به.
+ */
 export function MessageTypeCard() {
   const form = useFormContext<ObituaryFormValues>();
   const messageType = useWatch({ control: form.control, name: "messageType" });
-  const current = MESSAGE_TYPES.find((option) => option.value === messageType)?.label ?? "إعلان وفاة";
+  const relatedRequestNumber = useWatch({ control: form.control, name: "relatedRequestNumber" });
+  const [loading, setLoading] = useState(false);
+  const [loadedFrom, setLoadedFrom] = useState<string | null>(null);
+  const needsOriginal = !!messageType && messageType !== "announcement";
+
+  const loadOriginal = async () => {
+    const number = (relatedRequestNumber ?? "").trim();
+    if (!number) {
+      toast.error("اكتب رقم الطلب الأصلي أولاً");
+      return;
+    }
+    setLoading(true);
+    try {
+      const original = await getObituaryRequest(number);
+      form.reset({
+        ...mapPayloadToForm(original),
+        messageType: messageType ?? "amendment",
+        relatedRequestNumber: number,
+      });
+      setLoadedFrom(number);
+      toast.success(`تم تحميل بيانات الطلب ${number}`);
+    } catch {
+      toast.error("لم يُعثر على طلب بهذا الرقم، تأكد منه وحاول مرة أخرى");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <MoreOptions
-      label={`نوع الرسالة: ${current}`}
-      hint="للتأجيل أو التعديل أو إلغاء العزاء"
-      paths={["messageType", "relatedRequestNumber", "cancellation"]}
-    >
-    <Card className="border-border bg-muted/20 shadow-xs w-full box-border">
+    <Card className="border-primary/30 bg-primary/5 shadow-xs w-full box-border">
       <CardContent className="p-3 sm:p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="flex items-center gap-2 sm:col-span-2 text-xs sm:text-sm font-semibold text-foreground">
+        <div className="flex items-center gap-2 sm:col-span-2 text-sm sm:text-base font-bold text-foreground">
           <Mail className="w-4 h-4 text-primary shrink-0" />
           نوع الرسالة
         </div>
-        <SelectInput name="messageType" label="الرسالة" options={MESSAGE_TYPES} />
-        {messageType && messageType !== "announcement" && (
-          <TextInput name="relatedRequestNumber" label="رقم طلب الإعلان الأصلي (اختياري)" placeholder="QTR-20260101-1234" ltr />
+        <SelectInput name="messageType" label="اختر نوع الرسالة" options={MESSAGE_TYPES} />
+        {needsOriginal && (
+          <div className="grid grid-cols-[1fr_auto] gap-2 items-end w-full min-w-0">
+            <TextInput name="relatedRequestNumber" label="رقم الطلب الأصلي" placeholder="261234" ltr />
+            <Button type="button" variant="outline" className="h-9 text-xs gap-1.5 shrink-0" onClick={loadOriginal} disabled={loading}>
+              {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+              تحميل بيانات الطلب
+            </Button>
+          </div>
+        )}
+        {needsOriginal && (
+          <p className="sm:col-span-2 text-[11px] text-muted-foreground">
+            {loadedFrom
+              ? `تم تحميل بيانات الطلب ${loadedFrom}؛ عدّل ما تريد في الخطوات ثم أرسل الطلب.`
+              : "اكتب رقم الطلب الذي وصلك عند التسجيل، ثم اضغط «تحميل بيانات الطلب» لتعبئة الخطوات ببياناته."}
+          </p>
         )}
         {messageType === "condolence_cancellation" && (
           <>
@@ -238,7 +279,6 @@ export function MessageTypeCard() {
         )}
       </CardContent>
     </Card>
-    </MoreOptions>
   );
 }
 
