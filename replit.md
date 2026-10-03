@@ -8,7 +8,7 @@
 - `npm run typecheck` — full TypeScript build check across packages
 - `npm run build` — builds frontend applet
 - `npm start` — production: serves the API and the built frontend with `tsx server.ts` (`NODE_ENV=production`, `PORT`)
-- Deploy (Cloud Run): `npm run build` builds the frontend (`artifacts/qatar-obituary-form/dist/public`) and bundles `server.ts` with everything it imports into `dist/server.mjs` (`build-server.mjs`). `npm start` runs that bundle with plain `node`, so production needs no `node_modules`; without the bundle it falls back to `tsx server.ts`. `.gcloudignore` keeps `node_modules` and `.git` out of source uploads but keeps `dist`. `package-lock.json` is the only lockfile (a `bun.lock` makes Google buildpacks use Bun). The root `Dockerfile` (`npm ci` → `npm run build` → `npm start`) also works.
+- Deploy (Cloud Run): `npm run build` builds the frontend (`artifacts/qatar-obituary-form/dist/public`) and bundles `server.ts` with everything it imports into `dist/server.mjs` (`build-server.mjs`). `npm start` runs that bundle with plain `node`, so production needs no `node_modules`; without the bundle it falls back to `tsx server.ts`. `.gcloudignore` keeps `node_modules` and `.git` out of source uploads but keeps `dist`. `package-lock.json` is the only lockfile (a `bun.lock` makes Google buildpacks use Bun). The root `Dockerfile` (`npm ci` → `npm run build` → `npm start`) also works. `bunfig.toml` makes Bun (used by AI Studio) install the flat npm-style layout instead of its isolated workspace layout.
 - Database: Cloud Firestore (connected via `firebase-applet-config.json`, no `DATABASE_URL` required)
 
 ## Stack
