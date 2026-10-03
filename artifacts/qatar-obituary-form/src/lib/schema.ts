@@ -109,7 +109,12 @@ export const CondolenceWindowSchema = z.object({
 });
 
 export const CondolenceScheduleSchema = z.object({
+  /** قديم: كان مفتاح «إضافة أوقات للعزاء». يُقرأ فقط حتى لا تضيع أوقات طلب قديم. */
   enabled: z.boolean().default(false),
+  /** اختيار الفترة يكفي وحده («الفترة المسائية»)، والوقت يُضاف بعدها إن وُجد. */
+  morning: z.boolean().default(false),
+  evening: z.boolean().default(false),
+  friday: z.boolean().default(false),
   morningFrom: z.string().nullish().or(z.literal("")),
   morningTo: z.string().nullish().or(z.literal("")),
   eveningFrom: z.string().nullish().or(z.literal("")),
@@ -242,6 +247,9 @@ export function emptyCondolenceDetails() {
     durationDays: null,
     schedule: {
       enabled: false,
+      morning: false,
+      evening: false,
+      friday: false,
       morningFrom: "",
       morningTo: "",
       eveningFrom: "",

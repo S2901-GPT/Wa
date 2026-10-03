@@ -205,12 +205,14 @@ function rangeText(from?: string | null, to?: string | null): string {
 function scheduleToApi(details: FormDetails): CondolenceScheduleEntry[] {
   const entries: CondolenceScheduleEntry[] = [];
   const schedule = details.schedule;
-  if (schedule?.enabled) {
+  if (schedule) {
+    // الفترة المختارة تُكتب ولو بلا وقت («الفترة المسائية»). مفتاح «enabled» القديم يبقي أوقات الطلبات السابقة.
     const morning = rangeText(schedule.morningFrom, schedule.morningTo);
     const evening = rangeText(schedule.eveningFrom, schedule.eveningTo);
-    if (morning) entries.push({ days: PERIOD_LABELS.morning, time: morning });
-    if (evening) entries.push({ days: PERIOD_LABELS.evening, time: evening });
-    if (clean(schedule.fridayNote)) entries.push({ days: PERIOD_LABELS.friday, time: clean(schedule.fridayNote) });
+    const friday = clean(schedule.fridayNote);
+    if (schedule.morning || (schedule.enabled && morning)) entries.push({ days: PERIOD_LABELS.morning, time: morning });
+    if (schedule.evening || (schedule.enabled && evening)) entries.push({ days: PERIOD_LABELS.evening, time: evening });
+    if ((schedule.friday || schedule.enabled) && friday) entries.push({ days: PERIOD_LABELS.friday, time: friday });
   }
   for (const window of details.windows ?? []) {
     const text = [clean(window.note), clean(window.timeString)].filter(Boolean).join(" ");
@@ -369,15 +371,15 @@ function scheduleToForm(entries: CondolenceScheduleEntry[] | undefined, fallback
   for (const entry of entries ?? []) {
     const range = /^(?:من\s+(.+?))?(?:\s*(?:إلى|حتى)\s+(.+))?$/u.exec(clean(entry.time));
     if (entry.days === PERIOD_LABELS.morning && range) {
-      schedule.enabled = true;
+      schedule.morning = true;
       schedule.morningFrom = parseTime12h(range[1] ?? "");
       schedule.morningTo = parseTime12h(range[2] ?? "");
     } else if (entry.days === PERIOD_LABELS.evening && range) {
-      schedule.enabled = true;
+      schedule.evening = true;
       schedule.eveningFrom = parseTime12h(range[1] ?? "");
       schedule.eveningTo = parseTime12h(range[2] ?? "");
     } else if (entry.days === PERIOD_LABELS.friday) {
-      schedule.enabled = true;
+      schedule.friday = true;
       schedule.fridayNote = entry.time ?? "";
     } else {
       windows.push({ periodType: "exact_time", timeString: clean(`${entry.days ?? ""} ${entry.time ?? ""}`), note: "" });

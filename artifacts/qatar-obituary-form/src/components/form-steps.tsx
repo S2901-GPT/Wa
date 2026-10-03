@@ -21,7 +21,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { 
   Trash2, Plus, User, Users, UserX, Calendar, Heart, FileText, CheckCircle2, 
   MapPin, Clock, Phone, Sparkles, AlertCircle, Copy, Link as LinkIcon, UserCheck
@@ -1263,10 +1262,176 @@ export function CondolencesStep() {
 }
 
 // مكون فرعي: بطاقة مقر العزاء
+type FormSchedule = {
+  enabled?: boolean; morning?: boolean; evening?: boolean; friday?: boolean;
+  morningFrom?: string | null; morningTo?: string | null;
+  eveningFrom?: string | null; eveningTo?: string | null;
+  fridayNote?: string | null;
+};
+
+/** فترات العزاء كما ستُكتب في الإعلان: الفترة المختارة دائماً، ووقتها إن وُجد. */
+function periodLines(schedule: FormSchedule | undefined) {
+  const range = (from?: string | null, to?: string | null) => {
+    const start = formatTime12h(from || "");
+    const end = formatTime12h(to || "");
+    if (start && end) return `من ${start} إلى ${end}`;
+    return start ? `من ${start}` : end ? `حتى ${end}` : "";
+  };
+  const lines: { label: string; time: string }[] = [];
+  if (!schedule) return lines;
+  const morning = range(schedule.morningFrom, schedule.morningTo);
+  const evening = range(schedule.eveningFrom, schedule.eveningTo);
+  const friday = schedule.fridayNote?.trim() || "";
+  if (schedule.morning || (schedule.enabled && morning)) lines.push({ label: "الفترة الصباحية", time: morning });
+  if (schedule.evening || (schedule.enabled && evening)) lines.push({ label: "الفترة المسائية", time: evening });
+  if ((schedule.friday || schedule.enabled) && friday) lines.push({ label: "يوم الجمعة", time: friday });
+  return lines;
+}
+
+type PeriodKey = "morning" | "evening";
+const PERIODS: { key: PeriodKey; label: string }[] = [
+  { key: "morning", label: "الفترة الصباحية" },
+  { key: "evening", label: "الفترة المسائية" },
+];
+
+/** فترات العزاء: اختيار الفترة يكفي («الفترة المسائية»)، ووقت «من / إلى» اختياري يظهر بزر «إضافة وقت». */
+function CondolencePeriods({ prefix }: { prefix: string }) {
+  const form = useFormContext<ObituaryFormValues>();
+  const at = (field: string) => `${prefix}.schedule.${field}` as any;
+  const fridayOn = Boolean(form.watch(at("friday")));
+
+  const toggle = (key: "morning" | "evening" | "friday", on: boolean) => {
+    form.setValue(at(key), on, { shouldDirty: true });
+    // إلغاء الفترة يمسح وقتها حتى لا يُكتب وقت لفترة غير مختارة.
+    if (!on) {
+      if (key === "friday") form.setValue(at("fridayNote"), "", { shouldDirty: true });
+      else {
+        form.setValue(at(`${key}From`), "", { shouldDirty: true });
+        form.setValue(at(`${key}To`), "", { shouldDirty: true });
+      }
+    }
+  };
+
+  const chip = (key: "morning" | "evening" | "friday", label: string) => {
+    const on = Boolean(form.watch(at(key)));
+    return (
+      <Button
+        key={key}
+        type="button"
+        variant={on ? "default" : "outline"}
+        size="sm"
+        aria-pressed={on}
+        onClick={() => toggle(key, !on)}
+        className="h-8 text-xs gap-1"
+      >
+        {on && <CheckCircle2 className="w-3.5 h-3.5" />}
+        {label}
+      </Button>
+    );
+  };
+
+  return (
+    <div className="p-3 bg-muted/20 rounded-lg border space-y-3 w-full box-border">
+      <div className="flex items-center gap-1.5">
+        <Clock className="w-4 h-4 text-primary shrink-0" />
+        <span className="text-xs sm:text-sm font-semibold text-foreground">فترة العزاء</span>
+        <span className="text-[11px] text-muted-foreground">(اختياري)</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {PERIODS.map(({ key, label }) => chip(key, label))}
+        {chip("friday", "يوم الجمعة")}
+      </div>
+      {PERIODS.map(({ key, label }) => (
+        <PeriodTime key={key} prefix={prefix} period={key} label={label} />
+      ))}
+      {fridayOn && (
+        <FormField
+          control={form.control}
+          name={at("fridayNote")}
+          render={({ field }) => (
+            <FormItem className="w-full">
+              <FormLabel className="text-xs text-muted-foreground">يوم الجمعة</FormLabel>
+              <FormControl>
+                <Input placeholder="مثال: بعد صلاة العصر" className="h-9 bg-background text-xs sm:text-sm w-full" {...field} value={field.value || ""} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
+    </div>
+  );
+}
+
+/** وقت فترة واحدة: مخفي حتى يضغط المستخدم «إضافة وقت». */
+function PeriodTime({ prefix, period, label }: { prefix: string; period: PeriodKey; label: string }) {
+  const form = useFormContext<ObituaryFormValues>();
+  const at = (field: string) => `${prefix}.schedule.${field}` as any;
+  const on = Boolean(form.watch(at(period)));
+  const from = form.watch(at(`${period}From`)) as string | undefined;
+  const to = form.watch(at(`${period}To`)) as string | undefined;
+  const [open, setOpen] = useState(false);
+  if (!on) return null;
+  const showTimes = open || Boolean(from || to);
+
+  if (!showTimes) {
+    return (
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="text-foreground font-medium">{label}</span>
+        <Button type="button" variant="ghost" size="sm" className="h-7 text-xs gap-1 text-primary" onClick={() => setOpen(true)}>
+          <Plus className="w-3.5 h-3.5" />
+          إضافة وقت
+        </Button>
+      </div>
+    );
+  }
+
+  const timeField = (field: "From" | "To") => (
+    <FormField
+      control={form.control}
+      name={at(`${period}${field}`)}
+      render={({ field: input }) => (
+        <FormItem className="flex-1 min-w-0">
+          <FormControl>
+            <Input type="time" aria-label={`${label} ${field === "From" ? "من" : "إلى"}`} className="h-9 bg-background text-xs sm:text-sm w-full" {...input} value={input.value || ""} />
+          </FormControl>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center justify-between gap-2 text-xs">
+        <span className="text-foreground font-medium">{label}</span>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 text-xs text-muted-foreground"
+          onClick={() => {
+            form.setValue(at(`${period}From`), "", { shouldDirty: true });
+            form.setValue(at(`${period}To`), "", { shouldDirty: true });
+            setOpen(false);
+          }}
+        >
+          حذف الوقت
+        </Button>
+      </div>
+      <div className="flex items-center gap-2 w-full">
+        <span className="text-xs text-muted-foreground shrink-0 font-medium">من</span>
+        {timeField("From")}
+        <span className="text-xs text-muted-foreground shrink-0 font-medium">إلى</span>
+        {timeField("To")}
+      </div>
+    </div>
+  );
+}
+
 function CondolenceVenueCard({ audience, title }: { audience: "men" | "women"; title: string }) {
   const form = useFormContext<ObituaryFormValues>();
   const prefix = `condolences.${audience}` as const;
-  const isScheduleEnabled = form.watch(`${prefix}.schedule.enabled` as any);
 
   return (
     <Card className="border shadow-sm w-full max-w-full box-border">
@@ -1350,144 +1515,8 @@ function CondolenceVenueCard({ audience, title }: { audience: "men" | "women"; t
           />
         </div>
 
-        {/* أوقات وفترات استقبال المعزين (مغلقة ومخفية بشكل افتراضي) */}
-        <div className="p-3 bg-muted/20 rounded-lg border space-y-3 w-full box-border">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5">
-              <Clock className="w-4 h-4 text-primary shrink-0" />
-              <span className="text-xs sm:text-sm font-semibold text-foreground">إضافة أوقات للعزاء</span>
-            </div>
-            <Switch
-              checked={Boolean(isScheduleEnabled)}
-              onCheckedChange={(checked) => {
-                form.setValue(`${prefix}.schedule.enabled` as any, checked, { shouldDirty: true });
-              }}
-            />
-          </div>
-
-          {isScheduleEnabled && (
-            <div className="pt-2 border-t space-y-2.5 animate-in fade-in zoom-in-95">
-              <Tabs defaultValue="evening" className="w-full">
-                <TabsList className="grid grid-cols-3 w-full h-9 p-0.5 bg-muted">
-                  <TabsTrigger value="morning" className="text-xs py-1">
-                    صباحي
-                  </TabsTrigger>
-                  <TabsTrigger value="evening" className="text-xs py-1">
-                    مسائي
-                  </TabsTrigger>
-                  <TabsTrigger value="friday" className="text-xs py-1">
-                    الجمعة
-                  </TabsTrigger>
-                </TabsList>
-
-                {/* تبويب صباحي: من [ خانة وقت ] إلى [ خانة وقت ] */}
-                <TabsContent value="morning" className="pt-2 space-y-2">
-                  <div className="flex items-center gap-2 w-full">
-                    <span className="text-xs text-muted-foreground shrink-0 font-medium">من</span>
-                    <FormField
-                      control={form.control}
-                      name={`${prefix}.schedule.morningFrom` as any}
-                      render={({ field }) => (
-                        <FormItem className="flex-1 min-w-0">
-                          <FormControl>
-                            <Input 
-                              type="time" 
-                              className="h-9 bg-background text-xs sm:text-sm w-full" 
-                              {...field} 
-                              value={field.value || ""} 
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <span className="text-xs text-muted-foreground shrink-0 font-medium">إلى</span>
-                    <FormField
-                      control={form.control}
-                      name={`${prefix}.schedule.morningTo` as any}
-                      render={({ field }) => (
-                        <FormItem className="flex-1 min-w-0">
-                          <FormControl>
-                            <Input 
-                              type="time" 
-                              className="h-9 bg-background text-xs sm:text-sm w-full" 
-                              {...field} 
-                              value={field.value || ""} 
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </TabsContent>
-
-                {/* تبويب مسائي: من [ خانة وقت ] إلى [ خانة وقت ] */}
-                <TabsContent value="evening" className="pt-2 space-y-2">
-                  <div className="flex items-center gap-2 w-full">
-                    <span className="text-xs text-muted-foreground shrink-0 font-medium">من</span>
-                    <FormField
-                      control={form.control}
-                      name={`${prefix}.schedule.eveningFrom` as any}
-                      render={({ field }) => (
-                        <FormItem className="flex-1 min-w-0">
-                          <FormControl>
-                            <Input 
-                              type="time" 
-                              className="h-9 bg-background text-xs sm:text-sm w-full" 
-                              {...field} 
-                              value={field.value || ""} 
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <span className="text-xs text-muted-foreground shrink-0 font-medium">إلى</span>
-                    <FormField
-                      control={form.control}
-                      name={`${prefix}.schedule.eveningTo` as any}
-                      render={({ field }) => (
-                        <FormItem className="flex-1 min-w-0">
-                          <FormControl>
-                            <Input 
-                              type="time" 
-                              className="h-9 bg-background text-xs sm:text-sm w-full" 
-                              {...field} 
-                              value={field.value || ""} 
-                            />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                </TabsContent>
-
-                {/* تبويب الجمعة: حقل نصي لإدخال قيم مثل (بعد صلاة العصر) */}
-                <TabsContent value="friday" className="pt-2 space-y-2">
-                  <FormField
-                    control={form.control}
-                    name={`${prefix}.schedule.fridayNote` as any}
-                    render={({ field }) => (
-                      <FormItem className="w-full">
-                        <FormControl>
-                          <Input 
-                            placeholder="مثال: بعد صلاة العصر" 
-                            className="h-9 bg-background text-xs sm:text-sm w-full" 
-                            {...field} 
-                            value={field.value || ""} 
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </TabsContent>
-              </Tabs>
-            </div>
-          )}
-        </div>
+        {/* فترة العزاء: اختيار الفترة يكفي، والوقت يُضاف بزر عند الحاجة */}
+        <CondolencePeriods prefix={prefix} />
 
         {/* «حتى» و«عزاء لـ» (مطوية) */}
         <VenueExtras audience={audience} />
@@ -1945,15 +1974,8 @@ export function ReviewStep() {
                   const duration = card?.durationDays ? `${card.durationDays} أيام` : "";
                   const mapsLink = card?.mapsLink?.trim() || "";
                   const schedule = card?.schedule;
-                  const hasSchedule = schedule?.enabled;
-                  
-                  const morningTime = (schedule?.morningFrom || schedule?.morningTo)
-                    ? `من ${formatTime12h(schedule?.morningFrom || "")} إلى ${formatTime12h(schedule?.morningTo || "")}`
-                    : "";
-                  const eveningTime = (schedule?.eveningFrom || schedule?.eveningTo)
-                    ? `من ${formatTime12h(schedule?.eveningFrom || "")} إلى ${formatTime12h(schedule?.eveningTo || "")}`
-                    : "";
-                  const fridayTime = schedule?.fridayNote?.trim() || "";
+                  const periods = periodLines(schedule);
+                  const hasSchedule = periods.length > 0;
 
                   if (!venue && !duration && !hasSchedule && !mapsLink) {
                     return <p className="text-muted-foreground text-[11px]">لم يتم إدخال تفاصيل إضافية للمقر</p>;
@@ -1967,12 +1989,15 @@ export function ReviewStep() {
                       {duration && (
                         <div><span className="text-muted-foreground">المدة:</span> <span className="font-medium text-foreground">{duration}</span></div>
                       )}
-                      {hasSchedule && (morningTime || eveningTime || fridayTime) && (
+                      {hasSchedule && (
                         <div className="space-y-0.5 border-t pt-1.5 mt-1 text-[11px]">
-                          <span className="font-bold text-foreground">أوقات استقبال المعزين:</span>
-                          {morningTime && <div>• الفترة الصباحية: <span className="font-medium text-foreground">{morningTime}</span></div>}
-                          {eveningTime && <div>• الفترة المسائية: <span className="font-medium text-foreground">{eveningTime}</span></div>}
-                          {fridayTime && <div>• يوم الجمعة: <span className="font-medium text-foreground">{fridayTime}</span></div>}
+                          <span className="font-bold text-foreground">فترة العزاء:</span>
+                          {periods.map((period) => (
+                            <div key={period.label}>
+                              • {period.label}
+                              {period.time && <>: <span className="font-medium text-foreground">{period.time}</span></>}
+                            </div>
+                          ))}
                         </div>
                       )}
                       {mapsLink && (
@@ -2002,15 +2027,8 @@ export function ReviewStep() {
                   const duration = card?.durationDays ? `${card.durationDays} أيام` : "";
                   const mapsLink = card?.mapsLink?.trim() || "";
                   const schedule = card?.schedule;
-                  const hasSchedule = schedule?.enabled;
-                  
-                  const morningTime = (schedule?.morningFrom || schedule?.morningTo)
-                    ? `من ${formatTime12h(schedule?.morningFrom || "")} إلى ${formatTime12h(schedule?.morningTo || "")}`
-                    : "";
-                  const eveningTime = (schedule?.eveningFrom || schedule?.eveningTo)
-                    ? `من ${formatTime12h(schedule?.eveningFrom || "")} إلى ${formatTime12h(schedule?.eveningTo || "")}`
-                    : "";
-                  const fridayTime = schedule?.fridayNote?.trim() || "";
+                  const periods = periodLines(schedule);
+                  const hasSchedule = periods.length > 0;
 
                   if (!venue && !duration && !hasSchedule && !mapsLink) {
                     return <p className="text-muted-foreground text-[11px]">لم يتم إدخال تفاصيل إضافية للمقر</p>;
@@ -2024,12 +2042,15 @@ export function ReviewStep() {
                       {duration && (
                         <div><span className="text-muted-foreground">المدة:</span> <span className="font-medium text-foreground">{duration}</span></div>
                       )}
-                      {hasSchedule && (morningTime || eveningTime || fridayTime) && (
+                      {hasSchedule && (
                         <div className="space-y-0.5 border-t pt-1.5 mt-1 text-[11px]">
-                          <span className="font-bold text-foreground">أوقات استقبال المعزين:</span>
-                          {morningTime && <div>• الفترة الصباحية: <span className="font-medium text-foreground">{morningTime}</span></div>}
-                          {eveningTime && <div>• الفترة المسائية: <span className="font-medium text-foreground">{eveningTime}</span></div>}
-                          {fridayTime && <div>• يوم الجمعة: <span className="font-medium text-foreground">{fridayTime}</span></div>}
+                          <span className="font-bold text-foreground">فترة العزاء:</span>
+                          {periods.map((period) => (
+                            <div key={period.label}>
+                              • {period.label}
+                              {period.time && <>: <span className="font-medium text-foreground">{period.time}</span></>}
+                            </div>
+                          ))}
                         </div>
                       )}
                       {mapsLink && (

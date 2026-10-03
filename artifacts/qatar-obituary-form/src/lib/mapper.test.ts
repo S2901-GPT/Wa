@@ -154,6 +154,38 @@ const cases: Array<[string, () => void]> = [
     });
     assert.match(text(values), /الفترة المسائية من 4:00 مساءً إلى 9:00 مساءً\nيوم الجمعة بعد صلاة العصر/u);
   }],
+  ["اختيار «الفترة المسائية» يكفي بلا وقت، والوقت يُضاف بعدها إن وُجد", () => {
+    const withSchedule = (schedule: Record<string, unknown>) => form((draft) => {
+      draft.condolences = {
+        ...draft.condolences!,
+        type: "men_only",
+        men: { ...draft.condolences!.men!, locationName: "مجلس العائلة", schedule: { ...draft.condolences!.men!.schedule!, ...schedule } },
+      };
+    });
+    const periodOnly = withSchedule({ evening: true });
+    assert.match(text(periodOnly), /عزاء الرجال في مجلس العائلة\nالفترة المسائية\n/u);
+    serverAccepts(periodOnly);
+    assert.match(text(withSchedule({ evening: true, eveningFrom: "16:00" })), /الفترة المسائية من 4:00 مساءً\n/u);
+    assert.match(text(withSchedule({ morning: true, evening: true, eveningTo: "21:00" })), /الفترة الصباحية\nالفترة المسائية حتى 9:00 مساءً/u);
+    // فترة غير مختارة لا تُكتب ولو بقي لها وقت قديم.
+    assert.doesNotMatch(text(withSchedule({ evening: false, eveningFrom: "16:00" })), /الفترة/u);
+    // «يوم الجمعة» بلا نص لا يُكتب وحده.
+    assert.doesNotMatch(text(withSchedule({ friday: true })), /^يوم الجمعة/mu);
+  }],
+  ["فترة بلا وقت تعود مختارة في صفحة التعديل", () => {
+    const values = form((draft) => {
+      draft.condolences = {
+        ...draft.condolences!,
+        type: "men_only",
+        men: { ...draft.condolences!.men!, locationName: "مجلس العائلة", schedule: { ...draft.condolences!.men!.schedule!, evening: true } },
+      };
+    });
+    const back = mapPayloadToForm(asRequest(values));
+    assert.equal(back.condolences?.men?.schedule?.evening, true);
+    assert.equal(back.condolences?.men?.schedule?.eveningFrom, "");
+    assert.equal(back.condolences?.men?.schedule?.morning, false);
+    assert.deepEqual(mapFormToPayload(back).condolences?.[0]?.schedule, [{ days: "الفترة المسائية", time: "" }]);
+  }],
   ["ذهاباً وإياباً: النموذج ← الطلب ← النموذج (صفحة التعديل)", () => {
     const values = form((draft) => {
       draft.messageType = "amendment";
