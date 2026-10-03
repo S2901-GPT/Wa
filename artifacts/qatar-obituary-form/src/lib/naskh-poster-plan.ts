@@ -252,8 +252,18 @@ export function tokenizeArabic(text: string): string[] {
   t = t.replace(/(\S+) (\([^()]{1,40}\))/gu, (_, name: string, group: string) => `${name}${NBSP}${group.replace(/ /g, NBSP)}`);
   t = t.replace(/(\d{1,2}:\d{2}) (صباحاً|ظهراً|عصراً|مساءً)/gu, `$1${NBSP}$2`);
   t = t.replace(/(^| )(من|إلى|حتى) (\d)/gu, `$1$2${NBSP}$3`);
+  // «منزل رقم ٨٦» و«لمدة ٣ أيام» و«الساعة ٩:٣٠» لا ينكسر الرقم عن كلمته
+  t = t.replace(/(^| )(رقم|لمدة|الساعة) ([\d٠-٩]\S*)/gu, `$1$2${NBSP}$3`);
   t = t.replace(/⁦[^⁩]*⁩/gu, (isolate) => isolate.replace(/ /g, NBSP));
   return t.split(" ").filter(Boolean);
+}
+
+/**
+ * أرقام عربية مشرقية في الصورة (٩:٣٠، منزل رقم ٨٦) كما في الأرشيف. خط النسخ يرسمها على خط الحروف نفسه،
+ * أما الأرقام اللاتينية فليست فيه فتسقط إلى خط بديل بحجم وخط قاعدة مختلفين (ظهر ذلك على iPad).
+ */
+export function toArabicIndicDigits(text: string): string {
+  return text.replace(/[0-9]/g, (digit) => "٠١٢٣٤٥٦٧٨٩"[Number(digit)]);
 }
 
 /** يلفّ الكلمات في أسطر لا يتجاوز عرضها الحد، والكلمة الأطول من السطر تبقى سطراً وحدها. */
@@ -368,7 +378,8 @@ export function buildNaskhSections(content: NormalizedContent): NaskhSection[] {
     const rows: NaskhRow[] = [];
     for (const group of content.relatives) {
       rows.push({ style: "heading", text: `${group.heading}:` });
-      rows.push({ style: "body", text: group.membersText });
+      rows.push({ style: "body", text: group.reference ? group.membersList.join(" و") : group.membersText });
+      if (group.reference) rows.push({ style: "body", text: group.reference });
     }
     sections.push({ id: "relatives", title: "الأقارب", rows });
   } else if (content.relativesNote) {

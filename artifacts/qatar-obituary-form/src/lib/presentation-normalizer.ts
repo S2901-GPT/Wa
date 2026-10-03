@@ -71,6 +71,7 @@ export type NormalizedContent = {
   relatives: Array<{
     heading: string;
     membersText: string;
+    reference?: string;
     membersList: string[];
   }>;
   /** «ليس لديه أقارب» عندما يؤكد المرسل ذلك ولا توجد مجموعات. */
@@ -442,6 +443,8 @@ export function normalizeObituaryPresentation(
     heading: block.heading,
     membersList: block.members,
     membersText: [block.members.join(" و"), block.reference].filter(Boolean).join(" — "),
+    // «أبناء الوالد / فلان رحمه الله»: سطر مستقل تحت الأسماء في الصورة كما في الأرشيف
+    ...(block.reference ? { reference: block.reference } : {}),
   }));
 
   const relativesNote = edited.noRelatives && !relatives.length ? noRelativesPhrase(people) : undefined;
