@@ -1,5 +1,5 @@
 import type { CondolenceCard, ObituaryRequest } from "@workspace/api-client-react";
-import { buildAnnouncement, describeDeceased, posterCardLines } from "./announcement";
+import { buildAnnouncement, describeDeceased, noRelativesPhrase, posterCardLines } from "./announcement";
 import { formatDuration } from "./condolence-copy";
 
 export type NormalizedContent = {
@@ -434,9 +434,7 @@ export function normalizeObituaryPresentation(
     membersText: [block.members.join(" و"), block.reference].filter(Boolean).join(" — "),
   }));
 
-  const relativesNote = edited.noRelatives && !relatives.length
-    ? people.length > 1 ? "ليس لديهم أقارب" : people.every((person) => person.gender === "woman" || person.gender === "girl") ? "ليس لديها أقارب" : "ليس لديه أقارب"
-    : undefined;
+  const relativesNote = edited.noRelatives && !relatives.length ? noRelativesPhrase(people) : undefined;
 
   // 6. الملاحظات والختام
   const notes = cleanText(edited.notes);

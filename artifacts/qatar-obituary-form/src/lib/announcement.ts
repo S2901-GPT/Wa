@@ -124,6 +124,12 @@ function isQatari(nationality: string): boolean {
   return /^(?:ال)?قطري(?:ة|ه)?$|^قطر$/u.test(clean(nationality));
 }
 
+/** «ليس لديه/لديها/لديهم أقارب»، يكتبه المسؤول حين لا يُذكر أحد من الأقارب (يظهر في النص وفي الصورة). */
+export function noRelativesPhrase(people: Array<Pick<DeceasedPerson, "gender">>): string {
+  if (people.length > 1) return "ليس لديهم أقارب";
+  return people.every((person) => isFemale(person.gender)) ? "ليس لديها أقارب" : "ليس لديه أقارب";
+}
+
 const WEEKDAYS = ["السبت", "الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"];
 const RELATIVE_DAYS = ["اليوم", "غداً", "غدا", "الليلة", "أمس", "امس"];
 
@@ -1097,8 +1103,10 @@ export function buildAnnouncement(request: ObituaryRequestInput, options: Announ
 
   const withLink = (section: AnnouncementSection) => [...section.lines, ...(section.lines.length && section.mapLink ? [section.mapLink] : [])];
   const notice = messageType === "amendment" ? ["تعديل /"] : [];
+  // المرسل أكّد أنه لا أقارب يُذكرون: يُكتب ذلك في موضع الأقارب بدل تركه فارغاً
+  const noRelatives = request.noRelatives === true && !identity.relativeBlocks.length && !identity.relativesLines.length ? [noRelativesPhrase(people)] : [];
   const text = joinSections([
-    [...notice, ...identity.identityLines, ...identity.relativesLines],
+    [...notice, ...identity.identityLines, ...identity.relativesLines, ...noRelatives],
     [...withLink(prayer), ...withLink(burial)],
     condolences.flatMap(withLink),
     notes,
@@ -1108,7 +1116,7 @@ export function buildAnnouncement(request: ObituaryRequestInput, options: Announ
   const sections: AnnouncementSection[] = [
     ...(notice.length ? [{ id: "notice", lines: notice }] : []),
     { id: "deceased-details", label: people.length > 1 ? "بيانات المتوفين" : "بيانات المتوفى", lines: identity.posterDetails },
-    { id: "relatives", label: "الأقارب", lines: identity.relativesLines },
+    { id: "relatives", label: "الأقارب", lines: [...identity.relativesLines, ...noRelatives] },
     prayer,
     burial,
     ...condolences,
