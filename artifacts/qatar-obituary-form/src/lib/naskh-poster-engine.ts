@@ -5,7 +5,7 @@ import openingCalligraphyUrl from "../assets/poster/opening-calligraphy.png";
 import type { NormalizedContent } from "./presentation-normalizer";
 import { normalizeArabic } from "./presentation-normalizer";
 import type { QrCodeMap } from "./qr-images";
-import { DEFAULT_OPENING, NASKH_COLORS, NASKH_METRICS, planNaskhLayout, type MeasureFn, type NaskhLayoutId, type NaskhPlan, type NaskhQrKey, type PlanItem } from "./naskh-poster-plan";
+import { DEFAULT_OPENING, NASKH_COLORS, NASKH_METRICS, planNaskhLayout, toArabicIndicDigits, type MeasureFn, type NaskhLayoutId, type NaskhPlan, type NaskhQrKey, type PlanItem } from "./naskh-poster-plan";
 
 export const IMAGE_WIDTH: number = NASKH_METRICS.width;
 export const IMAGE_HEIGHT: number = NASKH_METRICS.minHeight;
@@ -175,6 +175,7 @@ function drawLine(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind:
   let x = item.xRight;
   item.runs.forEach((run, index) => {
     if (!run.text) return;
+    const shown = toArabicIndicDigits(run.text);
     ctx.font = fontString(run.weight, item.px);
     ctx.fillStyle = run.color;
     if (index > 0) {
@@ -184,8 +185,8 @@ function drawLine(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind:
       ctx.font = fontString(run.weight, item.px);
       x -= space;
     }
-    ctx.fillText(run.text, x, midY);
-    x -= ctx.measureText(run.text).width;
+    ctx.fillText(shown, x, midY);
+    x -= ctx.measureText(shown).width;
   });
 }
 
@@ -308,9 +309,10 @@ export function renderNaskhPoster(options: PosterOptions, content: NormalizedCon
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas 2D context unavailable");
 
+  // القياس بالأرقام المشرقية نفسها التي تُرسم، فتتطابق الأعراض.
   const measure: MeasureFn = (text, font) => {
     ctx.font = fontString(font.weight, font.px);
-    return ctx.measureText(text).width;
+    return ctx.measureText(toArabicIndicDigits(text)).width;
   };
   const openingIsImage = !!assets.opening && normalizeArabic(content.opening) === normalizeArabic(DEFAULT_OPENING);
   // كل رمز توفرت صورته (الصلاة، الدفن، وكل موقع عزاء بمفتاحه)

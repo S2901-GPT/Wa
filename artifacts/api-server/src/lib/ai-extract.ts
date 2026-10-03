@@ -133,12 +133,12 @@ export const RESPONSE_SCHEMA: GeminiSchema = obj(
         status: oneOf(BURIAL_STATUSES),
         day: str("اليوم، غداً، أو التاريخ كما ورد"),
         weekday: str("اسم اليوم مثل: الأربعاء"),
-        time: str("مثل: بعد صلاة العصر"),
+        time: str("مثل: بعد صلاة العصر، أو الساعة 9:30 مساءً"),
         cemetery: str("مثل: مقبرة مسيمير"),
         mapLink: str(),
         outsideQatar: bool(),
         outsideLocation: str(),
-        note: str(),
+        note: str("سبب التأجيل أو وصف دفن تمّ فقط؛ لا موعد ولا مقبرة هنا"),
       },
       ["status", "outsideQatar"],
     ),
@@ -221,7 +221,8 @@ export const SYSTEM_PROMPT = `أنت مساعد يحوّل نص إعلان وف�
   people: اسم كل شخص كما ورد (غالباً الاسم الأول)، deceased=true لمن ذُكر بعده «رحمه الله»، وجهة العمل أو «متقاعد» في occupation.
   إن كان الأبناء «أبناء المرحوم فلان» فضع الأب في reference. إن قال النص صراحةً لا أقارب فاجعل noRelatives=true.
 - burial: status = upcoming للدفن القادم، completed إن قال «تم الدفن»، postponed إن قال «تأجيل الدفن». day مثل «اليوم» أو «غداً»،
-  weekday اسم اليوم، time مثل «بعد صلاة العصر»، cemetery مثل «مقبرة مسيمير». الدفن خارج قطر: outsideQatar=true مع outsideLocation.
+  weekday اسم اليوم، time مثل «بعد صلاة العصر» أو «الساعة 9:30 مساءً»، cemetery مثل «مقبرة مسيمير». الدفن خارج قطر: outsideQatar=true مع outsideLocation.
+  note فقط لسبب التأجيل أو لوصف دفن تمّ («تم الدفن في مكة المكرمة»)؛ لا تضع فيه الموعد ولا المقبرة، بل وزّعها على day وweekday وtime وcemetery.
 - prayer: enabled=true فقط إن ذُكر مسجد أو جامع للصلاة منفصلاً عن المقبرة، مع موعده ومكانه.
 - condolences: بطاقة لكل مقر. عزاء الرجال audience=men وعزاء النساء audience=women، وإن تعددت مقرات النساء فبطاقة لكل مقر.
   location المقر كما ورد، area المنطقة، houseNumber رقم المنزل، start بداية العزاء (اليوم، غداً، أو اسم اليوم)،
@@ -311,6 +312,45 @@ function guessGender(person: Loose): (typeof GENDERS)[number] {
 const intOrUndefined = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.round(value) : undefined;
 
+const WEEKDAY_RE = /(?:^|\s)(السبت|الأحد|الاثنين|الإثنين|الثلاثاء|الأربعاء|الخميس|الجمعة)(?=\s|$)/u;
+const RELATIVE_DAY_RE = /(?:^|\s)(اليوم|غداً|غدا|بعد غد)(?=\s|$)/u;
+const PRAYER_TIME_RE = /بعد صلاة (?:الفجر|الظهر|العصر|المغرب|العشاء|الجمعة|التراويح)/u;
+const CLOCK_TIME_RE = /(?:الساعة\s*)?\d{1,2}(?::\d{2})?\s*(?:صباحاً|صباحا|ظهراً|ظهرا|عصراً|عصرا|مساءً|مساء)/u;
+const CEMETERY_RE = /مقبرة\s+(?:(?:أبو|ابو|أم|ام)\s+\S+|الوكرة\s+الجنوبية|\S+)/u;
+
+/**
+ * النموذج قد يضع موعد الدفن والمقبرة كلها في note أو time («الساعة 9:30 مساءً في مقبرة مسيمير اليوم الاثنين»)،
+ * فيخرج الإعلان «الدفن» ثم جملة مبعثرة مع تنبيهات بأن اليوم والمقبرة غير محددين. هنا تُفكّ إلى حقولها.
+ */
+export function splitBurialNote(burial: Loose): Loose {
+  if (burial.status === "postponed") return burial;
+  const have = { day: text(burial.day), weekday: text(burial.weekday), time: text(burial.time), cemetery: text(burial.cemetery), note: text(burial.note) };
+  // يُفكّ فقط حين تغيب المقبرة، أو حين تكون الملاحظة كل ما ورد عن الدفن.
+  const blob = !have.cemetery ? `${have.time} ${have.note}` : !have.day && !have.weekday && !have.time ? have.note : "";
+  if (!blob.trim()) return burial;
+  let rest = ` ${blob} `;
+  const take = (re: RegExp): string => {
+    const match = re.exec(rest);
+    if (!match) return "";
+    rest = rest.replace(match[0], " ");
+    return match[0].trim();
+  };
+  const cemetery = take(CEMETERY_RE);
+  const time = take(PRAYER_TIME_RE) || take(CLOCK_TIME_RE);
+  const weekday = take(WEEKDAY_RE);
+  const day = take(RELATIVE_DAY_RE);
+  if (!cemetery && !time && !weekday && !day) return burial;
+  const leftover = rest.replace(/(?:^|\s)(?:في|و|بـ|ب)(?=\s|$)/gu, " ").replace(/[،,.]+/gu, " ").replace(/\s+/gu, " ").trim();
+  return {
+    ...burial,
+    day: day || have.day || undefined,
+    weekday: weekday || have.weekday || undefined,
+    time: time || undefined,
+    cemetery: cemetery || have.cemetery || undefined,
+    note: /\p{L}{3,}/u.test(leftover) ? leftover : undefined,
+  };
+}
+
 /** يحوّل ناتج الذكاء الاصطناعي إلى طلب يقبله الخادم، أو يرفضه برسالة واضحة. */
 export function toRequest(raw: unknown): ExtractResult {
   const data = (dropEmpty(raw) ?? {}) as Loose;
@@ -385,7 +425,7 @@ export function toRequest(raw: unknown): ExtractResult {
     relatives,
     noRelatives: relatives.length === 0 && data.noRelatives === true ? true : undefined,
     prayer: { ...prayer, enabled: prayer.enabled === true },
-    burial: { ...burial, status: pick(burial.status, BURIAL_STATUSES) ?? "upcoming", outsideQatar: burial.outsideQatar === true },
+    burial: splitBurialNote({ ...burial, status: pick(burial.status, BURIAL_STATUSES) ?? "upcoming", outsideQatar: burial.outsideQatar === true }),
     condolenceOptions: options,
     condolences,
     condolencePhoneContacts: phones,

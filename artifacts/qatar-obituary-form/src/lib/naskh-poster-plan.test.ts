@@ -16,6 +16,7 @@ import {
   wrapAtoms,
   type MeasureFn,
   type NaskhPlanOptions,
+  toArabicIndicDigits,
 } from "./naskh-poster-plan";
 
 function makeRequest(overrides: Partial<ObituaryRequest> = {}): ObituaryRequest {
@@ -47,6 +48,17 @@ const lineItems = (p: ReturnType<typeof plan>) => p.items.filter((item): item is
 const lineText = (item: Extract<ReturnType<typeof plan>["items"][number], { kind: "line" }>) => item.runs.map((run) => run.text).join(" ");
 
 const cases: Array<[string, () => void]> = [
+  ["poster digits: Latin digits become Arabic-Indic, existing ones stay", () => {
+    assert.equal(toArabicIndicDigits("الساعة 9:30 مساءً، منزل رقم 86، لمدة 3 أيام"), "الساعة ٩:٣٠ مساءً، منزل رقم ٨٦، لمدة ٣ أيام");
+    assert.equal(toArabicIndicDigits("منزل رقم ٨٦"), "منزل رقم ٨٦");
+    assert.equal(toArabicIndicDigits("بلا أرقام"), "بلا أرقام");
+  }],
+  ["tokenizer keeps a number with its word: رقم، لمدة، الساعة", () => {
+    const atoms = tokenizeArabic("في منزل الفقيد بمنطقة النصر، منزل رقم 86 لمدة 3 أيام الساعة 9:30 مساءً");
+    assert.ok(atoms.includes("رقم\u00A086"), JSON.stringify(atoms));
+    assert.ok(atoms.includes("لمدة\u00A03"), JSON.stringify(atoms));
+    assert.ok(atoms.includes("الساعة\u00A09:30\u00A0مساءً"), JSON.stringify(atoms));
+  }],
   ["tokenizer keeps mercy phrases, times and isolates together", () => {
     assert.deepEqual(tokenizeArabic("ناصر وبدر رحمه الله وسمير"), ["ناصر", "وبدر رحمه الله", "وسمير"]);
     assert.deepEqual(tokenizeArabic("بدر (رحمه الله) وخالد"), ["بدر (رحمه الله)", "وخالد"]);

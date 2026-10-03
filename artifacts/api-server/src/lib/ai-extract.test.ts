@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import express from "express";
 import { ADMIN_COOKIE, createSessionToken } from "./admin-auth";
-import { AiError, DEFAULT_MODEL, FALLBACK_MODEL, HOLLOW_WARNING, aiConfig, aiEnvHints, buildGeminiBody, extractRequest, isHollow, readJson, toRequest } from "./ai-extract";
+import { AiError, DEFAULT_MODEL, FALLBACK_MODEL, HOLLOW_WARNING, aiConfig, aiEnvHints, buildGeminiBody, extractRequest, isHollow, readJson, splitBurialNote, toRequest } from "./ai-extract";
 import aiRouter from "../routes/ai";
 
 /** رد نموذجي كما يُرجعه Gemini لإعلان وهمي (بقيم فارغة وnull كما يحدث فعلاً). */
@@ -78,6 +78,34 @@ const cases: Array<[string, () => void | Promise<void>]> = [
     assert.equal(request.prayer.enabled, false);
     assert.deepEqual(request.condolenceOptions, ["phone"]);
     assert.equal(request.condolencePhoneContacts.length, 1);
+  }],
+  ["splitBurialNote: موعد الدفن والمقبرة المكدّسة في note أو time تعود إلى حقولها", () => {
+    assert.deepEqual(
+      splitBurialNote({ status: "upcoming", outsideQatar: false, note: "الساعة 9:30 مساءً في مقبرة مسيمير اليوم الاثنين" }),
+      { status: "upcoming", outsideQatar: false, day: "اليوم", weekday: "الاثنين", time: "الساعة 9:30 مساءً", cemetery: "مقبرة مسيمير", note: undefined },
+    );
+    assert.deepEqual(
+      splitBurialNote({ status: "upcoming", outsideQatar: false, time: "بعد صلاة العصر في مقبرة أبو هامور غداً" }),
+      { status: "upcoming", outsideQatar: false, day: "غداً", weekday: undefined, time: "بعد صلاة العصر", cemetery: "مقبرة أبو هامور", note: undefined },
+    );
+    // ما بقي بعد الفكّ يظل ملاحظة، والحقول الموجودة لا تُمحى
+    const split = splitBurialNote({ status: "upcoming", outsideQatar: false, day: "اليوم", note: "بعد صلاة المغرب في مقبرة الوكرة ويُرجى الحضور مبكراً" });
+    assert.equal(split.cemetery, "مقبرة الوكرة");
+    assert.equal(split.time, "بعد صلاة المغرب");
+    assert.equal(split.day, "اليوم");
+    assert.equal(split.note, "ويُرجى الحضور مبكراً");
+    // ما ليس فيه موعد ولا مقبرة يبقى كما هو، والتأجيل لا يُمسّ
+    const done = { status: "completed", outsideQatar: false, note: "تم الدفن في مكة المكرمة" };
+    assert.deepEqual(splitBurialNote(done), done);
+    const postponed = { status: "postponed", outsideQatar: false, note: "لحين وصول الجثمان غداً" };
+    assert.deepEqual(splitBurialNote(postponed), postponed);
+    const intact = { status: "upcoming", outsideQatar: false, day: "اليوم", time: "بعد صلاة العصر", cemetery: "مقبرة مسيمير" };
+    assert.deepEqual(splitBurialNote(intact), intact);
+    // عبر toRequest كاملاً
+    const { request } = toRequest({ ...AI_OUTPUT, burial: { status: "upcoming", outsideQatar: false, note: "الساعة 9:30 مساءً في مقبرة مسيمير اليوم الاثنين" } });
+    assert.equal(request.burial.cemetery, "مقبرة مسيمير");
+    assert.equal(request.burial.weekday, "الاثنين");
+    assert.equal(request.burial.note, undefined);
   }],
   ["readJson: يقبل الرد المحاط بعلامات ```json ويرفض غير المفهوم", () => {
     assert.deepEqual(readJson('```json\n{"a":1}\n```'), { a: 1 });
