@@ -2,6 +2,28 @@ import type { CondolenceCard, ObituaryRequest } from "@workspace/api-client-reac
 import { buildAnnouncement, describeDeceased, noRelativesPhrase, posterCardLines } from "./announcement";
 import { formatDuration } from "./condolence-copy";
 
+/** موقع عزاء واحد: عنوانه («عزاء النساء الأول»)، وأسطره، ورمز موقعه إن وُجد رابط. */
+export type VenueSite = {
+  label: string;
+  lines: string[];
+  qrUrl?: string;
+};
+
+export type VenueContent = {
+  title: string;
+  /** عنوان الجملة الجارية كما في الأرشيف: «عزاء الرجال» و«والنساء» عند وجود عزاء للرجال. */
+  flowLabel: string;
+  startAndDuration?: string;
+  time?: string;
+  location?: string;
+  address?: string;
+  /** رمز الموقع الأول (يوافق sites[0].qrUrl). */
+  qrUrl?: string;
+  qrLabel?: string;
+  /** كل موقع على حدة عند تعدد المواقع (لكل منها رمزه)، وإلا تبقى الحقول أعلاه. */
+  sites?: VenueSite[];
+};
+
 export type NormalizedContent = {
   opening: string;
   statement: string;
@@ -39,27 +61,8 @@ export type NormalizedContent = {
     qrUrl?: string;
     qrLabel?: string;
   };
-  men?: {
-    title: string;
-    /** عنوان الجملة الجارية كما في الأرشيف: «عزاء الرجال» و«والنساء» عند وجود عزاء للرجال. */
-    flowLabel: string;
-    startAndDuration?: string;
-    time?: string;
-    location?: string;
-    address?: string;
-    qrUrl?: string;
-    qrLabel?: string;
-  };
-  women?: {
-    title: string;
-    flowLabel: string;
-    startAndDuration?: string;
-    time?: string;
-    location?: string;
-    address?: string;
-    qrUrl?: string;
-    qrLabel?: string;
-  };
+  men?: VenueContent;
+  women?: VenueContent;
   phoneContacts: Array<{
     name?: string;
     phone: string;
@@ -386,10 +389,19 @@ export function normalizeObituaryPresentation(
   const condolenceBlock = (audience: "men" | "women"): NormalizedContent["men"] => {
     const blocks = announcement.sections.filter((item) => item.audience === audience);
     if (!blocks.length) return undefined;
+    const override = audience === "men" ? draftOverrides?.menMapLink : draftOverrides?.womenMapLink;
+    const sites: VenueSite[] = [];
     const lines = blocks.flatMap((block, index) => {
       const card: CondolenceCard | undefined = typeof block.cardIndex === "number" ? edited.condolences?.[block.cardIndex] : undefined;
       const body = card ? posterCardLines(edited, condolenceStart ? { ...card, start: "" } : card) : block.lines;
       const base = audience === "men" ? "عزاء الرجال" : "عزاء النساء";
+      // لكل موقع رمزه: رابط بطاقته (وللأول ما عدّله المسؤول في الاستوديو)
+      const mapUrl = cleanText(index === 0 && override !== undefined ? override : card?.mapLink);
+      sites.push({
+        label: block.label === `${base} (${index + 1})` ? `${base} ${LOCATION_ORDINALS[index] ?? index + 1}` : block.label ?? base,
+        lines: body,
+        qrUrl: qrFor(cleanText(card?.location), mapUrl),
+      });
       // العنوان العام للقسم هو «عزاء النساء» أصلاً، فالمواقع المرقّمة تُسمّى «الموقع الأول/الثاني».
       const numbered = block.label === `${base} (${index + 1})`;
       const heading = numbered
@@ -397,16 +409,14 @@ export function normalizeObituaryPresentation(
         : blocks.length > 1 || block.label !== base ? `${block.label}:` : "";
       return index === 0 && !heading ? body : [heading, ...body].filter(Boolean);
     });
-    const firstCard = blocks[0]?.cardIndex != null ? edited.condolences?.[blocks[0].cardIndex!] : undefined;
-    const override = audience === "men" ? draftOverrides?.menMapLink : draftOverrides?.womenMapLink;
-    const map = cleanText(override ?? firstCard?.mapLink);
-    const qrUrl = qrFor(cleanText(firstCard?.location), map);
+    const qrUrl = sites[0]?.qrUrl;
     return {
       title: audience === "men" ? "عزاء الرجال" : "عزاء النساء",
       flowLabel: audience === "men" ? "عزاء الرجال" : hasMen ? "والنساء" : "عزاء النساء",
       location: lines.join("\n"),
       qrUrl,
       qrLabel: qrUrl ? (audience === "men" ? "موقع المجلس" : "موقع العزاء") : undefined,
+      ...(sites.length > 1 ? { sites } : {}),
     };
   };
   const men = condolenceBlock("men");
