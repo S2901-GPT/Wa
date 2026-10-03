@@ -378,7 +378,8 @@ export function buildNaskhSections(content: NormalizedContent): NaskhSection[] {
     const rows: NaskhRow[] = [];
     for (const group of content.relatives) {
       rows.push({ style: "heading", text: `${group.heading}:` });
-      rows.push({ style: "body", text: group.membersText });
+      rows.push({ style: "body", text: group.reference ? group.membersList.join(" و") : group.membersText });
+      if (group.reference) rows.push({ style: "body", text: group.reference });
     }
     sections.push({ id: "relatives", title: "الأقارب", rows });
   } else if (content.relativesNote) {

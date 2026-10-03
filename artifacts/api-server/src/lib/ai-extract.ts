@@ -219,7 +219,9 @@ export const SYSTEM_PROMPT = `أنت مساعد يحوّل نص إعلان وف�
   grandchildren (جد)، brothers_children (عم)، sisters_children (خال)، paternal_uncles (أعمامه)، maternal_uncles (أخواله)،
   daughters_husbands (والد زوجة)، sisters_husbands (أخو زوجة)، father (ابن فلان)، grandfather (حفيد فلان)، وغيرها other.
   people: اسم كل شخص كما ورد (غالباً الاسم الأول)، deceased=true لمن ذُكر بعده «رحمه الله»، وجهة العمل أو «متقاعد» في occupation.
-  إن كان الأبناء «أبناء المرحوم فلان» فضع الأب في reference. إن قال النص صراحةً لا أقارب فاجعل noRelatives=true.
+  إن عُرّف الأبناء بأبيهم («أبناء المرحوم فلان»، أو سطر «أبناء الوالد / فلان رحمه الله» بعد الأسماء) فضع الأب في reference
+  لمجموعة الأبناء: title «الوالد»، name الاسم، deceased=true إن ذُكر «رحمه الله» أو «المرحوم». لا تجعله متوفى ثانياً ولا قريباً.
+  إن قال النص صراحةً لا أقارب فاجعل noRelatives=true.
 - burial: status = upcoming للدفن القادم، completed إن قال «تم الدفن»، postponed إن قال «تأجيل الدفن». day مثل «اليوم» أو «غداً»،
   weekday اسم اليوم، time مثل «بعد صلاة العصر» أو «الساعة 9:30 مساءً»، cemetery مثل «مقبرة مسيمير». الدفن خارج قطر: outsideQatar=true مع outsideLocation.
   note فقط لسبب التأجيل أو لوصف دفن تمّ («تم الدفن في مكة المكرمة»)؛ لا تضع فيه الموعد ولا المقبرة، بل وزّعها على day وweekday وtime وcemetery.

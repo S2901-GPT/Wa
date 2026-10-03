@@ -375,10 +375,26 @@ export function RelationSelect({ groupIndex, options }: { groupIndex: number; op
 export function RelativeGroupExtras({ groupIndex }: { groupIndex: number }) {
   const form = useFormContext<ObituaryFormValues>();
   const people = useWatch({ control: form.control, name: "deceasedList" }) ?? [];
-  if (people.length < 2) return null;
+  const relationKey = useWatch({ control: form.control, name: `relatives.${groupIndex}.relationKey` as FormPath }) as string | undefined;
+  // الأبناء يُعرَّفون بأبيهم حين تكون المتوفاة أمّهم: «أبناء الوالد / فلان رحمه الله» سطراً تحت الأسماء.
+  const showReference = relationKey === "children";
+  if (people.length < 2 && !showReference) return null;
   return (
-    <div className="pt-3 mt-3 border-t border-border/50 w-full box-border sm:max-w-xs">
-      <DeceasedTargetSelect name={`relatives.${groupIndex}.deceasedTarget`} label="يخص" />
+    <div className="pt-3 mt-3 border-t border-border/50 w-full box-border space-y-3">
+      {people.length >= 2 && (
+        <div className="sm:max-w-xs">
+          <DeceasedTargetSelect name={`relatives.${groupIndex}.deceasedTarget`} label="يخص" />
+        </div>
+      )}
+      {showReference && (
+        <MoreOptions
+          label="أبناء الوالد / … (اختياري)"
+          hint="يُكتب تحت الأسماء: «أبناء الوالد / فلان رحمه الله»"
+          paths={[`relatives.${groupIndex}.reference.name`, `relatives.${groupIndex}.reference.title`, `relatives.${groupIndex}.reference.isDeceased`]}
+        >
+          <LinkedPersonFields prefix={`relatives.${groupIndex}.reference`} nameLabel="اسم الأب" />
+        </MoreOptions>
+      )}
     </div>
   );
 }
