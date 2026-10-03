@@ -155,6 +155,36 @@ paths:
           description: يلزم تسجيل الدخول كمسؤول
         "500":
           description: تعذر الحفظ
+  /admin/parse-text:
+    post:
+      operationId: parseObituaryText
+      tags: [admin]
+      description: يحوّل نص إعلان وصل للمسؤول (من واتساب أو غيره) إلى بيانات طلب بالذكاء الاصطناعي دون حفظه، ليراجعه المسؤول ثم يحفظه. للمسؤول فقط
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ParseTextInput"
+      responses:
+        "200":
+          description: بيانات الطلب المستخرجة مع ملاحظات عمّا لم يتضح في النص
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ParseTextResult"
+        "400":
+          description: النص فارغ أو طويل جداً
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
+        "422":
+          description: لم يُعثر في النص على بيانات إعلان وفاة
+        "429":
+          description: طلبات كثيرة، حاول بعد قليل
+        "502":
+          description: تعذر الحصول على نتيجة من الذكاء الاصطناعي
+        "503":
+          description: خدمة الذكاء الاصطناعي غير مفعّلة على الخادم
   /admin/login:
     post:
       operationId: adminLogin
@@ -236,6 +266,25 @@ components:
           minimum: 1350
           maximum: 1800
           description: الصورة تبدأ بطول 1350 وتطول عند الحاجة حتى هذا الحد
+    ParseTextInput:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 8000
+    ParseTextResult:
+      type: object
+      required: [request, warnings]
+      properties:
+        request:
+          $ref: "#/components/schemas/ObituaryRequestInput"
+        warnings:
+          type: array
+          description: ما لم يتضح في النص ويستحق المراجعة قبل الحفظ
+          items:
+            type: string
     AdminLoginInput:
       type: object
       required: [password]
