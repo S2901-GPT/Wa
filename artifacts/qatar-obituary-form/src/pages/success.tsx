@@ -45,7 +45,7 @@ export default function SuccessPage() {
           </div>
 
           <a href={whatsappUrl} target="_blank" rel="noreferrer" className="block mb-3">
-            <Button type="button" className="w-full h-12 text-base sm:text-lg gap-2 bg-green-600 hover:bg-green-700 text-white font-bold">
+            <Button type="button" className="w-full h-auto min-h-12 py-3 whitespace-normal text-center leading-snug text-base sm:text-lg gap-2 bg-green-600 hover:bg-green-700 text-white font-bold">
               <MessageCircle className="w-5 h-5" />
               إرسال رقم الطلب إلى وفيات قطر عبر واتساب
             </Button>
