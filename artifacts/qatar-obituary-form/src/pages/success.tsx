@@ -1,7 +1,10 @@
 import { useRoute, Link } from "wouter";
-import { CheckCircle2, ChevronRight, Copy } from "lucide-react";
+import { CheckCircle2, ChevronRight, Copy, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+
+/** رقم واتساب «وفيات قطر» بصيغة دولية بلا علامة + */
+const WAFIYAT_QATAR_WHATSAPP = "97470228822";
 
 export default function SuccessPage() {
   const [, params] = useRoute("/success/:requestNumber");
@@ -12,6 +15,9 @@ export default function SuccessPage() {
       navigator.clipboard.writeText(requestNumber);
     }
   };
+
+  // إرسال رقم الطلب إلى حساب «وفيات قطر» على واتساب برسالة جاهزة
+  const whatsappUrl = `https://wa.me/${WAFIYAT_QATAR_WHATSAPP}?text=${encodeURIComponent(`السلام عليكم، سجّلت طلب إعلان وفاة برقم ${requestNumber ?? ""}، أرجو نشره.`)}`;
 
   return (
     <div className="min-h-screen bg-muted/30 flex items-center justify-center p-4 py-20">
@@ -24,7 +30,7 @@ export default function SuccessPage() {
         <CardContent className="pt-8 pb-10 px-8">
           <h1 className="text-2xl font-bold mb-4">تم إرسال الطلب بنجاح</h1>
           <p className="text-muted-foreground mb-8">
-            تم استلام طلب إعلان الوفاة الخاص بك بنجاح. سيتم مراجعته ونشره في أقرب وقت ممكن.
+            تم استلام طلب إعلان الوفاة الخاص بك بنجاح. أرسل رقم الطلب إلى «وفيات قطر» على واتساب ليُراجع ويُنشر.
           </p>
 
           <div className="bg-muted p-6 rounded-lg mb-8">
@@ -38,8 +44,15 @@ export default function SuccessPage() {
             <p className="text-xs text-muted-foreground mt-3">يرجى الاحتفاظ بهذا الرقم لمتابعة حالة الطلب.</p>
           </div>
 
+          <a href={whatsappUrl} target="_blank" rel="noreferrer" className="block mb-3">
+            <Button type="button" className="w-full h-12 text-base sm:text-lg gap-2 bg-green-600 hover:bg-green-700 text-white font-bold">
+              <MessageCircle className="w-5 h-5" />
+              إرسال رقم الطلب إلى وفيات قطر عبر واتساب
+            </Button>
+          </a>
+
           <Link href="/">
-            <Button className="w-full h-12 text-lg">
+            <Button variant="outline" className="w-full h-12 text-lg">
               العودة للرئيسية
               <ChevronRight className="w-5 h-5 ml-2 rtl:rotate-180" />
             </Button>

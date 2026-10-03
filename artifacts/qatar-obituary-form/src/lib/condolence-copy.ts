@@ -1,5 +1,13 @@
 import type { ObituaryRequest } from "@workspace/api-client-react";
-import type { CondolenceContentItem } from "./condolence-poster-renderer";
+/** بند من محتوى صورة التعزية بعد التحرير (قسم بعنوان ونص، وربما رمز موقع). */
+export type CondolenceContentItem = {
+  kind: "section";
+  id: string;
+  label?: string;
+  text: string;
+  tone?: "body" | "identity" | "closing";
+  qr?: { key: string; label: string; url: string };
+};
 import { buildAnnouncement, formatOccupation, makeClosingPrayer, makeDeathStatement } from "./announcement";
 
 // صيغ الوفاة والختام من المولّد الموحّد (تراعي الجنس والعدد والأطفال).
@@ -77,7 +85,7 @@ export function formatRelativePerson(
   return [
     clean(person.name),
     formatOccupation(person.occupation),
-    person.deceased ? "رحمه الله" : "",
+    person.deceased ? "(رحمه الله)" : "",
   ].filter(Boolean).join(" ");
 }
 

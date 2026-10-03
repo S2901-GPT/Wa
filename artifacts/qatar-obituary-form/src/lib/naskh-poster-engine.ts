@@ -1,34 +1,66 @@
-// محرك رسم قالب «النسخ الرسمي» على Canvas: يحمّل الأصول (الخلفية، مخطوطة «إنا لله»، الشعار)،
-// ويقيس النص بخط النسخ، ويستدعي المخطّط النقي (naskh-poster-plan.ts)، ثم يرسم العناصر.
+// محرك رسم صورة التعزية على Canvas بخط النسخ: يحمّل الأصول (الخلفية، مخطوطة «إنا لله»، الشعار)،
+// ويقيس النص، ويستدعي المخطّط النقي (naskh-poster-plan.ts) بالتخطيط المختار، ثم يرسم العناصر.
 import bgPatternUrl from "../assets/poster/bg-pattern.jpg";
 import openingCalligraphyUrl from "../assets/poster/opening-calligraphy.png";
 import type { NormalizedContent } from "./presentation-normalizer";
 import { normalizeArabic } from "./presentation-normalizer";
-import type { CondolenceTemplate, SocialNetwork, TemplateBranding } from "./template-schema";
-import type { QrCodeMap, RenderValidationReport, ValidationIssue } from "./single-page-engine";
-import { DEFAULT_OPENING, NASKH_COLORS, NASKH_METRICS, planNaskhLayout, type MeasureFn, type NaskhPlan, type PlanItem } from "./naskh-poster-plan";
+import type { QrCodeMap } from "./qr-images";
+import { DEFAULT_OPENING, NASKH_COLORS, NASKH_METRICS, planNaskhLayout, type MeasureFn, type NaskhLayoutId, type NaskhPlan, type PlanItem } from "./naskh-poster-plan";
 
+export const IMAGE_WIDTH: number = NASKH_METRICS.width;
+export const IMAGE_HEIGHT: number = NASKH_METRICS.minHeight;
 export const NASKH_FONT_FAMILY = '"Noto Naskh Arabic", "Noto Naskh Arabic UI", serif';
+const NASKH_FONT_SAMPLE = "إنا لله وإنا إليه راجعون توفي الوالد 0123456789";
 
-export const DEFAULT_NASKH_BRANDING: Required<Pick<TemplateBranding, "handle" | "socials" | "maxHeight">> = {
+/** خطوط Google مقسّمة بنطاقات Unicode، فيلزم نص عربي حتى يُحمَّل النطاق العربي قبل القياس على Canvas. */
+export async function loadCondolenceFonts() {
+  if (typeof document === "undefined" || !document.fonts) return;
+  await Promise.allSettled([
+    document.fonts.load('400 36px "Noto Naskh Arabic"', NASKH_FONT_SAMPLE),
+    document.fonts.load('700 36px "Noto Naskh Arabic"', NASKH_FONT_SAMPLE),
+    document.fonts.load('700 62px "Noto Naskh Arabic"', NASKH_FONT_SAMPLE),
+  ]);
+  await document.fonts.ready;
+}
+
+export type SocialNetwork = "instagram" | "snapchat" | "x";
+
+/** هوية الإعلان: الشعار يميناً وحسابات التواصل يساراً، والحد الأقصى لطول الصورة. */
+export type PosterBranding = {
+  /** صورة الشعار كـ data URL، أو فارغ فلا يُرسم شيء مكانه. */
+  logoDataUrl?: string;
+  handle?: string;
+  socials?: SocialNetwork[];
+  /** الصورة تبدأ 1350 وتطول عند الحاجة حتى هذا الحد (1350–1800). */
+  maxHeight?: number;
+};
+
+export type PosterOptions = { layout: NaskhLayoutId; branding?: PosterBranding };
+
+export type ValidationIssue = { severity: "error" | "warning"; code: string; message: string };
+export type RenderValidationReport = {
+  isValid: boolean;
+  isCompactMode: boolean;
+  totalUsedHeight: number;
+  maxAllowedHeight: number;
+  issues: ValidationIssue[];
+};
+
+export const DEFAULT_NASKH_BRANDING: Required<Pick<PosterBranding, "handle" | "socials" | "maxHeight">> = {
   handle: "qatarde",
   socials: ["instagram", "snapchat", "x"],
   maxHeight: NASKH_METRICS.maxHeight,
 };
 
-export function isNaskhTemplate(template: Pick<CondolenceTemplate, "canvas"> | null | undefined): boolean {
-  return template?.canvas?.styleId === "naskh";
-}
-
-/** إعدادات الهوية مع القيم الافتراضية (القوالب المحفوظة قديماً قد تخلو من branding). */
-export function resolveNaskhBranding(template: Pick<CondolenceTemplate, "branding"> | null | undefined): TemplateBranding & typeof DEFAULT_NASKH_BRANDING {
-  const branding = template?.branding ?? {};
-  const maxHeight = Number(branding.maxHeight) || DEFAULT_NASKH_BRANDING.maxHeight;
+/** إعدادات الهوية مع القيم الافتراضية. */
+export function resolveNaskhBranding(branding: PosterBranding | null | undefined): PosterBranding & typeof DEFAULT_NASKH_BRANDING {
+  const given = branding ?? {};
+  const maxHeight = Number(given.maxHeight) || DEFAULT_NASKH_BRANDING.maxHeight;
   return {
     ...DEFAULT_NASKH_BRANDING,
-    ...branding,
-    handle: (branding.handle ?? DEFAULT_NASKH_BRANDING.handle).trim(),
-    socials: branding.socials ?? DEFAULT_NASKH_BRANDING.socials,
+    ...given,
+    handle: (given.handle ?? DEFAULT_NASKH_BRANDING.handle).trim(),
+    socials: given.socials ?? DEFAULT_NASKH_BRANDING.socials,
     maxHeight: Math.min(NASKH_METRICS.maxHeight, Math.max(NASKH_METRICS.minHeight, maxHeight)),
   };
 }
@@ -61,9 +93,9 @@ export function loadImageOnce(src: string): Promise<HTMLImageElement | null> {
   return promise;
 }
 
-export async function loadNaskhAssets(template: Pick<CondolenceTemplate, "branding"> | null | undefined): Promise<NaskhAssets> {
-  const branding = resolveNaskhBranding(template);
-  const logoSrc = branding.logoDataUrl && branding.logoDataUrl.startsWith("data:image/") ? branding.logoDataUrl : "";
+export async function loadNaskhAssets(branding: PosterBranding | null | undefined): Promise<NaskhAssets> {
+  const resolved = resolveNaskhBranding(branding);
+  const logoSrc = resolved.logoDataUrl && resolved.logoDataUrl.startsWith("data:image/") ? resolved.logoDataUrl : "";
   const [background, opening, logo] = await Promise.all([
     loadImageOnce(bgPatternUrl),
     loadImageOnce(openingCalligraphyUrl),
@@ -134,19 +166,11 @@ function drawSocialIcon(ctx: CanvasRenderingContext2D, network: SocialNetwork, x
   ctx.restore();
 }
 
+/** المخطّط يحسب الحافة اليمنى للسطر (موسّطاً أو من اليمين)، فالرسم دائماً من اليمين إلى اليسار من xRight. */
 function drawLine(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind: "line" }>) {
   ctx.textBaseline = "middle";
   ctx.direction = "rtl";
   const midY = item.y + item.h / 2;
-  if (item.align === "center") {
-    ctx.textAlign = "center";
-    const text = item.runs.map((run) => run.text).join(" ");
-    const run = item.runs[0];
-    ctx.font = fontString(run?.weight ?? 700, item.px);
-    ctx.fillStyle = run?.color ?? NASKH_COLORS.ink;
-    ctx.fillText(text, item.xRight, midY);
-    return;
-  }
   ctx.textAlign = "right";
   let x = item.xRight;
   item.runs.forEach((run, index) => {
@@ -165,34 +189,22 @@ function drawLine(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind:
   });
 }
 
-function drawBand(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind: "band" }>, branding: ReturnType<typeof resolveNaskhBranding>, logo: HTMLImageElement | null) {
-  const { inset, width } = NASKH_METRICS;
-  ctx.fillStyle = NASKH_COLORS.line;
-  ctx.fillRect(inset, item.y, width - inset * 2, 1);
-
-  // الشعار يميناً
-  const logoSize = 72;
-  const logoX = width - inset - logoSize;
-  const logoY = item.y + (item.h - logoSize) / 2;
-  if (logo) {
-    drawImageContain(ctx, logo, logoX, logoY, logoSize, logoSize);
-  } else {
-    ctx.save();
-    roundedRectPath(ctx, logoX, logoY, logoSize, logoSize, 10);
-    ctx.fillStyle = "rgba(255,255,255,0.5)";
-    ctx.fill();
-    ctx.setLineDash([5, 4]);
-    ctx.strokeStyle = "#B9B1A5";
-    ctx.lineWidth = 1.5;
-    ctx.stroke();
-    ctx.restore();
-    ctx.font = fontString(400, 22);
-    ctx.fillStyle = "#8A8278";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.direction = "rtl";
-    ctx.fillText("الشعار", logoX + logoSize / 2, logoY + logoSize / 2);
+/** الشريط: الشعار يميناً وحسابات التواصل يساراً؛ أسفل الصورة فوق خط رفيع، أو ترويسة أعلاها تتوسطها مخطوطة «إنا لله». */
+function drawBand(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind: "band" }>, branding: ReturnType<typeof resolveNaskhBranding>, assets: NaskhAssets) {
+  const inset = item.x;
+  const width = item.x + item.width;
+  if (item.position === "bottom") {
+    ctx.fillStyle = NASKH_COLORS.line;
+    ctx.fillRect(inset, item.y, item.width, 1);
+  } else if (assets.opening) {
+    const h = NASKH_METRICS.letterheadOpening;
+    const drawW = assets.opening.naturalWidth * (h / assets.opening.naturalHeight);
+    ctx.drawImage(assets.opening, (NASKH_METRICS.width - drawW) / 2, item.y + (item.h - h) / 2, drawW, h);
   }
+
+  // الشعار يميناً (لا يُرسم مكان محجوز عند غيابه)
+  const logoSize = 72;
+  if (assets.logo) drawImageContain(ctx, assets.logo, width - logoSize, item.y + (item.h - logoSize) / 2, logoSize, logoSize);
 
   // حسابات التواصل يساراً: الأيقونات في صف واسم الحساب تحتها
   const socials = branding.socials.filter((network) => SOCIAL_ICON_PATHS[network]);
@@ -254,6 +266,15 @@ export function drawNaskhPlan(ctx: CanvasRenderingContext2D, plan: NaskhPlan, as
         ctx.fillStyle = NASKH_COLORS.line;
         ctx.fillRect(item.x, item.y, item.width, 1);
         break;
+      case "vline":
+        ctx.fillStyle = NASKH_COLORS.line;
+        ctx.fillRect(item.x, item.y, 1, item.h);
+        break;
+      case "frame":
+        ctx.strokeStyle = NASKH_COLORS.frame;
+        ctx.lineWidth = 1;
+        ctx.strokeRect(item.x + 0.5, item.y + 0.5, item.width - 1, item.height - 1);
+        break;
       case "qr": {
         const qr = qrImages[item.key];
         if (!qr) break;
@@ -270,7 +291,7 @@ export function drawNaskhPlan(ctx: CanvasRenderingContext2D, plan: NaskhPlan, as
         break;
       }
       case "band":
-        drawBand(ctx, item, branding, assets.logo);
+        drawBand(ctx, item, branding, assets);
         break;
     }
   }
@@ -278,9 +299,9 @@ export function drawNaskhPlan(ctx: CanvasRenderingContext2D, plan: NaskhPlan, as
 
 export type NaskhRenderResult = { canvas: HTMLCanvasElement; report: RenderValidationReport; plan: NaskhPlan };
 
-/** يرسم الإعلان كاملاً بقالب النسخ ويعيد لوحة بارتفاع ديناميكي (1350 حتى الحد الأقصى في إعدادات القالب). */
-export function renderNaskhPoster(template: CondolenceTemplate, content: NormalizedContent, qrImages: QrCodeMap, assets: NaskhAssets): NaskhRenderResult {
-  const branding = resolveNaskhBranding(template);
+/** يرسم الإعلان كاملاً بالتخطيط المختار ويعيد لوحة بارتفاع ديناميكي (1350 حتى الحد الأقصى). */
+export function renderNaskhPoster(options: PosterOptions, content: NormalizedContent, qrImages: QrCodeMap, assets: NaskhAssets): NaskhRenderResult {
+  const branding = resolveNaskhBranding(options.branding);
   const canvas = document.createElement("canvas");
   canvas.width = NASKH_METRICS.width;
   canvas.height = NASKH_METRICS.minHeight;
@@ -299,13 +320,13 @@ export function renderNaskhPoster(template: CondolenceTemplate, content: Normali
     men: !!qrImages.men,
     women: !!qrImages.women,
   };
-  const plan = planNaskhLayout(content, measure, { openingIsImage, qrAvailable, maxHeight: branding.maxHeight });
+  const plan = planNaskhLayout(content, measure, { layout: options.layout, openingIsImage, qrAvailable, maxHeight: branding.maxHeight });
 
   canvas.height = plan.height;
   drawNaskhPlan(ctx, plan, assets, qrImages, branding);
 
   const issues: ValidationIssue[] = [];
-  if (plan.overflow) issues.push({ severity: "error", code: "naskh-overflow", message: "المحتوى أطول من الحد الأقصى لطول الصورة؛ ارفع الحد الأقصى في إعدادات القالب أو اختصر النص." });
+  if (plan.overflow) issues.push({ severity: "error", code: "naskh-overflow", message: "المحتوى أطول من الحد الأقصى لطول الصورة؛ اختصر النص أو جرّب تخطيطاً آخر." });
   if (!assets.background) issues.push({ severity: "warning", code: "naskh-background-missing", message: "تعذر تحميل صورة الخلفية، فاستُخدم لون سادة." });
   if (!assets.opening) issues.push({ severity: "warning", code: "naskh-opening-missing", message: "تعذر تحميل مخطوطة «إنا لله»، فكُتبت نصاً." });
   const report: RenderValidationReport = {

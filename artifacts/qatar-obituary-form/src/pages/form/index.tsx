@@ -89,7 +89,7 @@ export default function FormPage() {
         <div className="container max-w-3xl mx-auto relative z-10 text-center px-1">
           <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2 tracking-tight">تسجيل بيانات إعلان وفاة</h1>
           <p className="text-primary-foreground/80 text-xs sm:text-sm md:text-base max-w-xl mx-auto">
-            مساحة رسمية لتسجيل وتوثيق بيانات إعلانات الوفاة وتفاصيل الدفن والعزاء في دولة قطر
+            مساحة مجتمعية لتسجيل وتوثيق بيانات إعلانات الوفاة وتفاصيل الدفن والعزاء في دولة قطر
           </p>
         </div>
       </div>

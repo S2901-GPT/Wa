@@ -125,7 +125,7 @@ const cases: Array<[string, () => void]> = [
     });
     includesInOrder(result, [
       "توفي كل من", "سعود — 22 عاماً", "جاسم — 21 عاماً", "أبناء / فهد محمد جاسم",
-      "إخوتهم كل من", "ناصر", "وعلي", "جدهم / محمد جاسم رحمه الله", "أعمامهم كل من",
+      "إخوتهم كل من", "ناصر", "وعلي", "جدهم / محمد جاسم (رحمه الله)", "أعمامهم كل من",
       "عزاء الرجال في مجلس العائلة بمنطقة الدفنة",
       "عزاء النساء لـسعود رحمه الله في منزل رقم ٥ بمنطقة الوكرة",
       "عزاء النساء لـجاسم رحمه الله في منزل رقم ٩ بمنطقة الخور",
@@ -166,12 +166,12 @@ const cases: Array<[string, () => void]> = [
     const result = text({
       relatives: [{ relation: "", relationKey: "siblings", people: [...living, { name: "عبدالله", deceased: true }, { name: "أمين", deceased: true }] }],
     });
-    includesInOrder(result, ["أخ كل من", "راشد", "وخليفة", "وعبدالله رحمه الله", "وأمين رحمه الله"]);
+    includesInOrder(result, ["أخ كل من", "راشد", "وخليفة", "وعبدالله (رحمه الله)", "وأمين (رحمه الله)"]);
     assert.doesNotMatch(result, /رحمهما/u);
     const grouped = text({
       relatives: [{ relation: "", relationKey: "siblings", deceasedPlacement: "grouped", people: [...living, { name: "عبدالله", deceased: true }, { name: "أمين", deceased: true }] }],
     });
-    assert.match(grouped, /وعبدالله وأمين رحمهما الله/u);
+    assert.match(grouped, /وعبدالله وأمين \(رحمهما الله\)/u);
   }],
   ["جهة العمل ثم «متقاعد» داخل القوسين نفسيهما: (وزارة الداخلية - متقاعد)", () => {
     const result = text({
@@ -298,14 +298,14 @@ const cases: Array<[string, () => void]> = [
       deceasedPeople: [{ title: "حرم الشيخ عبدالله", fullName: "عائشة محمد", gender: "woman" }],
       relatives: [{ relation: "ابن", familyReference: "", people: [{ name: "ناصر", deceased: false }, { name: "محمد", deceased: true }] }],
     });
-    includesInOrder(result, ["توفيت / عائشة محمد", "حرم الشيخ عبدالله", "والدة كل من", "ناصر", "ومحمد رحمه الله"]);
+    includesInOrder(result, ["توفيت / عائشة محمد", "حرم الشيخ عبدالله", "والدة كل من", "ناصر", "ومحمد (رحمه الله)"]);
   }],
   ["ترحّم القريب بالمذكر دائماً حتى مع عنوان حر بصيغة الأرشيف", () => {
     const result = text({
       deceasedPeople: [{ fullName: "نورة", gender: "woman" }],
       relatives: [{ relation: "والدة كل من", relationKey: "other", people: [{ name: "باسل", deceased: false }, { name: "محمد", deceased: true }] }],
     });
-    assert.match(result, /ومحمد رحمه الله/u);
+    assert.match(result, /ومحمد \(رحمه الله\)/u);
     assert.doesNotMatch(result, /رحمها الله تعالى|متوفى/u);
   }],
   ["الجنس غير المحدد يُنتج تنبيهاً ولا يُختلق دعاء", () => {

@@ -46,7 +46,7 @@ const cases: Array<[string, () => void]> = [
       deceasedPeople: [{ fullName: "نورة", gender: "woman" }],
       relatives: [{ relation: "الأبناء", relationKey: "children", people: [{ name: "باسل", deceased: false }, { name: "محمد", deceased: true }] }],
     }));
-    assert.deepEqual(content.relatives, [{ heading: "والدة كل من", membersList: ["باسل", "محمد رحمه الله"], membersText: "باسل ومحمد رحمه الله" }]);
+    assert.deepEqual(content.relatives, [{ heading: "والدة كل من", membersList: ["باسل", "محمد (رحمه الله)"], membersText: "باسل ومحمد (رحمه الله)" }]);
   }],
   ["prayer and burial in the same place become one archive sentence", () => {
     const content = normalizeObituaryPresentation(makeRequest());
@@ -95,7 +95,7 @@ const cases: Array<[string, () => void]> = [
       deceasedPeople: [{ fullName: "نبيل سرور سعد", gender: "man", age: 70, nationality: "تايلندي", deathPlace: "تايلند" }],
     }));
     assert.equal(content.headline.name, "نبيل سرور سعد");
-    assert.deepEqual(content.headline.rest, ["70 عاماً — تايلندي — وكانت الوفاة في تايلند"]);
+    assert.deepEqual(content.headline.rest, ["70 عاماً — تايلندي — الوفاة في تايلند"]);
     assert.equal(content.relativesNote, undefined);
   }],
   ["a shared condolence start becomes one line, and «no relatives» is noted", () => {
@@ -132,7 +132,7 @@ const cases: Array<[string, () => void]> = [
     assert.equal(content.closing, "رحمه الله");
   }],
   ["relative wording helper is masculine and keeps the job in parentheses", () => {
-    assert.equal(formatRelativePerson({ name: "مريم", deceased: true }, "والدة"), "مريم رحمه الله");
+    assert.equal(formatRelativePerson({ name: "مريم", deceased: true }, "والدة"), "مريم (رحمه الله)");
     assert.equal(formatRelativePerson({ name: "أحمد", occupation: "جامعة قطر", deceased: false }), "أحمد (جامعة قطر)");
   }],
   ["identity helper puts the husband after her name", () => {

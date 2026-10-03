@@ -7,9 +7,7 @@ import {
   Check,
   Copy,
   Sparkles,
-  Sliders,
   AlertTriangle,
-  ExternalLink,
 } from "lucide-react";
 import {
   getGetObituaryRequestQueryKey,
@@ -30,25 +28,32 @@ import {
   type EditableContact,
   type ImageDraft,
 } from "@/lib/condolence-copy";
-import {
-  type CondolenceTemplate,
-  IMAGE_HEIGHT,
-  IMAGE_WIDTH,
-} from "@/lib/template-schema";
-import {
-  fetchAllTemplates,
-  getDefaultTemplateId,
-  setDefaultTemplateId,
-} from "@/lib/template-storage";
+import { IMAGE_HEIGHT, IMAGE_WIDTH, type RenderValidationReport } from "@/lib/naskh-poster-engine";
+import { DEFAULT_NASKH_LAYOUT, NASKH_LAYOUTS, isNaskhLayoutId, type NaskhLayoutId } from "@/lib/naskh-poster-plan";
 import { normalizeObituaryPresentation } from "@/lib/presentation-normalizer";
 import { buildAnnouncement } from "@/lib/announcement";
-import {
-  generateQrImages,
-  type QrCodeMap,
-  type RenderValidationReport,
-} from "@/lib/single-page-engine";
+import { generateQrImages, type QrCodeMap } from "@/lib/qr-images";
 import { renderPoster } from "@/lib/poster-render";
-import { TemplateDesignerModal } from "./template-designer/template-designer-modal";
+
+const LAYOUT_STORAGE_KEY = "qatar_poster_layout_v1";
+
+/** آخر تخطيط اختاره المستخدم في هذا المتصفح. */
+function readStoredLayout(): NaskhLayoutId {
+  try {
+    const stored = localStorage.getItem(LAYOUT_STORAGE_KEY);
+    return isNaskhLayoutId(stored) ? stored : DEFAULT_NASKH_LAYOUT;
+  } catch {
+    return DEFAULT_NASKH_LAYOUT;
+  }
+}
+
+function storeLayout(layout: NaskhLayoutId) {
+  try {
+    localStorage.setItem(LAYOUT_STORAGE_KEY, layout);
+  } catch {
+    /* التخزين المحلي غير متاح (وضع خاص مثلاً)؛ الاختيار يبقى لهذه الجلسة فقط */
+  }
+}
 
 function parseAddressDraft(address: string) {
   type AddressField = "area" | "street" | "houseNumber" | "buildingNumber" | "floor" | "apartmentNumber";
@@ -144,32 +149,17 @@ export function CondolenceImageStudio({
   onClose: () => void;
 }) {
   const previewRef = useRef<HTMLCanvasElement>(null);
-  const [templates, setTemplates] = useState<Record<string, CondolenceTemplate>>({});
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("naskh");
+  const [layout, setLayout] = useState<NaskhLayoutId>(readStoredLayout);
   const [previewSize, setPreviewSize] = useState({ width: IMAGE_WIDTH, height: IMAGE_HEIGHT });
   const [draft, setDraft] = useState<ImageDraft>(() => createCondolenceImageDraft(request));
   const [qrImages, setQrImages] = useState<QrCodeMap>({});
   const [rendering, setRendering] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [designerModalOpen, setDesignerModalOpen] = useState(false);
   const [validationReport, setValidationReport] = useState<RenderValidationReport | null>(null);
 
   const queryClient = useQueryClient();
   const updateMutation = useUpdateObituaryRequest();
-
-  // Load templates on mount
-  useEffect(() => {
-    void fetchAllTemplates().then((loaded) => {
-      setTemplates(loaded);
-      const def = getDefaultTemplateId();
-      if (loaded[def]) {
-        setSelectedTemplateId(def);
-      }
-    });
-  }, []);
-
-  const currentTemplate = templates[selectedTemplateId] || Object.values(templates)[0];
 
   // Normalized content via Presentation Normalizer
   const normalizedContent = useMemo(() => {
@@ -205,15 +195,14 @@ export function CondolenceImageStudio({
     };
   }, [normalizedContent]);
 
-  // Render the poster: 1080 × 1350 for block templates, and a dynamic height for the Naskh template
+  // رسم الصورة بالتخطيط المختار: 1080 × 1350 وتطول تلقائياً عند كثرة الأسماء
   useEffect(() => {
     let cancelled = false;
-    if (!currentTemplate) return;
 
     setRendering(true);
     void (async () => {
       try {
-        const { canvas: compiled, report } = await renderPoster(currentTemplate, normalizedContent, qrImages);
+        const { canvas: compiled, report } = await renderPoster(layout, normalizedContent, qrImages);
         if (cancelled) return;
 
         setValidationReport(report);
@@ -230,7 +219,7 @@ export function CondolenceImageStudio({
           }
         }
       } catch (err) {
-        console.error("Single page render error:", err);
+        console.error("Poster render error:", err);
       } finally {
         if (!cancelled) setRendering(false);
       }
@@ -239,7 +228,7 @@ export function CondolenceImageStudio({
     return () => {
       cancelled = true;
     };
-  }, [currentTemplate, normalizedContent, qrImages]);
+  }, [layout, normalizedContent, qrImages]);
 
   const updateCard = (audience: Audience, key: keyof EditableCard, value: string) => {
     setDraft((current) => ({
@@ -269,7 +258,7 @@ export function CondolenceImageStudio({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${request.requestNumber}-${selectedTemplateId}.png`;
+      link.download = `${request.requestNumber}-${layout}.png`;
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1500);
       toast.success(`تم تنزيل صورة التعزية بصيغة PNG عالية الدقة (${previewSize.width} × ${previewSize.height})`);
@@ -389,16 +378,6 @@ export function CondolenceImageStudio({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setDesignerModalOpen(true)}
-              className="gap-1.5 border-primary/40 hover:bg-primary/10 text-primary font-semibold text-xs"
-            >
-              <Sliders className="h-4 w-4 text-primary" />
-              محرر القوالب البصري
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
               onClick={saveToRequest}
               disabled={saving}
               className="gap-1.5 border-primary/20 hover:bg-primary/10 text-xs"
@@ -417,33 +396,27 @@ export function CondolenceImageStudio({
         <div className="grid gap-6 p-4 sm:p-6 lg:grid-cols-[minmax(0,1.2fr)_440px]">
           {/* PREVIEW & TEMPLATE SWITCHER COLUMN */}
           <section className="order-1 flex flex-col items-center rounded-xl border bg-muted/20 p-4 sm:p-6 lg:order-1">
-            {/* TEMPLATE SWITCHER TOOLBAR */}
+            {/* LAYOUT SWITCHER */}
             <div className="w-full max-w-[560px] mb-4">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-bold text-foreground flex items-center gap-1.5">
                   <Sparkles className="w-4 h-4 text-primary" />
-                  القالب المعتمد:
+                  تخطيط الصورة:
                 </span>
-                <button
-                  type="button"
-                  onClick={() => setDesignerModalOpen(true)}
-                  className="text-xs text-primary hover:underline flex items-center gap-1"
-                >
-                  تخصيص القالب في المحرر
-                  <ExternalLink className="w-3 h-3" />
-                </button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {Object.values(templates).map((t) => {
-                  const isSelected = selectedTemplateId === t.id;
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="تخطيط الصورة">
+                {NASKH_LAYOUTS.map((option) => {
+                  const isSelected = layout === option.id;
                   return (
                     <button
-                      key={t.id}
+                      key={option.id}
                       type="button"
+                      role="radio"
+                      aria-checked={isSelected}
                       onClick={() => {
-                        setSelectedTemplateId(t.id);
-                        setDefaultTemplateId(t.id);
+                        setLayout(option.id);
+                        storeLayout(option.id);
                       }}
                       className={`relative flex flex-col text-right p-3 rounded-xl border transition-all text-xs ${
                         isSelected
@@ -452,10 +425,10 @@ export function CondolenceImageStudio({
                       }`}
                     >
                       <div className="flex items-center justify-between w-full mb-1">
-                        <span className="font-bold text-sm text-foreground">{t.name}</span>
+                        <span className="font-bold text-sm text-foreground">{option.name}</span>
                         {isSelected && <Check className="w-4 h-4 text-primary shrink-0" />}
                       </div>
-                      <span className="text-[11px] leading-4 opacity-80 line-clamp-2">{t.description}</span>
+                      <span className="text-[11px] leading-4 opacity-80 line-clamp-2">{option.description}</span>
                     </button>
                   );
                 })}
@@ -724,19 +697,6 @@ export function CondolenceImageStudio({
         </div>
       </div>
 
-      {/* FULL VISUAL TEMPLATE DESIGNER MODAL */}
-      {designerModalOpen && (
-        <TemplateDesignerModal
-          initialTemplateId={selectedTemplateId}
-          onClose={() => setDesignerModalOpen(false)}
-          onSelectAndApply={(applied) => {
-            setTemplates((prev) => ({ ...prev, [applied.id]: applied }));
-            setSelectedTemplateId(applied.id);
-            setDesignerModalOpen(false);
-            toast.success(`تم تطبيق القالب "${applied.name}" على صورة الطلب الحالية`);
-          }}
-        />
-      )}
     </div>
   );
 }
