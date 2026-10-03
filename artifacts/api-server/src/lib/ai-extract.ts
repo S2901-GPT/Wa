@@ -201,6 +201,8 @@ const EXAMPLE_OUTPUT = JSON.stringify(
 export const SYSTEM_PROMPT = `أنت مساعد يحوّل نص إعلان وفاة من قطر (كما يصل في واتساب) إلى بيانات منظّمة بصيغة JSON حسب المخطط.
 القواعد:
 - لا تخترع شيئاً. ما لم يرد في النص اتركه فارغاً، واذكر النقص المهم في warnings بجملة قصيرة.
+- كل الحقول النصية تُنشر حرفياً في الإعلان، فلا تكتب فيها أي تعليق أو تخمين أو توصية أو عبارة من عندك
+  (مثل «يرجى مراجعة»، «قد يُدفن»، «للتأكيد»، «نُقلت الأسماء كما وردت»، «تأكد من صحة المعلومات»). كل ما تريد قوله ضعه في warnings.
 - قد يصل النص مرتباً أو في سطر واحد، أو بلهجة خليجية واختصارات، أو مليئاً بالأخطاء والرموز التعبيرية. افهم المقصود:
   «الرياييل» = الرجال، «الحريم» = النساء، «عقب» = بعد، «الحين» = اليوم، «بكره» = غداً، «المسايه» = الفترة المسائية.
   تجاهل الرموز والعبارات التي ليست من الإعلان (مثل «انشروه» أو «عظم الله أجركم»).
@@ -353,6 +355,26 @@ export function splitBurialNote(burial: Loose): Loose {
   };
 }
 
+const COMMENTARY_RE =
+  /يرجى|يُرجى|الرجاء|نرجو|للتأكيد|للتأكد|تأكد|التحقق|مراجعة|راجع|التواصل مع|تواصل معنا|يُنصح|ينصح|قد (?:يُ|ي|تُ|ت)[\u0600-\u06FF]+|ربما|محتمل|غير (?:مؤكد|واضح|محدد)|لم (?:يُذكر|يذكر|تُذكر|تذكر)|لم يرد|لم ترد|نُقلت|نقلت|كما وردت|كما ورد|وفيات قطر|الذكاء الاصطناعي|النموذج|في الإعلان|في النص/u;
+
+/**
+ * الحقول النصية تُنشر حرفياً، لكن النموذج قد يكتب فيها تعليقاته («يرجى مراجعة إدارة المقبرة للتأكيد»، «نُقلت
+ * الأسماء كما وردت»). الجمل التي تحمل علامات التعليق تُحذف من الحقل وتُنقل إلى warnings ليراها المسؤول.
+ */
+export function stripCommentary(value: unknown, warnings: string[]): string | undefined {
+  const raw = text(value);
+  if (!raw) return undefined;
+  const sentences = raw.split(/(?<=[.!؟?])\s+|\n+/u).map((part) => part.trim()).filter(Boolean);
+  const kept: string[] = [];
+  for (const sentence of sentences) {
+    if (COMMENTARY_RE.test(sentence)) warnings.push(`حُذف من الإعلان تعليق للذكاء الاصطناعي: «${sentence.replace(/[.!؟?]+$/u, "")}»`);
+    else kept.push(sentence);
+  }
+  const result = kept.join(" ").trim();
+  return result || undefined;
+}
+
 /** يحوّل ناتج الذكاء الاصطناعي إلى طلب يقبله الخادم، أو يرفضه برسالة واضحة. */
 export function toRequest(raw: unknown): ExtractResult {
   const data = (dropEmpty(raw) ?? {}) as Loose;
@@ -371,6 +393,7 @@ export function toRequest(raw: unknown): ExtractResult {
       return {
         ...person,
         gender,
+        note: stripCommentary(person.note, warnings),
         age: intOrUndefined(person.age),
         ageUnit: pick(person.ageUnit, AGE_UNITS),
         spouse: isObject(person.spouse) ? { ...person.spouse, kind: pick(person.spouse.kind, ["harem", "widow"] as const) ?? "harem" } : undefined,
@@ -400,6 +423,7 @@ export function toRequest(raw: unknown): ExtractResult {
     .map((card) => ({
       ...card,
       audience: card.audience as "men" | "women",
+      locationNotes: stripCommentary(card.locationNotes, warnings),
       durationDays: intOrUndefined(card.durationDays),
       schedule: array(card.schedule)
         .filter(isObject)
@@ -415,6 +439,8 @@ export function toRequest(raw: unknown): ExtractResult {
 
   const prayer = isObject(data.prayer) ? data.prayer : {};
   const burial = isObject(data.burial) ? data.burial : {};
+  const freeText = (value: unknown) => stripCommentary(value, warnings);
+  burial.note = freeText(burial.note);
   const mode = people.length > 1 ? pick(data.announcementMode, MODES) : undefined;
 
   const candidate = {
@@ -431,6 +457,8 @@ export function toRequest(raw: unknown): ExtractResult {
     condolenceOptions: options,
     condolences,
     condolencePhoneContacts: phones,
+    condolenceNote: freeText(data.condolenceNote),
+    notes: freeText(data.notes),
   };
 
   const parsed = CreateObituaryRequestBody.safeParse(dropEmpty(candidate));

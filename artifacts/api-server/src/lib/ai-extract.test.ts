@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import express from "express";
 import { ADMIN_COOKIE, createSessionToken } from "./admin-auth";
-import { AiError, DEFAULT_MODEL, FALLBACK_MODEL, HOLLOW_WARNING, aiConfig, aiEnvHints, buildGeminiBody, extractRequest, isHollow, readJson, splitBurialNote, toRequest } from "./ai-extract";
+import { AiError, DEFAULT_MODEL, FALLBACK_MODEL, HOLLOW_WARNING, aiConfig, aiEnvHints, buildGeminiBody, extractRequest, isHollow, readJson, splitBurialNote, stripCommentary, toRequest } from "./ai-extract";
 import aiRouter from "../routes/ai";
 
 /** رد نموذجي كما يُرجعه Gemini لإعلان وهمي (بقيم فارغة وnull كما يحدث فعلاً). */
@@ -106,6 +106,22 @@ const cases: Array<[string, () => void | Promise<void>]> = [
     assert.equal(request.burial.cemetery, "مقبرة مسيمير");
     assert.equal(request.burial.weekday, "الاثنين");
     assert.equal(request.burial.note, undefined);
+  }],
+  ["stripCommentary: تعليقات النموذج تُحذف من حقول النشر وتُنقل إلى الملاحظات", () => {
+    const warnings: string[] = [];
+    const note = "لم تذكر صلاة جنازة منفصلة عن المقبرة في الإعلان. يرجى مراجعة إدارة المقبرة للتأكيد. تم تحديد الدفن بعد صلاة العشاء. قد يُدفن المتوفى في مقبرة مسيمير إذا تم توفير مكان له هناك. نُقلت الأسماء كما وردت في الإعلان. الله يرحمه ويغفر له. وفيات قطر.";
+    assert.equal(stripCommentary(note, warnings), "تم تحديد الدفن بعد صلاة العشاء. الله يرحمه ويغفر له.");
+    assert.equal(warnings.length, 5);
+    assert.ok(warnings.every((warning) => warning.startsWith("حُذف من الإعلان تعليق")));
+    assert.equal(stripCommentary("لحين وصول الجثمان من لندن", []), "لحين وصول الجثمان من لندن");
+    assert.equal(stripCommentary("", []), undefined);
+    // عبر toRequest: الملاحظة تُنظَّف ثم تُفكّ، والتعليقات تظهر في warnings لا في الطلب
+    const { request, warnings: all } = toRequest({ ...AI_OUTPUT, burial: { status: "upcoming", outsideQatar: false, note }, notes: "تأكد من صحة المعلومات قبل نشرها." });
+    assert.equal(request.burial.time, "بعد صلاة العشاء");
+    assert.ok(!JSON.stringify(request).includes("يرجى"), JSON.stringify(request.burial));
+    assert.ok(!JSON.stringify(request).includes("وفيات قطر"));
+    assert.equal(request.notes, undefined);
+    assert.ok(all.some((warning) => warning.includes("يرجى مراجعة إدارة المقبرة")));
   }],
   ["readJson: يقبل الرد المحاط بعلامات ```json ويرفض غير المفهوم", () => {
     assert.deepEqual(readJson('```json\n{"a":1}\n```'), { a: 1 });
