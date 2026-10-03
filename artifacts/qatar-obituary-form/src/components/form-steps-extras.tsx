@@ -200,11 +200,50 @@ export function DeceasedTargetSelect({ name, label }: { name: FormPath; label: s
 // ───────────────────────── الخطوة ١ ─────────────────────────
 
 const MESSAGE_TYPES = [
-  { value: "announcement", label: "إعلان وفاة" },
-  { value: "postponement", label: "تأجيل الدفن حتى إشعار آخر" },
-  { value: "amendment", label: "تعديل إعلان سابق" },
-  { value: "condolence_cancellation", label: "إلغاء عزاء" },
+  { value: "announcement", label: "إعلان وفاة", hint: "طلب جديد" },
+  { value: "postponement", label: "تأجيل الدفن", hint: "حتى إشعار آخر" },
+  { value: "amendment", label: "تعديل إعلان سابق", hint: "برقم الطلب" },
+  { value: "condolence_cancellation", label: "إلغاء عزاء", hint: "برقم الطلب" },
 ] as const;
+
+/** خيارات ظاهرة بدل القائمة المنسدلة، على نمط أزرار الجنس، ليرى المستخدم الأنواع الأربعة دفعة واحدة. */
+function MessageTypeButtons() {
+  const form = useFormContext<ObituaryFormValues>();
+  return (
+    <FormField
+      control={form.control}
+      name="messageType"
+      render={({ field }) => (
+        <FormItem className="w-full min-w-0 sm:col-span-2">
+          <FormLabel className={labelClass}>اختر نوع الرسالة</FormLabel>
+          <div role="radiogroup" aria-label="نوع الرسالة" className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full box-border">
+            {MESSAGE_TYPES.map((option) => {
+              const selected = (field.value ?? "announcement") === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => field.onChange(option.value)}
+                  className={`flex flex-col items-center justify-center gap-0.5 py-2.5 px-2 rounded-lg border text-xs sm:text-sm font-semibold transition-all ${
+                    selected
+                      ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                      : "bg-background hover:bg-muted text-foreground border-input"
+                  }`}
+                >
+                  <span>{option.label}</span>
+                  <span className={`text-[10px] font-normal ${selected ? "text-primary-foreground/80" : "text-muted-foreground"}`}>{option.hint}</span>
+                </button>
+              );
+            })}
+          </div>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}
 
 /**
  * نوع الرسالة ظاهر دائماً في أول الخطوة الأولى. عند التعديل أو التأجيل أو إلغاء العزاء يكتب المستخدم رقم طلبه
@@ -248,7 +287,7 @@ export function MessageTypeCard() {
           <Mail className="w-4 h-4 text-primary shrink-0" />
           نوع الرسالة
         </div>
-        <SelectInput name="messageType" label="اختر نوع الرسالة" options={MESSAGE_TYPES} />
+        <MessageTypeButtons />
         {needsOriginal && (
           <div className="grid grid-cols-[1fr_auto] gap-2 items-end w-full min-w-0">
             <TextInput name="relatedRequestNumber" label="رقم الطلب الأصلي" placeholder="261234" ltr />
