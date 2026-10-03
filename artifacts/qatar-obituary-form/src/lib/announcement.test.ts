@@ -407,6 +407,18 @@ const cases: Array<[string, () => void]> = [
     assert.match(text, /والنساء في منزل الفقيد رقم ٢٥ بمنطقة بوهامور/u);
     assert.doesNotMatch(text, /في مقابل/u);
   }],
+  ["36 «ليس لديه أقارب» يظهر في النص بصيغة المتوفى (مذكر ومؤنث وجمع) ولا يظهر إن وُجد أقارب", () => {
+    const man = text({ noRelatives: true });
+    includesInOrder(man, ["توفي / محمد علي", "ليس لديه أقارب", "الدفن"]);
+    const woman = text({ noRelatives: true, deceasedPeople: [{ fullName: "مروه الامام", gender: "woman", nationality: "فلبينية", note: "مسلمة" }] });
+    includesInOrder(woman, ["توفيت / مروه الامام", "فلبينية", "مسلمة", "ليس لديها أقارب", "الدفن"]);
+    const group = text({ noRelatives: true, deceasedPeople: [{ fullName: "سعود", gender: "man" }, { fullName: "جاسم", gender: "man" }] });
+    assert.match(group, /ليس لديهم أقارب/u);
+    assert.doesNotMatch(text({}), /ليس لدي/u, "بلا تأكيد لا يُكتب شيء");
+    const withRelatives = text({ noRelatives: true, relatives: [{ relation: "الأبناء", relationKey: "children", people: [{ name: "أحمد", deceased: false }] }] });
+    assert.doesNotMatch(withRelatives, /ليس لدي/u);
+    assert.match(withRelatives, /أحمد/u);
+  }],
 ];
 
 let failed = 0;
