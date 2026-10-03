@@ -118,6 +118,43 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AdminSession"
+  /admin/settings:
+    get:
+      operationId: getPosterSettings
+      tags: [admin]
+      description: إعدادات هوية صورة التعزية (الشعار واسم الحساب وأيقونات التواصل والطول الأقصى). للمسؤول فقط
+      responses:
+        "200":
+          description: الإعدادات الحالية (أو الافتراضية)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PosterSettings"
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
+    put:
+      operationId: savePosterSettings
+      tags: [admin]
+      description: للمسؤول فقط
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PosterSettings"
+      responses:
+        "200":
+          description: الإعدادات بعد الحفظ
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PosterSettings"
+        "400":
+          description: إعدادات غير صالحة
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
+        "500":
+          description: تعذر الحفظ
   /admin/login:
     post:
       operationId: adminLogin
@@ -176,6 +213,29 @@ components:
         configured:
           type: boolean
           description: كلمة مرور المسؤول مضبوطة في الخادم وقوية بما يكفي
+    PosterSettings:
+      type: object
+      required: [logoDataUrl, handle, socials, maxHeight]
+      properties:
+        logoDataUrl:
+          type: string
+          maxLength: 300000
+          description: الشعار كـ data URL (PNG أو JPEG أو WebP) أو نص فارغ بلا شعار
+        handle:
+          type: string
+          maxLength: 60
+          description: اسم الحساب الظاهر تحت أيقونات التواصل
+        socials:
+          type: array
+          maxItems: 3
+          items:
+            type: string
+            enum: [instagram, snapchat, x]
+        maxHeight:
+          type: integer
+          minimum: 1350
+          maximum: 1800
+          description: الصورة تبدأ بطول 1350 وتطول عند الحاجة حتى هذا الحد
     AdminLoginInput:
       type: object
       required: [password]

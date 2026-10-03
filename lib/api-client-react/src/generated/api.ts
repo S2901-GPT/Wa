@@ -25,7 +25,8 @@ import type {
   HealthStatus,
   ObituaryRequest,
   ObituaryRequestInput,
-  ObituaryRequestUpdate
+  ObituaryRequestUpdate,
+  PosterSettings
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -580,6 +581,165 @@ export function useGetAdminSession<TData = Awaited<ReturnType<typeof getAdminSes
 
 
 
+
+export const getGetPosterSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/settings`
+}
+
+/**
+ * إعدادات هوية صورة التعزية (الشعار واسم الحساب وأيقونات التواصل والطول الأقصى). للمسؤول فقط
+ */
+export const getPosterSettings = async ( options?: Parameters<typeof customFetch>[1]): Promise<PosterSettings> => {
+
+  return customFetch<PosterSettings>(getGetPosterSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPosterSettingsQueryKey = () => {
+    return [
+    `/api/admin/settings`
+    ] as const;
+    }
+
+
+export const getGetPosterSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getPosterSettings>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPosterSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPosterSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPosterSettings>>> = ({ signal }) => getPosterSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPosterSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPosterSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getPosterSettings>>>
+export type GetPosterSettingsQueryError = ErrorType<void>
+
+
+
+export function useGetPosterSettings<TData = Awaited<ReturnType<typeof getPosterSettings>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPosterSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPosterSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSavePosterSettingsUrl = () => {
+
+
+
+
+  return `/api/admin/settings`
+}
+
+/**
+ * للمسؤول فقط
+ */
+export const savePosterSettings = async (posterSettings: PosterSettings, options?: Parameters<typeof customFetch>[1]): Promise<PosterSettings> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<PosterSettings>(getSavePosterSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(posterSettings)
+  }
+);}
+
+
+
+
+
+export const getSavePosterSettingsMutationKey = () => ['savePosterSettings'] as const;
+
+export const getSavePosterSettingsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof savePosterSettings>>, TError,SavePosterSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof savePosterSettings>>, TError,SavePosterSettingsMutationVariables, TContext> => {
+
+const mutationKey = getSavePosterSettingsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof savePosterSettings>>, SavePosterSettingsMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  savePosterSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SavePosterSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof savePosterSettings>>>
+    export type SavePosterSettingsMutationBody = BodyType<PosterSettings>
+    export type SavePosterSettingsMutationError = ErrorType<void>
+    export type SavePosterSettingsMutationVariables = {data: BodyType<PosterSettings>}
+
+    export const useSavePosterSettings = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof savePosterSettings>>, TError,SavePosterSettingsMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof savePosterSettings>>,
+        TError,
+        SavePosterSettingsMutationVariables,
+        TContext
+      > => {
+      return useMutation(getSavePosterSettingsMutationOptions(options));
+    }
 
 export const getAdminLoginUrl = () => {
 

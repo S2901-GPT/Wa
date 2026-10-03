@@ -11,7 +11,7 @@ import { DeleteRequestButton } from "@/components/delete-request-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { FileText, ChevronLeft, Loader2, AlertCircle, Copy, Check, LogOut } from "lucide-react";
+import { FileText, ChevronLeft, Loader2, AlertCircle, Copy, Check, LogOut, Settings } from "lucide-react";
 import { toast } from "sonner";
 import { MESSAGE_TYPE_LABELS, buildAnnouncement, describeRequestDeceased } from "@/lib/announcement";
 
@@ -72,10 +72,18 @@ export default function AdminPage() {
           <h1 className="text-3xl font-bold text-primary mb-2">لوحة الإدارة</h1>
           <p className="text-muted-foreground">عرض وإدارة طلبات إعلان الوفاة</p>
         </div>
-        <Button type="button" variant="outline" size="sm" onClick={signOut} disabled={logout.isPending} className="gap-1.5 shrink-0">
-          {logout.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
-          تسجيل الخروج
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link href="/admin/settings">
+            <Button type="button" variant="outline" size="sm" className="gap-1.5 border-primary/40 text-primary hover:bg-primary/5">
+              <Settings className="h-4 w-4" />
+              الإعدادات
+            </Button>
+          </Link>
+          <Button type="button" variant="outline" size="sm" onClick={signOut} disabled={logout.isPending} className="gap-1.5">
+            {logout.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />}
+            تسجيل الخروج
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (

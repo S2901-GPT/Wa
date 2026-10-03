@@ -350,5 +350,42 @@ export const obituaryRequestsDb = {
   },
 };
 
+/**
+ * إعدادات هوية صورة التعزية (الشعار واسم الحساب…). تُحفظ في مجموعة «condolence_templates» لأن قواعد Firestore
+ * المنشورة تسمح بالكتابة فيها (مستند بمعرّف صالح)، ولا تسمح بمجموعة جديدة. وإن لم يوجد المستند الجديد تُقرأ
+ * «branding» المحفوظة قديماً في مستند قالب النسخ حتى لا يضيع شعار رُفع قبل حذف محرر القوالب.
+ */
+const POSTER_SETTINGS_COLLECTION = "condolence_templates";
+const POSTER_SETTINGS_ID = "poster-settings";
+const LEGACY_TEMPLATE_ID = "naskh";
+let inMemoryPosterSettings: Record<string, unknown> | null = null;
+
+export const posterSettingsDb = {
+  /** الإعدادات المخزّنة كما هي (تُنظَّف في الخادم)، أو null إن لم يُحفظ شيء بعد. */
+  async get(): Promise<Record<string, unknown> | null> {
+    if (firestoreDb) {
+      try {
+        const current = await getDoc(doc(firestoreDb, POSTER_SETTINGS_COLLECTION, POSTER_SETTINGS_ID));
+        if (current.exists()) return current.data() as Record<string, unknown>;
+        const legacy = await getDoc(doc(firestoreDb, POSTER_SETTINGS_COLLECTION, LEGACY_TEMPLATE_ID));
+        const branding = legacy.exists() ? (legacy.data() as { branding?: unknown }).branding : undefined;
+        if (branding && typeof branding === "object") return branding as Record<string, unknown>;
+        return inMemoryPosterSettings;
+      } catch (err) {
+        console.warn("[AI Studio] Firestore poster settings read failed, using memory:", err);
+      }
+    }
+    return inMemoryPosterSettings;
+  },
+
+  /** يحفظ الإعدادات. يرمي خطأ إن فشلت الكتابة في Firestore، حتى لا يظن المسؤول أن الشعار حُفظ وهو لم يُحفظ. */
+  async save(settings: Record<string, unknown>): Promise<void> {
+    if (firestoreDb) {
+      await setDoc(doc(firestoreDb, POSTER_SETTINGS_COLLECTION, POSTER_SETTINGS_ID), { ...settings, updatedAt: new Date().toISOString() });
+    }
+    inMemoryPosterSettings = { ...settings };
+  },
+};
+
 export { firestoreDb };
 export * from "./schema";

@@ -31,6 +31,8 @@ export * from './obituaryRequestInputPhoneAudience';
 export * from './obituaryRequestStatus';
 export * from './obituaryRequestUpdate';
 export * from './obituaryRequestUpdateStatus';
+export * from './posterSettings';
+export * from './posterSettingsSocialsItem';
 export * from './prayerDetails';
 export * from './relativeGroup';
 export * from './relativeGroupDeceasedPlacement';

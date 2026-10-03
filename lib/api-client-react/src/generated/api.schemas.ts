@@ -15,6 +15,36 @@ export interface AdminSession {
   configured: boolean;
 }
 
+export type PosterSettingsSocialsItem = typeof PosterSettingsSocialsItem[keyof typeof PosterSettingsSocialsItem];
+
+
+export const PosterSettingsSocialsItem = {
+  instagram: 'instagram',
+  snapchat: 'snapchat',
+  x: 'x',
+} as const;
+
+export interface PosterSettings {
+  /**
+     * الشعار كـ data URL (PNG أو JPEG أو WebP) أو نص فارغ بلا شعار
+     * @maxLength 300000
+     */
+  logoDataUrl: string;
+  /**
+     * اسم الحساب الظاهر تحت أيقونات التواصل
+     * @maxLength 60
+     */
+  handle: string;
+  /** @maxItems 3 */
+  socials: PosterSettingsSocialsItem[];
+  /**
+     * الصورة تبدأ بطول 1350 وتطول عند الحاجة حتى هذا الحد
+     * @minimum 1350
+     * @maximum 1800
+     */
+  maxHeight: number;
+}
+
 export interface AdminLoginInput {
   /** @maxLength 200 */
   password: string;

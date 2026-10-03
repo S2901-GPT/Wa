@@ -28,6 +28,7 @@ app.use(
   }),
 );
 app.use(cors());
+app.use("/api/admin/settings", express.json({ limit: "1mb" }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
