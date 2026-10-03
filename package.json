@@ -8,30 +8,32 @@
     "node": ">=22"
   },
   "workspaces": [
-    "artifacts/*",
-    "lib/*",
-    "scripts"
+    "artifacts/api-server",
+    "artifacts/qatar-obituary-form",
+    "lib/api-client-react",
+    "lib/api-zod",
+    "lib/db"
   ],
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "npm run build --workspace=@workspace/qatar-obituary-form && node build-server.mjs",
+    "build": "vite build artifacts/qatar-obituary-form && node build-server.mjs",
     "gcp-build": "npm run build",
     "start": "if [ -f dist/server.mjs ]; then node --enable-source-maps dist/server.mjs; else tsx server.ts; fi",
     "typecheck": "tsc --build",
-    "test": "npm run test --workspace=@workspace/qatar-obituary-form",
+    "test": "cd artifacts/qatar-obituary-form && npm test",
     "lint": "tsc --build"
   },
   "dependencies": {
+    "@firebase/app": "0.16.2",
+    "@firebase/firestore": "4.17.2",
     "cors": "^2.8.5",
     "express": "^5.2.1",
-    "firebase": "^12.19.0",
     "pino": "^9.14.0",
     "pino-http": "^10.5.0",
     "pino-pretty": "^13.1.3",
     "tsx": "^4.21.0"
   },
   "devDependencies": {
-    "@firebase/eslint-plugin-security-rules": "^0.0.2",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/node": "^22.13.0",

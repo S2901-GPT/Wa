@@ -1,4 +1,4 @@
-import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
+import { initializeApp, getApps, type FirebaseApp } from "@firebase/app";
 import {
   getFirestore,
   collection,
@@ -9,7 +9,7 @@ import {
   query,
   orderBy,
   type Firestore,
-} from "firebase/firestore";
+} from "@firebase/firestore";
 import firebaseConfig from "../../../firebase-applet-config.json";
 import { type ObituaryRequestRow } from "./schema/obituary-requests";
 

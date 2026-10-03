@@ -1,4 +1,4 @@
-import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
+import { initializeApp, getApps, type FirebaseApp } from "@firebase/app";
 import {
   getFirestore,
   collection,
@@ -8,7 +8,7 @@ import {
   setDoc,
   deleteDoc,
   type Firestore,
-} from "firebase/firestore";
+} from "@firebase/firestore";
 import firebaseConfig from "../../../../firebase-applet-config.json";
 import {
   type CondolenceTemplate,
