@@ -1037,10 +1037,8 @@ function condolenceSections(request: ObituaryRequestInput, warnings: string[], n
     else sections.push(phoneSection);
   }
   if (options.includes("tbd")) other.push("العزاء: سيُحدَّد لاحقاً");
-  if (!options.length) {
-    other.push(sentence(["لا يوجد عزاء", note]));
-    noteUsed = !!note;
-  }
+  // لا عزاء: لا يُكتب شيء عن العزاء (لا «لا يوجد عزاء» ولا سببه)
+  if (!options.length) noteUsed = true;
   if (note && !noteUsed) other.push(note);
   if (other.length) sections.push({ id: "condolence-other", label: "العزاء", lines: other });
   return sections;

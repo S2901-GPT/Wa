@@ -57,7 +57,7 @@ const cases: Array<[string, () => void]> = [
     const values = form(() => {});
     assert.deepEqual(issues(values), []);
     serverAccepts(values);
-    assert.equal(text(values), "توفي الوالد / محمد علي\n\nالدفن اليوم الجمعة بعد صلاة العصر في مقبرة مسيمير\n\nلا يوجد عزاء\n\nالله يرحمه ويغفر له");
+    assert.equal(text(values), "توفي الوالد / محمد علي\n\nالدفن اليوم الجمعة بعد صلاة العصر في مقبرة مسيمير\n\nالله يرحمه ويغفر له");
   }],
   ["أرملة بلا اسم (معرّف القرابة) ← «أرملة الوالد / … رحمهم الله»", () => {
     const values = form((draft) => {
@@ -116,6 +116,17 @@ const cases: Array<[string, () => void]> = [
   ["أنواع العزاء: المقبرة فقط، الهاتف، سيُحدَّد لاحقاً، ومواقع إضافية", () => {
     const cemetery = form((draft) => { draft.condolences = { ...draft.condolences!, type: "cemetery_only", cancellationOrRestrictionReason: "اتباعاً للسنة" }; });
     assert.match(text(cemetery), /عزاء الرجال في المقبرة فقط اتباعاً للسنة/u);
+    assert.doesNotMatch(text(cemetery), /عزاء النساء/u);
+    // الرجال في المقبرة، والنساء في مقر: مقر النساء مطلوب، ويُحفظ ويُستعاد للتعديل
+    const withWomen = form((draft) => { draft.condolences = { ...draft.condolences!, type: "cemetery_only", cemeteryWithWomen: true, women: { ...draft.condolences!.women!, locationName: "منزل الفقيد" } }; });
+    assert.deepEqual(issues(withWomen), []);
+    serverAccepts(withWomen);
+    assert.deepEqual(mapFormToPayload(withWomen).condolenceOptions, ["men_cemetery", "women"]);
+    assert.match(text(withWomen), /عزاء الرجال في المقبرة فقط[\s\S]*عزاء النساء في منزل الفقيد/u);
+    const reloaded = mapPayloadToForm({ ...mapFormToPayload(withWomen), id: 1, requestNumber: "QTR-1", createdAt: "", updatedAt: "", status: "new" } as ObituaryRequest);
+    assert.deepEqual([reloaded.condolences?.type, reloaded.condolences?.cemeteryWithWomen, reloaded.condolences?.women?.locationName], ["cemetery_only", true, "منزل الفقيد"]);
+    const missing = form((draft) => { draft.condolences = { ...draft.condolences!, type: "cemetery_only", cemeteryWithWomen: true }; });
+    assert.ok(issues(missing).some((issue) => issue.startsWith("condolences.women.locationName")), JSON.stringify(issues(missing)));
     // «هاتف فقط» دون أرقام: لا يُرسل أي رقم حتى لو بقي في النموذج من طلب قديم
     const phone = form((draft) => { draft.condolences = { ...draft.condolences!, type: "phone_only", phones: ["ناصر (الأبناء): 55551234"] }; });
     assert.match(text(phone), /العزاء عبر الهاتف/u);

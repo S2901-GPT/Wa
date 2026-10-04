@@ -349,8 +349,10 @@ const cases: Array<[string, () => void]> = [
     const result = buildAnnouncement(request({ deceasedPeople: [{ gender: "woman" }] }));
     assert.ok(result.warnings.some((warning) => warning.includes("تعذر التعريف")));
   }],
-  ["«لا يوجد عزاء» يظهر صراحة، والمقبرة فقط مع سببها", () => {
-    assert.match(text({ condolenceOptions: [] }), /لا يوجد عزاء/u);
+  ["لا عزاء: لا يُكتب شيء عن العزاء (ولا سببه)؛ والمقبرة فقط مع سببها", () => {
+    const none = text({ condolenceOptions: [], condolenceNote: "تنفيذاً لوصية المتوفى" });
+    assert.doesNotMatch(none, /عزاء|تنفيذاً لوصية/u);
+    assert.match(none, /\n\nالله يرحمه ويغفر له$/u);
     const cemetery = text({ condolenceOptions: ["men_cemetery", "phone"], phoneAudience: "women", condolenceNote: "اتباعاً للسنة" });
     includesInOrder(cemetery, ["عزاء الرجال في المقبرة فقط اتباعاً للسنة", "عزاء النساء عبر الهاتف"]);
     assert.match(text({ condolenceOptions: ["tbd"] }), /سيُحدَّد لاحقاً/u);
