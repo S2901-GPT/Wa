@@ -75,7 +75,8 @@ export default function AdminRequestDetailsPage() {
 
   const copyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(announcement?.text ?? "");
+      // يُبنى لحظة النسخ: «اليوم / غداً» بحسب وقت النشر لا وقت فتح الصفحة
+      await navigator.clipboard.writeText(req ? buildAnnouncement(req).text : "");
       setCopied(true);
       toast.success("تم نسخ النص بنجاح");
       setTimeout(() => setCopied(false), 2000);

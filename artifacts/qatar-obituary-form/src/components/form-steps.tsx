@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { useFormContext, useFieldArray } from "react-hook-form";
 import { ObituaryFormValues, emptyDeceased } from "@/lib/schema";
+import { dayTimePhrase } from "@/lib/announcement";
 import {
   AnnouncementPreview,
   CondolenceExtras,
@@ -52,10 +53,22 @@ const PREFIX_TITLES = [
   { label: "شهيد الوطن", value: "شهيد الوطن" },
 ];
 
+// ألقاب المتوفى في النموذج. الألقاب الأخرى (الشيخ، اللواء…) تبقى مقبولة من طلب سابق أو من «طلب من نص».
+const DECEASED_TITLES = ["none", "الوالد", "الوالدة", "الطفل", "الطفلة", "الدكتور", "الدكتورة"]
+  .map((value) => PREFIX_TITLES.find((title) => title.value === value)!);
+
 // ألقاب الزوج في «أرملة / حرم»: ألقاب الرجال من القائمة نفسها (دون ألقاب النساء والأطفال)
 const NO_TITLE = "none";
 const NON_HUSBAND_TITLES = ["none", "الوالدة", "الشابة", "الطفل", "الطفلة", "الرضيع", "الرضيعة", "المولودة", "الشيخة", "الدكتورة"];
 const HUSBAND_TITLES = PREFIX_TITLES.map((t) => t.value).filter((value) => !NON_HUSBAND_TITLES.includes(value));
+
+/** اسم يوم الأسبوع لتاريخ من منتقي التاريخ («2026-10-04» ← «الأحد»). */
+function weekdayOf(value?: string | null): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value ?? "");
+  if (!match) return "";
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(date.getTime()) ? "" : ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"][date.getDay()];
+}
 
 // 1. الجنس: ذكر أو أنثى حصرياً
 const GENDER_OPTIONS = [
@@ -270,9 +283,13 @@ export function DeceasedStep() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent className="max-h-60">
-                          {PREFIX_TITLES.map((t) => (
+                          {DECEASED_TITLES.map((t) => (
                             <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
                           ))}
+                          {/* لقب من طلب سابق خارج القائمة: يبقى ظاهراً حتى لا يضيع عند التعديل */}
+                          {titleField.value && titleField.value !== "none" && !DECEASED_TITLES.some((t) => t.value === titleField.value) && (
+                            <SelectItem value={titleField.value}>{titleField.value}</SelectItem>
+                          )}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -1020,7 +1037,7 @@ export function BurialPrayerStep() {
                   name="burial.dateDescription"
                   render={({ field }) => (
                     <FormItem className="w-full min-w-0">
-                      <FormLabel className="text-xs sm:text-sm font-semibold">تاريخ / يوم الدفن</FormLabel>
+                      <FormLabel className="text-xs sm:text-sm font-semibold">يوم الدفن</FormLabel>
                       <FormControl>
                         <Input 
                           type="date" 
@@ -1029,6 +1046,11 @@ export function BurialPrayerStep() {
                           onChange={(e) => field.onChange(e.target.value)} 
                         />
                       </FormControl>
+                      {weekdayOf(field.value) && (
+                        <p className="text-[11px] text-muted-foreground">
+                          يوم {weekdayOf(field.value)} · يُكتب في الإعلان «اليوم» أو «غداً» بحسب وقت النشر، دون التاريخ
+                        </p>
+                      )}
                     </FormItem>
                   )}
                 />
@@ -1918,7 +1940,7 @@ export function ReviewStep() {
               <div className="sm:col-span-2">
                 <span className="text-muted-foreground">الموعد:</span>{" "}
                 <span className="font-medium text-foreground">
-                  {[burial?.dateDescription, burial?.timeDescription].filter(Boolean).join(" - ") || "غير محدد"}
+                  {dayTimePhrase(burial?.dateDescription ?? "", "", burial?.timeDescription ?? "") || "غير محدد"}
                 </span>
               </div>
               {prayer?.enabled && prayer?.locationName && prayer.locationName.trim() && (
