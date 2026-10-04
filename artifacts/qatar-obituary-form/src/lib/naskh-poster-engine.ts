@@ -2,6 +2,7 @@
 // ويقيس النص، ويستدعي المخطّط النقي (naskh-poster-plan.ts) بالتخطيط المختار، ثم يرسم العناصر.
 import bgPatternUrl from "../assets/poster/bg-pattern.jpg";
 import openingCalligraphyUrl from "../assets/poster/opening-calligraphy.png";
+import defaultLogoUrl from "../assets/poster/logo-default.png";
 import type { NormalizedContent } from "./presentation-normalizer";
 import { normalizeArabic } from "./presentation-normalizer";
 import type { QrCodeMap } from "./qr-images";
@@ -24,9 +25,12 @@ export async function loadCondolenceFonts() {
   await document.fonts.ready;
 }
 
+/** شعار «وفيات قطر» المدمج: يظهر في كل صورة ما لم يرفع المسؤول شعاراً آخر من «الإعدادات». */
+export const DEFAULT_LOGO_URL: string = defaultLogoUrl;
+
 /** هوية الإعلان: الشعار كبيراً في وسط أسفل الصورة، والحد الأقصى لطول الصورة. */
 export type PosterBranding = {
-  /** صورة الشعار كـ data URL، أو فارغ فلا يُرسم شيء ولا يُحجز له مكان. */
+  /** صورة الشعار المرفوع كـ data URL، أو فارغ فيُستخدم الشعار المدمج. */
   logoDataUrl?: string;
   /** الصورة تبدأ 1350 وتطول عند الحاجة حتى هذا الحد (1350–1800). */
   maxHeight?: number;
@@ -100,12 +104,14 @@ export function loadImageOnce(src: string): Promise<HTMLImageElement | null> {
 
 export async function loadNaskhAssets(branding: PosterBranding | null | undefined): Promise<NaskhAssets> {
   const resolved = resolveNaskhBranding(branding);
-  const logoSrc = resolved.logoDataUrl && resolved.logoDataUrl.startsWith("data:image/") ? resolved.logoDataUrl : "";
-  const [background, opening, logo] = await Promise.all([
+  const customLogo = resolved.logoDataUrl && resolved.logoDataUrl.startsWith("data:image/") ? resolved.logoDataUrl : "";
+  const [background, opening, uploaded] = await Promise.all([
     loadImageOnce(bgPatternUrl),
     loadImageOnce(openingCalligraphyUrl),
-    logoSrc ? loadImageOnce(logoSrc) : Promise.resolve(null),
+    customLogo ? loadImageOnce(customLogo) : Promise.resolve(null),
   ]);
+  // الشعار المدمج عند عدم الرفع أو تعذّر قراءة المرفوع، فلا تخرج صورة بلا شعار
+  const logo = uploaded ?? (await loadImageOnce(DEFAULT_LOGO_URL));
   return { background, opening, logo: logo ? trimmedLogo(logo) : null };
 }
 
