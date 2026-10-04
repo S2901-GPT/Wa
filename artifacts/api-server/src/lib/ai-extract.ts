@@ -316,11 +316,26 @@ function guessGender(person: Loose): (typeof GENDERS)[number] {
 const intOrUndefined = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.round(value) : undefined;
 
-const WEEKDAY_RE = /(?:^|\s)(السبت|الأحد|الاثنين|الإثنين|الثلاثاء|الأربعاء|الخميس|الجمعة)(?=\s|$)/u;
-const RELATIVE_DAY_RE = /(?:^|\s)(اليوم|غداً|غدا|بعد غد)(?=\s|$)/u;
-const PRAYER_TIME_RE = /بعد صلاة (?:الفجر|الظهر|العصر|المغرب|العشاء|الجمعة|التراويح)/u;
+const WEEKDAY_RE = /(?:^|\s)(السبت|الأحد|الاحد|الاثنين|الإثنين|الثلاثاء|الثلاثا|الأربعاء|الاربعاء|الخميس|الجمعة|الجمعه)(?=\s|$)/u;
+const RELATIVE_DAY_RE = /(?:^|\s)(اليوم|الحين|الليلة|الليله|غداً|غدا|بكرة|بكره|بعد غد)(?=\s|$)/u;
+const PRAYER_TIME_RE = /(?:بعد|عقب) صلاة (?:الفجر|الظهر|العصر|المغرب|العشاء|الجمعة|التراويح)/u;
 const CLOCK_TIME_RE = /(?:الساعة\s*)?\d{1,2}(?::\d{2})?\s*(?:صباحاً|صباحا|ظهراً|ظهرا|عصراً|عصرا|مساءً|مساء)/u;
-const CEMETERY_RE = /مقبرة\s+(?:(?:أبو|ابو|أم|ام)\s+\S+|الوكرة\s+الجنوبية|\S+)/u;
+const CEMETERY_RE = /(?:(?<!\p{L})|(?<=(?<!\p{L})ب))مقبرة\s+(?:(?:أبو|ابو|أم|ام)\s+\S+|الوكرة\s+الجنوبية|\S+)/u;
+
+/** الكتابة المعتمدة لما يرد بالعامية أو بلا همزة: «الاحد» ← «الأحد»، «بكره» ← «غداً»، «عقب صلاة» ← «بعد صلاة». */
+const SPELLING: Record<string, string> = {
+  "الاحد": "الأحد",
+  "الإثنين": "الاثنين",
+  "الثلاثا": "الثلاثاء",
+  "الاربعاء": "الأربعاء",
+  "الجمعه": "الجمعة",
+  "غدا": "غداً",
+  "بكرة": "غداً",
+  "بكره": "غداً",
+  "الحين": "اليوم",
+  "الليله": "الليلة",
+};
+const canonical = (word: string): string => SPELLING[word] ?? word;
 
 /**
  * النموذج قد يضع موعد الدفن والمقبرة كلها في note أو time («الساعة 9:30 مساءً في مقبرة مسيمير اليوم الاثنين»)،
@@ -339,10 +354,7 @@ export function splitBurialNote(burial: Loose): Loose {
     rest = rest.replace(match[0], " ");
     return match[0].trim();
   };
-  const cemetery = take(CEMETERY_RE);
-  const time = take(PRAYER_TIME_RE) || take(CLOCK_TIME_RE);
-  const weekday = take(WEEKDAY_RE);
-  const day = take(RELATIVE_DAY_RE);
+  const { cemetery, time, weekday, day } = burialParts(take);
   if (!cemetery && !time && !weekday && !day) return burial;
   const leftover = rest.replace(/(?:^|\s)(?:في|و|بـ|ب)(?=\s|$)/gu, " ").replace(/[،,.]+/gu, " ").replace(/\s+/gu, " ").trim();
   return {
@@ -353,6 +365,40 @@ export function splitBurialNote(burial: Loose): Loose {
     cemetery: cemetery || have.cemetery || undefined,
     note: /\p{L}{3,}/u.test(leftover) ? leftover : undefined,
   };
+}
+
+/** يلتقط من جملة الدفن المقبرة والوقت واسم اليوم و«اليوم / غداً» بالكتابة المعتمدة؛ take يقتطع ما يطابق من الجملة. */
+function burialParts(take: (re: RegExp) => string) {
+  const cemetery = take(CEMETERY_RE).replace(/^مقبرة (?:ابو|ام) /u, (match) => match.replace(" ا", " أ"));
+  const time = (take(PRAYER_TIME_RE) || take(CLOCK_TIME_RE)).replace(/^عقب /u, "بعد ");
+  const weekday = canonical(take(WEEKDAY_RE));
+  const day = canonical(take(RELATIVE_DAY_RE));
+  return { cemetery, time, weekday, day };
+}
+
+/** بداية جملة الدفن في الرسالة («الدفن»، «والدفن»، «يُدفن»، «سيوارى الثرى»…)، لا «تم الدفن» ولا «تأجيل الدفن». */
+const BURIAL_START_RE = /(?<=^|\s)(?<!(?:تم|وتم|تأجيل|تاجيل)\s)(?:و?الدفن|و?سيتم\s+(?:الدفن|دفن\S*)|و?(?:سي|ست|ي|ت)ُ?(?:دفن|وارى(?:\s+الثرى)?))(?=\s|$)/u;
+/** نهاية جملة الدفن: سطر جديد، أو بداية العزاء، أو رابط. */
+const BURIAL_END_RE = /\n|\s(?=و?(?:ال)?عزاء|و?للرجال|و?للنساء|و?الرجال|و?النساء|https?:)/u;
+
+/**
+ * يقرأ موعد الدفن ومقبرته من نص الرسالة نفسه. النموذج (خاصة مع المخطط الصارم) قد يُرجع الدفن فارغاً
+ * رغم وضوح الجملة («الدفن اليوم الاحد بعد صلاة العصر في مقبرة مسيمير»)، فتُكمَّل الحقول الناقصة منها فقط.
+ */
+export function burialFromSource(source: string): { day?: string; weekday?: string; time?: string; cemetery?: string } {
+  const start = BURIAL_START_RE.exec(source);
+  if (!start) return {};
+  const after = source.slice(start.index + start[0].length);
+  const end = BURIAL_END_RE.exec(after);
+  let rest = ` ${end ? after.slice(0, end.index) : after} `;
+  const take = (re: RegExp): string => {
+    const match = re.exec(rest);
+    if (!match) return "";
+    rest = rest.replace(match[0], " ");
+    return match[0].trim();
+  };
+  const parts = burialParts(take);
+  return Object.fromEntries(Object.entries(parts).filter(([, value]) => value));
 }
 
 const COMMENTARY_RE =
@@ -376,7 +422,7 @@ export function stripCommentary(value: unknown, warnings: string[]): string | un
 }
 
 /** يحوّل ناتج الذكاء الاصطناعي إلى طلب يقبله الخادم، أو يرفضه برسالة واضحة. */
-export function toRequest(raw: unknown): ExtractResult {
+export function toRequest(raw: unknown, source = ""): ExtractResult {
   const data = (dropEmpty(raw) ?? {}) as Loose;
   if (!isObject(data)) throw new AiError(502, "لم يُرجع الذكاء الاصطناعي بيانات مفهومة، حاول مرة أخرى.");
   const warnings = array(data.warnings).map(text).filter(Boolean).slice(0, 8);
@@ -444,6 +490,16 @@ export function toRequest(raw: unknown): ExtractResult {
   const burial = isObject(data.burial) ? data.burial : {};
   const freeText = (value: unknown) => stripCommentary(value, warnings);
   burial.note = freeText(burial.note);
+  const burialStatus = pick(burial.status, BURIAL_STATUSES) ?? "upcoming";
+  const fixedBurial = splitBurialNote({ ...burial, status: burialStatus, outsideQatar: burial.outsideQatar === true });
+  // ما نقص من موعد الدفن ومقبرته يُكمَّل من جملة الدفن في الرسالة نفسها
+  if (burialStatus === "upcoming" && fixedBurial.outsideQatar !== true) {
+    const fromText = burialFromSource(source);
+    const filled = (["day", "weekday", "time", "cemetery"] as const).filter((key) => !text(fixedBurial[key]) && fromText[key]);
+    for (const key of filled) fixedBurial[key] = fromText[key];
+    // تنبيهات النموذج عن نقص الدفن لم تعد صحيحة
+    if (filled.length) warnings.splice(0, warnings.length, ...warnings.filter((warning) => !/الدفن|المقبرة|مقبرة/u.test(warning)));
+  }
   const mode = people.length > 1 ? pick(data.announcementMode, MODES) : undefined;
 
   const candidate = {
@@ -456,7 +512,7 @@ export function toRequest(raw: unknown): ExtractResult {
     relatives,
     noRelatives: relatives.length === 0 && data.noRelatives === true ? true : undefined,
     prayer: { ...prayer, enabled: prayer.enabled === true },
-    burial: splitBurialNote({ ...burial, status: pick(burial.status, BURIAL_STATUSES) ?? "upcoming", outsideQatar: burial.outsideQatar === true }),
+    burial: fixedBurial,
     condolenceOptions: options,
     condolences,
     condolencePhoneContacts: [],
@@ -533,7 +589,7 @@ export async function extractRequest(
         continue;
       }
       try {
-        const result = toRequest(readJson(reply));
+        const result = toRequest(readJson(reply), input);
         if (!isHollow(result, input.length)) return result;
         last = { result, reply };
       } catch (error) {
