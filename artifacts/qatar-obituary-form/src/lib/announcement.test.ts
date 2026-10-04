@@ -19,7 +19,13 @@ function request(overrides: Partial<ObituaryRequestInput>): ObituaryRequestInput
   };
 }
 
-const text = (overrides: Partial<ObituaryRequestInput>) => buildAnnouncement(request(overrides)).text;
+const text = (overrides: Partial<ObituaryRequestInput>, now?: Date) => buildAnnouncement(request(overrides), now ? { now } : {}).text;
+
+// أيام ثابتة للاختبارات التي تعتمد على «اليوم / غداً»: أكتوبر 2026
+const SAT = new Date(2026, 9, 3, 22, 0); // السبت ليلاً
+const SUN = new Date(2026, 9, 4, 9, 0); // الأحد صباحاً
+const MON = new Date(2026, 9, 5, 9, 0);
+const THU = new Date(2026, 9, 1, 9, 0);
 
 function includesInOrder(haystack: string, needles: string[]) {
   let from = 0;
@@ -196,7 +202,7 @@ const cases: Array<[string, () => void]> = [
     const result = text({
       deceasedPeople: [{ title: "الوالد", fullName: "محمد علي", gender: "man", deathPlace: "ألمانيا" }],
       burial: { status: "upcoming", outsideQatar: false, day: "غداً", weekday: "الأحد", time: "بعد صلاة الظهر", cemetery: "مقبرة مسيمير" },
-    });
+    }, SAT);
     includesInOrder(result, ["توفي الوالد / محمد علي في ألمانيا", "الدفن غداً الأحد بعد صلاة الظهر في مقبرة مسيمير"]);
   }],
   ["13 صلاة في مسيمير ودفن في مصر دون يوم أو وقت للدفن", () => {
@@ -214,7 +220,7 @@ const cases: Array<[string, () => void]> = [
       burial: { status: "completed", outsideQatar: true, outsideLocation: "البحرين", day: "اليوم", weekday: "السبت" },
       condolenceOptions: ["men"],
       condolences: [{ audience: "men", start: "غداً", durationDays: 3, location: "مجلس العائلة", area: "الدفنة" }],
-    });
+    }, SAT);
     includesInOrder(result, ["تم الدفن اليوم السبت في البحرين", "عزاء الرجال من الغد في مجلس العائلة بمنطقة الدفنة", "لمدة 3 أيام"]);
   }],
   ["15 تأجيل الدفن حتى إشعار آخر ثم رسالة تعديل بموعد جديد", () => {
@@ -226,8 +232,32 @@ const cases: Array<[string, () => void]> = [
       relatedRequestNumber: "QTR-1",
       deceasedPeople: deceased,
       burial: { status: "upcoming", outsideQatar: false, day: "اليوم", weekday: "الخميس", time: "بعد صلاة العشاء", cemetery: "مقبرة مسيمير" },
-    });
+    }, THU);
     includesInOrder(amended, ["تعديل /", "توفيت حرم / علي حسن", "الدفن اليوم الخميس بعد صلاة العشاء في مقبرة مسيمير"]);
+  }],
+  ["الدفن بتاريخ من النموذج: اسم اليوم فقط دون التاريخ، و«اليوم / غداً» بحسب لحظة النشر", () => {
+    const burial = (day: string) => ({ status: "upcoming" as const, outsideQatar: false, day, time: "بعد صلاة العصر", cemetery: "مقبرة مسيمير" });
+    // عُبّئ ليلة السبت لدفن الأحد، ونُشر ليلاً ثم صباحاً ثم بعد يوم
+    assert.match(text({ burial: burial("2026-10-04") }, SAT), /الدفن غداً الأحد بعد صلاة العصر/u);
+    assert.match(text({ burial: burial("2026-10-04") }, SUN), /الدفن اليوم الأحد بعد صلاة العصر/u);
+    assert.match(text({ burial: burial("2026-10-04") }, MON), /الدفن أمس الأحد/u);
+    // بعد أكثر من يوم: «يوم الخميس» بلا رقم ولا شهر
+    const far = text({ burial: burial("2026-10-08") }, SUN);
+    assert.match(far, /الدفن يوم الخميس بعد صلاة العصر/u);
+    assert.doesNotMatch(far, /\d{1,2} (?:يناير|فبراير|مارس|أبريل|مايو|يونيو|يوليو|أغسطس|سبتمبر|أكتوبر|نوفمبر|ديسمبر)/u);
+  }],
+  ["«غداً الأحد» من رسالة كُتبت ليلاً تصبح «اليوم الأحد» إذا نُشرت صباح الأحد", () => {
+    const burial = (day: string, weekday: string) => ({ status: "upcoming" as const, outsideQatar: false, day, weekday, time: "بعد صلاة الظهر", cemetery: "مقبرة مسيمير" });
+    assert.match(text({ burial: burial("غداً", "الأحد") }, SAT), /الدفن غداً الأحد/u);
+    assert.match(text({ burial: burial("غداً", "الأحد") }, SUN), /الدفن اليوم الأحد/u);
+    assert.match(text({ burial: burial("اليوم", "الأحد") }, MON), /الدفن أمس الأحد/u);
+    // اسم اليوم وحده: اليوم أو القادم
+    assert.match(text({ burial: burial("", "الأحد") }, SUN), /الدفن اليوم الأحد/u);
+    assert.match(text({ burial: burial("", "الثلاثاء") }, SUN), /الدفن يوم الثلاثاء/u);
+    assert.match(text({ burial: burial("الإثنين", "") }, SUN), /الدفن غداً الاثنين/u);
+    // كلمة نسبية بلا اسم يوم تبقى كما هي، وكذلك النص الحر
+    assert.match(text({ burial: burial("غداً", "") }, SUN), /الدفن غداً بعد صلاة الظهر/u);
+    assert.match(text({ burial: burial("فجر الجمعة القادمة", "") }, SUN), /الدفن فجر الجمعة القادمة/u);
   }],
   ["16 عزاء رمضاني بجدول: يوم بعد العشاء ويومان بعد العصر", () => {
     const result = text({

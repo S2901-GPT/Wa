@@ -130,12 +130,38 @@ export function noRelativesPhrase(people: Array<Pick<DeceasedPerson, "gender">>)
   return people.every((person) => isFemale(person.gender)) ? "ليس لديها أقارب" : "ليس لديه أقارب";
 }
 
-const WEEKDAYS = ["السبت", "الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة"];
-const RELATIVE_DAYS = ["اليوم", "غداً", "غدا", "الليلة", "أمس", "امس"];
 
 const WEEKDAYS_BY_INDEX = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
-const MONTH_NAMES = ["يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"];
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})(?:\s+(.*))?$/u;
+/** كتابات أخرى لأسماء الأيام كما تصل في الرسائل. */
+const WEEKDAY_ALIASES: Record<string, string> = { "الإثنين": "الاثنين", "الاحد": "الأحد", "الاربعاء": "الأربعاء", "الثلاثا": "الثلاثاء" };
+/** كلمات اليوم النسبية وبُعدها عن يوم كتابتها. */
+const RELATIVE_OFFSETS: Record<string, number> = { "اليوم": 0, "الليلة": 0, "غداً": 1, "غدا": 1, "بكرة": 1, "بكره": 1, "بعد غد": 2, "أمس": -1, "امس": -1 };
+
+function weekdayName(value: string): string {
+  const name = WEEKDAY_ALIASES[value] ?? value;
+  return WEEKDAYS_BY_INDEX.includes(name) ? name : "";
+}
+
+/** «اليوم الأحد» / «غداً الأحد» / «أمس الأحد» / «يوم الأحد»: اسم اليوم دون تاريخ. */
+function weekdayPhrase(diff: number, weekday: string, tonight = false): string {
+  if (diff === 0) return `${tonight ? "الليلة" : "اليوم"} ${weekday}`;
+  if (diff === 1) return `غداً ${weekday}`;
+  if (diff === -1) return `أمس ${weekday}`;
+  return `يوم ${weekday}`;
+}
+
+/**
+ * بُعد يوم الأسبوع المذكور عن يوم العرض. مع كلمة نسبية من الرسالة («غداً الأحد» كُتبت ليلة السبت) يُختار الأحد
+ * الأقرب إلى ما قصدته الكلمة، فإن نُشر الإعلان صباح الأحد صار «اليوم الأحد». بلا كلمة نسبية: اليوم أو القادم.
+ */
+function weekdayDiff(weekday: string, relative: string | undefined, now: Date): number {
+  const forward = (WEEKDAYS_BY_INDEX.indexOf(weekday) - now.getDay() + 7) % 7;
+  if (relative === undefined) return forward;
+  const offset = RELATIVE_OFFSETS[relative] ?? 0;
+  const backward = forward - 7;
+  return Math.abs(forward - offset) <= Math.abs(backward - offset) ? forward : backward;
+}
 
 /**
  * تاريخ من منتقي التاريخ («2026-10-02») بصيغة الإعلان نسبةً إلى يوم النشر:
@@ -149,26 +175,25 @@ export function formatIsoDay(value: string | undefined, now: Date = new Date()):
   if (Number.isNaN(date.getTime())) return null;
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const diff = Math.round((date.getTime() - today.getTime()) / 86_400_000);
-  const weekday = WEEKDAYS_BY_INDEX[date.getDay()];
-  const text = diff === 0 ? `اليوم ${weekday}`
-    : diff === 1 ? `غداً ${weekday}`
-    : diff === -1 ? `أمس ${weekday}`
-    : `يوم ${weekday} ${date.getDate()} ${MONTH_NAMES[date.getMonth()]}`;
+  // التاريخ يحدد اليوم فقط ولا يُكتب: «اليوم الأحد»، «غداً الأحد»، «يوم الأحد».
+  const text = weekdayPhrase(diff, WEEKDAYS_BY_INDEX[date.getDay()]);
   return rest ? `${text} ${clean(rest)}` : text;
 }
 
 /** «اليوم السبت بعد صلاة العصر»، «يوم الخميس»، دون «يوم اليوم». */
-export function dayTimePhrase(day?: string, weekday?: string, time?: string, now?: Date): string {
+export function dayTimePhrase(day?: string, weekday?: string, time?: string, now: Date = new Date()): string {
   const dayText = clean(day);
-  const weekdayText = clean(weekday);
   const timeText = clean(time);
+  const relative = dayText in RELATIVE_OFFSETS ? dayText : undefined;
+  // اسم اليوم من حقله، أو من حقل اليوم نفسه («الأحد»)
+  const named = weekdayName(clean(weekday)) || weekdayName(dayText);
   let when = "";
   const isoDay = formatIsoDay(dayText, now);
   if (isoDay) when = isoDay;
-  else if (dayText && weekdayText && RELATIVE_DAYS.includes(dayText)) when = `${dayText} ${weekdayText}`;
-  else if (dayText && WEEKDAYS.includes(dayText)) when = `يوم ${dayText}`;
+  // «اليوم / غداً» تُحسب من اسم اليوم لحظة النسخ أو إنشاء الصورة، لا لحظة كتابة الرسالة
+  else if (named && (!dayText || relative || weekdayName(dayText))) when = weekdayPhrase(weekdayDiff(named, relative, now), named, relative === "الليلة");
   else if (dayText) when = dayText;
-  else if (weekdayText) when = `يوم ${weekdayText}`;
+  else if (clean(weekday)) when = `يوم ${clean(weekday)}`;
   return [when, timeText].filter(Boolean).join(" ");
 }
 
