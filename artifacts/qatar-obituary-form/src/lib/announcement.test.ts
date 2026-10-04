@@ -280,7 +280,9 @@ const cases: Array<[string, () => void]> = [
       phoneAudience: "all",
       condolencePhoneContacts: [{ name: "والدها", phone: "55555555" }],
     });
-    includesInOrder(result, ["انتقلت إلى رحمة الله تعالى الرضيعة / ريم خالد", "3 أشهر", "العزاء عن طريق هاتف والدها: 55555555", "شفيعاً لوالديها يارب"]);
+    // لا تُنشر أرقام الهواتف ولا أسماء أصحابها، حتى لو حملها طلب قديم
+    includesInOrder(result, ["انتقلت إلى رحمة الله تعالى الرضيعة / ريم خالد", "3 أشهر", "العزاء عبر الهاتف", "شفيعاً لوالديها يارب"]);
+    assert.doesNotMatch(result, /55555555|والدها:/u);
     assert.doesNotMatch(result, /غفر لها/u, "لا يُستعمل دعاء البالغين للرضيعة");
   }],
   ["18 موقعان لعزاء النساء ومجلس للرجال", () => {
@@ -355,13 +357,15 @@ const cases: Array<[string, () => void]> = [
   }],
   ["«لا يوجد عزاء / والنساء عبر الهاتف»", () => {
     const result = text({ condolenceOptions: ["phone"], phoneAudience: "women", condolencePhoneContacts: [{ name: "أم خالد", phone: "5000" }] });
-    includesInOrder(result, ["لا يوجد عزاء للرجال", "وعزاء النساء عن طريق هاتف أم خالد: 5000"]);
+    includesInOrder(result, ["لا يوجد عزاء للرجال", "وعزاء النساء عبر الهاتف"]);
+    assert.doesNotMatch(result, /5000|أم خالد/u);
   }],
   ["إلغاء عزاء لاحق بقرار رسمي مع الاكتفاء بالهاتف", () => {
     const result = text({
       messageType: "condolence_cancellation",
       deceasedPeople: [{ title: "الوالد", fullName: "محمد علي", gender: "man" }],
       cancellation: { audience: "men", from: "لليوم الثالث", reason: "وفقاً لقرار وزارة الداخلية", phoneOnly: true },
+      condolencePhoneContacts: [{ name: "ابنه", phone: "55123456" }],
     });
     assert.equal(result, "وفقاً لقرار وزارة الداخلية، تقرر إلغاء عزاء الرجال لليوم الثالث في عزاء الوالد / محمد علي رحمه الله\nويُكتفى بتلقي العزاء عبر الهاتف");
   }],

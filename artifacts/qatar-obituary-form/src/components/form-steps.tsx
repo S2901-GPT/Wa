@@ -117,7 +117,7 @@ const CONDOLENCE_TYPES = [
   { 
     id: "phone_only", 
     title: "هاتف فقط", 
-    desc: "التعازي عبر الاتصال الهاتفي ورسائل WhatsApp" 
+    desc: "يُكتب «العزاء عبر الهاتف» دون نشر أي أرقام" 
   },
   { 
     id: "cemetery_only", 
@@ -125,16 +125,14 @@ const CONDOLENCE_TYPES = [
     desc: "«عزاء الرجال في المقبرة فقط» اتباعاً للسنة أو تنفيذاً للوصية" 
   },
   { 
-    id: "tbd", 
-    title: "سيُحدَّد لاحقاً", 
-    desc: "يُعلن مقر العزاء في رسالة لاحقة" 
-  },
-  { 
     id: "none", 
     title: "لا يوجد عزاء", 
     desc: "يُكتب «لا يوجد عزاء» صراحة في الإعلان" 
   },
 ] as const;
+
+/** «سيُحدَّد لاحقاً» أُلغي من النموذج، ويظهر فقط عند تعديل طلب قديم اختاره حتى لا يضيع. */
+const LEGACY_TBD_TYPE = { id: "tbd", title: "سيُحدَّد لاحقاً", desc: "خيار قديم: يُعلن مقر العزاء في رسالة لاحقة" } as const;
 
 const TIME_WINDOWS = [
   { value: "evening", label: "الفترة المسائية (من بعد صلاة العصر حتى 9 مساءً)" },
@@ -1191,7 +1189,7 @@ export function CondolencesStep() {
         name="condolences.type"
         render={({ field }) => (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 w-full max-w-full box-border">
-            {CONDOLENCE_TYPES.map((t) => {
+            {[...CONDOLENCE_TYPES, ...(field.value === "tbd" ? [LEGACY_TBD_TYPE] : [])].map((t) => {
               const isSelected = (field.value || "full") === t.id;
               return (
                 <button
@@ -1217,21 +1215,16 @@ export function CondolencesStep() {
       />
 
       {/* تنبيه عند اختيار لا يوجد عزاء أو المقبرة فقط */}
-      {(condType === "none" || condType === "cemetery_only" || condType === "tbd") && (
+      {(condType === "none" || condType === "cemetery_only" || condType === "tbd" || condType === "phone_only") && (
         <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/10 p-3 sm:p-4 text-amber-800 dark:text-amber-300 text-xs sm:text-sm flex items-center gap-2.5 w-full box-border">
           <AlertCircle className="w-5 h-5 shrink-0" />
           <div>
             <p className="font-semibold">
-              {condType === "none" ? "يُكتب «لا يوجد عزاء»" : condType === "tbd" ? "يُكتب «العزاء: سيُحدَّد لاحقاً»" : "يُكتب «عزاء الرجال في المقبرة فقط»"}
+              {condType === "none" ? "يُكتب «لا يوجد عزاء»" : condType === "tbd" ? "يُكتب «العزاء: سيُحدَّد لاحقاً»" : condType === "phone_only" ? "يُكتب «العزاء عبر الهاتف» ولا تُنشر أي أرقام" : "يُكتب «عزاء الرجال في المقبرة فقط»"}
             </p>
             <p className="text-[11px] opacity-90 mt-0.5">يمكن إضافة السبب من «خيارات إضافية» أسفل الصفحة (مثل: اتباعاً للسنة، أو تنفيذاً لوصية المتوفى).</p>
           </div>
         </Card>
-      )}
-
-      {/* 2. خانة أرقام الهواتف: مخفية بالكامل ولا تظهر إلا إذا تم تحديد "هاتف فقط" */}
-      {condType === "phone_only" && (
-        <SmartPhonesSection isPhoneOnly={true} />
       )}
 
       {/* مقرات العزاء المادية (تظهر فقط عند عزاء رجال أو نساء) */}
@@ -1259,20 +1252,15 @@ export function CondolencesStep() {
         </div>
       )}
 
-      {/* سبب العزاء، أرقام الهاتف مع المقرات، والمواقع الإضافية (مطوية) */}
+      {/* سبب العزاء والمواقع الإضافية (مطوية). لا تُنشر أرقام هواتف (قرار جديد)، فلا خانات لها. */}
       <MoreOptions
-        hint="سبب العزاء، أرقام الهاتف، مواقع إضافية"
+        hint="سبب العزاء، مواقع إضافية"
         paths={[
           "condolences.cancellationOrRestrictionReason",
-          "condolences.withPhones",
           "condolences.extraVenues",
-          ...(condType === "phone_only" ? [] : ["condolences.phones"]),
         ]}
       >
-        <CondolenceExtras type={condType} />
-        {condType !== "phone_only" && form.watch("condolences.withPhones") && (
-          <SmartPhonesSection isPhoneOnly={false} />
-        )}
+        <CondolenceExtras />
         {(condType === "full" || condType === "men_only" || condType === "women_only") && (
           <ExtraVenuesSection
             audiences={condType === "full" ? ["men", "women"] : condType === "men_only" ? ["men"] : ["women"]}
@@ -1547,151 +1535,6 @@ function CondolenceVenueCard({ audience, title }: { audience: "men" | "women"; t
   );
 }
 
-// ميزة استدعاء الأقارب التلقائي وهواتف التعزية
-function SmartPhonesSection({ isPhoneOnly }: { isPhoneOnly: boolean }) {
-  const form = useFormContext<ObituaryFormValues>();
-  const phones = form.watch("condolences.phones") || [];
-  const relativesGroups = form.watch("relatives") || [];
-  const [newManualPhone, setNewManualPhone] = useState("");
-
-  const aliveRelatives = useMemo(() => {
-    const list: { name: string; relation: string; key: string }[] = [];
-    relativesGroups.forEach((group) => {
-      const relationName = group.relationType || "قريب";
-      (group.persons || []).forEach((person) => {
-        if (person.name && !person.isDeceased) {
-          list.push({
-            name: person.name,
-            relation: relationName,
-            key: `${relationName}_${person.name}`,
-          });
-        }
-      });
-    });
-    return list;
-  }, [relativesGroups]);
-
-  const [relativePhoneMap, setRelativePhoneMap] = useState<Record<string, string>>({});
-
-  const handleRelativePhoneChange = (key: string, name: string, relation: string, phone: string) => {
-    const updatedMap = { ...relativePhoneMap, [key]: phone };
-    setRelativePhoneMap(updatedMap);
-
-    const activeRelativePhones = Object.entries(updatedMap)
-      .filter(([_, num]) => num && num.trim().length > 0)
-      .map(([k, num]) => {
-        const item = aliveRelatives.find(r => r.key === k);
-        return item ? `${item.name} (${item.relation}): ${num.trim()}` : num.trim();
-      });
-
-    const manualOnly = phones.filter(p => !aliveRelatives.some(r => p.startsWith(r.name)));
-    form.setValue("condolences.phones", [...activeRelativePhones, ...manualOnly], { shouldDirty: true });
-  };
-
-  const handleAddManualPhone = () => {
-    if (!newManualPhone.trim()) return;
-    const current = form.getValues("condolences.phones") || [];
-    form.setValue("condolences.phones", [...current, newManualPhone.trim()], { shouldDirty: true });
-    setNewManualPhone("");
-  };
-
-  const handleRemovePhone = (index: number) => {
-    const current = form.getValues("condolences.phones") || [];
-    form.setValue("condolences.phones", current.filter((_, i) => i !== index), { shouldDirty: true });
-  };
-
-  return (
-    <Card className="border bg-muted/10 p-3 sm:p-4 space-y-3.5 w-full box-border overflow-hidden">
-      <div className="flex items-center justify-between border-b pb-2">
-        <div>
-          <h4 className="text-xs sm:text-sm font-semibold text-foreground flex items-center gap-1.5">
-            <Phone className="w-4 h-4 text-primary shrink-0" />
-            أرقام هواتف التعزية
-          </h4>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            {isPhoneOnly 
-              ? "تم استدعاء الأقارب المسجلين لتسهيل إدخال أرقامهم. إدخال الرقم اختياري لكل قريب." 
-              : "أدخل أرقام الهواتف المخصصة لاستقبال اتصالات ورسائل التعزية (اختياري)."}
-          </p>
-        </div>
-      </div>
-
-      {isPhoneOnly && aliveRelatives.length > 0 && (
-        <div className="space-y-2 w-full box-border">
-          <div className="text-xs font-semibold text-foreground flex items-center gap-1">
-            <UserCheck className="w-3.5 h-3.5 text-primary shrink-0" />
-            أقارب الفقيد المسجلون (إدخال الرقم اختياري):
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full box-border">
-            {aliveRelatives.map((rel) => (
-              <div key={rel.key} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5 p-2 bg-background rounded-md border text-xs shadow-2xs w-full min-w-0 box-border">
-                <div className="flex-1 truncate">
-                  <span className="font-semibold text-foreground">{rel.name}</span>
-                  <span className="text-muted-foreground text-[11px] mr-1">({rel.relation})</span>
-                </div>
-                <Input
-                  placeholder="رقم الهاتف"
-                  dir="ltr"
-                  className="h-8 w-full sm:w-32 text-xs text-left bg-muted/20"
-                  value={relativePhoneMap[rel.key] || ""}
-                  onChange={(e) => handleRelativePhoneChange(rel.key, rel.name, rel.relation, e.target.value)}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-1.5 pt-1 w-full box-border">
-        {isPhoneOnly && aliveRelatives.length > 0 && (
-          <div className="text-xs text-muted-foreground font-medium">أو أضف رقماً إضافياً مباشرة:</div>
-        )}
-        <div className="flex gap-1.5 w-full box-border">
-          <Input
-            placeholder="مثال: ناصر: 55123456 أو 66987654"
-            dir="ltr"
-            value={newManualPhone}
-            onChange={(e) => setNewManualPhone(e.target.value)}
-            className="h-9 bg-background text-xs sm:text-sm text-left flex-1 min-w-0"
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                handleAddManualPhone();
-              }
-            }}
-          />
-          <Button
-            type="button"
-            size="sm"
-            className="h-9 shrink-0 text-xs px-2.5"
-            onClick={handleAddManualPhone}
-            disabled={!newManualPhone.trim()}
-          >
-            <Plus className="w-3.5 h-3.5 ml-1" />
-            إضافة
-          </Button>
-        </div>
-      </div>
-
-      {phones.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 pt-1 w-full box-border">
-          {phones.map((phone, idx) => (
-            <Badge key={idx} variant="outline" className="h-7 px-2 text-xs bg-background gap-1.5 font-normal">
-              <span dir="ltr">{phone}</span>
-              <button 
-                type="button" 
-                onClick={() => handleRemovePhone(idx)} 
-                className="hover:text-destructive text-muted-foreground font-bold"
-              >
-                ×
-              </button>
-            </Badge>
-          ))}
-        </div>
-      )}
-    </Card>
-  );
-}
 
 // ==========================================
 // دالة مساعدة لتحديد الكلمة المناسبة للتاريخ مقارنةً باليوم
@@ -2089,19 +1932,6 @@ export function ReviewStep() {
               </div>
             )}
 
-            {/* هواتف التعزية (تظهر فقط عند هاتف فقط) */}
-            {condolences?.type === "phone_only" && condolences?.phones && condolences.phones.length > 0 && (
-              <div className="p-2.5 rounded-lg bg-muted/30 border space-y-1">
-                <span className="text-muted-foreground font-semibold">هواتف التعزية:</span>{" "}
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {condolences.phones.map((phone, idx) => (
-                    <Badge key={idx} variant="outline" className="font-mono text-xs" dir="ltr">
-                      {phone}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </Card>
       </div>

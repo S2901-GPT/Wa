@@ -360,22 +360,6 @@ export default function AdminRequestDetailsPage() {
             )}
           </section>
 
-          {/* أرقام التعزية عبر الهاتف */}
-          {req.condolenceOptions.includes("phone") && req.condolencePhoneContacts.length > 0 && (
-            <section>
-              <h4 className="text-lg font-bold text-primary mb-4 border-b pb-2">التعزية عبر الهاتف</h4>
-              <div className="grid sm:grid-cols-3 gap-4">
-                {req.condolencePhoneContacts.map((c, i) => (
-                  <div key={i} className="bg-muted/5 p-3 rounded-md border flex justify-between items-center">
-                    <div>
-                      {c.name && <p className="font-semibold text-sm">{c.name}</p>}
-                    </div>
-                    {c.phone && <p className="font-mono text-sm" dir="ltr">{c.phone}</p>}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
 
           {/* ملاحظات */}
           {req.notes && (

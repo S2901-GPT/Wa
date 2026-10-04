@@ -422,11 +422,11 @@ export function buildNaskhSections(content: NormalizedContent): NaskhSection[] {
     if (rows.length) sections.push({ id: audience, title: venue.title, rows, qrKey: venue.qrUrl ? audience : undefined });
   }
 
-  if (content.phoneContacts.length) {
+  if (content.phoneLines.length) {
     sections.push({
       id: "phone",
-      title: "للتعزية عبر الهاتف",
-      rows: [{ style: "heading", text: "للتعزية عبر الهاتف" }, ...content.phoneContacts.map((contact) => ({ style: "body" as const, text: contact.formatted }))],
+      title: "التعزية عبر الهاتف",
+      rows: content.phoneLines.map((line) => ({ style: "body" as const, text: line })),
     });
   }
 

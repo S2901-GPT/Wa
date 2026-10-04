@@ -165,7 +165,9 @@ const cases: Array<[string, () => void]> = [
     const prayer = sections.find((section) => section.id === "prayer")!;
     assert.deepEqual(prayer.rows[0], { style: "body", label: "صلاة الجنازة", text: "اليوم بعد صلاة العصر في مسجد حمد بن علي" });
     assert.equal(prayer.qrKey, "prayer");
-    assert.equal(sections.find((section) => section.id === "phone")!.rows[0].text, "للتعزية عبر الهاتف");
+    const phone = sections.find((section) => section.id === "phone")!;
+    assert.equal(phone.rows[0].text, "العزاء عبر الهاتف");
+    assert.ok(!JSON.stringify(phone.rows).includes("55555555"), "لا تُنشر أرقام الهواتف في الصورة");
   }],
   ["a shared start is its own row before the venues, and «no relatives» fills the relatives slot", () => {
     const sections = buildNaskhSections(normalizeObituaryPresentation(makeRequest({

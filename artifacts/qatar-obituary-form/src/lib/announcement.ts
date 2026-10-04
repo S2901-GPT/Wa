@@ -8,7 +8,6 @@
  */
 import type {
   CondolenceCard,
-  CondolencePhoneContact,
   DeceasedPerson,
   LinkedPerson,
   ObituaryRequestInput,
@@ -1017,17 +1016,12 @@ function condolenceSections(request: ObituaryRequestInput, warnings: string[], n
   if (options.includes("phone")) {
     const audience = request.phoneAudience ?? "all";
     const label = audience === "men" ? "عزاء الرجال" : audience === "women" ? "عزاء النساء" : "العزاء";
-    const contacts = (request.condolencePhoneContacts ?? []).filter((contact) => clean(contact.name) || clean(contact.phone));
     const phoneLines: string[] = [];
     if (audience === "women" && !options.includes("men") && !options.includes("men_cemetery")) phoneLines.push("لا يوجد عزاء للرجال");
     if (audience === "men" && !options.includes("women")) phoneLines.push("لا يوجد عزاء للنساء");
-    const contactText = (contact: CondolencePhoneContact) => [clean(contact.name), clean(contact.phone)].filter(Boolean).join(": ");
     const prefix = phoneLines.length ? "و" : "";
-    if (contacts.length === 1 && clean(contacts[0].name)) {
-      phoneLines.push(`${prefix}${label} عن طريق هاتف ${contactText(contacts[0])}`);
-    } else {
-      phoneLines.push(`${prefix}${label} عبر الهاتف`, ...contacts.map(contactText));
-    }
+    // لا تُنشر أرقام الهواتف ولا أسماء أصحابها (قرار جديد)، حتى لو حملها طلب قديم.
+    phoneLines.push(`${prefix}${label} عبر الهاتف`);
     sections.push({ id: "phone", label: "التعزية عبر الهاتف", lines: phoneLines });
   }
   if (options.includes("tbd")) other.push("العزاء: سيُحدَّد لاحقاً");
@@ -1050,13 +1044,8 @@ function cancellationLines(request: ObituaryRequestInput, shortIdentity: string)
   const lines = [
     `${reason ? `${reason}، ` : ""}تقرر إلغاء ${sentence([audience, cancellation.from])} في عزاء ${sentence([shortIdentity, mercyForDeceased(people)])}`,
   ];
-  if (cancellation.phoneOnly) {
-    lines.push("ويُكتفى بتلقي العزاء عبر الهاتف");
-    for (const contact of request.condolencePhoneContacts ?? []) {
-      const text = [clean(contact.name), clean(contact.phone)].filter(Boolean).join(": ");
-      if (text) lines.push(text);
-    }
-  }
+  // دون أرقام هواتف (قرار جديد)
+  if (cancellation.phoneOnly) lines.push("ويُكتفى بتلقي العزاء عبر الهاتف");
   return lines;
 }
 

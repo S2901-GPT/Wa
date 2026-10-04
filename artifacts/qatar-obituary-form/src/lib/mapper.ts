@@ -236,15 +236,6 @@ function cardToApi(details: FormDetails | undefined, audience: "men" | "women", 
   };
 }
 
-/** «ناصر (الأبناء): 5555» → { name: «ناصر», phone: «5555» }. */
-function parsePhone(entry: string): { name?: string; phone?: string } {
-  const text = clean(entry);
-  const separator = text.lastIndexOf(":");
-  if (separator < 0) return /\d/u.test(text) ? { phone: text } : { name: text };
-  const name = clean(text.slice(0, separator)).replace(/\s*\([^)]*\)$/u, "");
-  const phone = clean(text.slice(separator + 1));
-  return { ...(name ? { name } : {}), ...(phone ? { phone } : {}) };
-}
 
 // ───────────────────────── النموذج ← الـ API ─────────────────────────
 
@@ -273,8 +264,8 @@ export function mapFormToPayload(data: ObituaryFormValues): ObituaryRequestInput
   if (type === "full" || type === "women_only") options.push("women");
   if (type === "cemetery_only") options.push("men_cemetery");
   if (type === "tbd") options.push("tbd");
-  const phones = (cond?.phones ?? []).map(parsePhone).filter((contact) => contact.name || contact.phone);
-  if (type === "phone_only" || (cond?.withPhones && phones.length)) options.push("phone");
+  // «هاتف فقط» دون أرقام: لا يُرسل أي رقم هاتف (قرار جديد بعدم نشر الأرقام).
+  if (type === "phone_only") options.push("phone");
 
   const start = [clean(data.condolenceStartDate), clean(data.condolenceStartTime)].filter(Boolean).join(" ");
   const cards = [
@@ -318,10 +309,10 @@ export function mapFormToPayload(data: ObituaryFormValues): ObituaryRequestInput
       ...(optional(burial?.notes) ? { note: clean(burial?.notes) } : {}),
     },
     condolenceOptions: options,
-    ...(options.includes("phone") ? { phoneAudience: type === "phone_only" ? "all" : cond?.phoneAudience ?? "all" } : {}),
+    ...(options.includes("phone") ? { phoneAudience: "all" as const } : {}),
     ...(optional(cond?.cancellationOrRestrictionReason) ? { condolenceNote: clean(cond?.cancellationOrRestrictionReason) } : {}),
     condolences: cards,
-    condolencePhoneContacts: options.includes("phone") ? phones : [],
+    condolencePhoneContacts: [],
     ...(optional(data.notes) ? { notes: data.notes!.trim() } : {}),
   };
 }
@@ -488,11 +479,10 @@ export function mapPayloadToForm(request: ObituaryRequest): ObituaryFormValues {
         ...menCards.slice(1).map((card) => ({ ...cardToForm(card), audience: "men" as const })),
         ...womenCards.slice(1).map((card) => ({ ...cardToForm(card), audience: "women" as const })),
       ],
-      phones: (request.condolencePhoneContacts ?? [])
-        .map((contact) => [clean(contact.name), clean(contact.phone)].filter(Boolean).join(": "))
-        .filter(Boolean),
-      withPhones: options.includes("phone") && type !== "phone_only",
-      phoneAudience: request.phoneAudience ?? "all",
+      // أرقام طلب قديم لا تُحمَّل للتعديل، فتُحذف عند حفظه.
+      phones: [],
+      withPhones: false,
+      phoneAudience: "all",
       cancellationOrRestrictionReason: request.condolenceNote ?? "",
     },
     condolenceStartDate: startMatch ? startMatch[1] : "",
