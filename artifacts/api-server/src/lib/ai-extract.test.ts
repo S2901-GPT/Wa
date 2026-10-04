@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import express from "express";
 import { ADMIN_COOKIE, createSessionToken } from "./admin-auth";
-import { AiError, DEFAULT_MODEL, FALLBACK_MODEL, HOLLOW_WARNING, aiConfig, aiEnvHints, buildGeminiBody, extractRequest, isHollow, readJson, splitBurialNote, stripCommentary, toRequest } from "./ai-extract";
+import { AiError, DEFAULT_MODEL, FALLBACK_MODEL, HOLLOW_WARNING, aiConfig, aiEnvHints, buildGeminiBody, burialFromSource, extractRequest, isHollow, readJson, splitBurialNote, stripCommentary, toRequest } from "./ai-extract";
 import aiRouter from "../routes/ai";
 
 /** رد نموذجي كما يُرجعه Gemini لإعلان وهمي (بقيم فارغة وnull كما يحدث فعلاً). */
@@ -30,6 +30,23 @@ const AI_OUTPUT = {
   notes: "",
   warnings: ["لم يُذكر عمر المتوفى."],
 };
+
+/** رسالة واتساب كما وصلت للمسؤول (أُرسلت صورتها مع بلاغ «لا يتعرف على الدفن»). */
+const WHATSAPP_TEXT = `توفي/ عبدالله حمد هادي دخيل الودعاني الدوسري
+٣٥ عام
+
+اخ كل من
+هادي /وزارة الدفاع
+ومحمد /لخويا
+وفهد / لخويا
+
+الدفن اليوم الاحد بعد صلاة العصر في مقبرة مسيمير
+
+عزاء الرجال في معيذر الجنوبي بجانب مدرسة خالد بن الوليد الاعدادية
+https://maps.google.com/?q=25.248951,51.394585
+
+عزاء النساء في منزل والده في معيذر الجنوبي
+https://maps.google.com/?q=25.249846,51.391582`;
 
 const reply = (body: unknown, status = 200) =>
   new Response(typeof body === "string" ? body : JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -112,6 +129,33 @@ const cases: Array<[string, () => void | Promise<void>]> = [
     assert.equal(request.burial.weekday, "الاثنين");
     assert.equal(request.burial.note, undefined);
   }],
+  ["burialFromSource: موعد الدفن ومقبرته من جملة الدفن في الرسالة، بالعامية وبلا همزات", () => {
+    assert.deepEqual(burialFromSource(WHATSAPP_TEXT), { cemetery: "مقبرة مسيمير", time: "بعد صلاة العصر", weekday: "الأحد", day: "اليوم" });
+    assert.deepEqual(burialFromSource("انتقل الى رحمة الله فلان والدفن بكره عقب صلاة الظهر في مقبرة ابو هامور والعزاء للرجال في مجلسهم"), { cemetery: "مقبرة أبو هامور", time: "بعد صلاة الظهر", day: "غداً" });
+    assert.deepEqual(burialFromSource("توفيت فلانة وسيتم دفنها الساعة 9:30 مساءً في مقبرة الوكرة الجنوبية اليوم الاثنين"), { cemetery: "مقبرة الوكرة الجنوبية", time: "الساعة 9:30 مساءً", weekday: "الاثنين", day: "اليوم" });
+    assert.deepEqual(burialFromSource("توفي فلان، يُدفن غدا الخميس بعد صلاة المغرب بمقبرة الخور"), { cemetery: "مقبرة الخور", time: "بعد صلاة المغرب", weekday: "الخميس", day: "غداً" });
+    // دفن تمّ، أو تأجيل، أو «الدفن» داخل جملة العزاء: لا شيء
+    assert.deepEqual(burialFromSource("توفي فلان وتم الدفن في مقبرة مسيمير والعزاء في المجلس"), {});
+    assert.deepEqual(burialFromSource("تأجيل الدفن حتى إشعار آخر"), {});
+    assert.deepEqual(burialFromSource("توفي فلان والعزاء بعد الدفن مباشرة في المقبرة"), {});
+  }],
+  ["toRequest: دفن فارغ من النموذج يُكمَّل من الرسالة دون المساس بما أرجعه، وتسقط تنبيهات نقصه", () => {
+    const empty = { ...AI_OUTPUT, burial: { status: "upcoming", outsideQatar: false }, warnings: ["لم يُذكر موعد الدفن.", "لم يُذكر عمر المتوفى."] };
+    const { request, warnings } = toRequest(empty, WHATSAPP_TEXT);
+    assert.deepEqual(
+      [request.burial.day, request.burial.weekday, request.burial.time, request.burial.cemetery],
+      ["اليوم", "الأحد", "بعد صلاة العصر", "مقبرة مسيمير"],
+    );
+    assert.deepEqual(warnings, ["لم يُذكر عمر المتوفى."]);
+    // ما أرجعه النموذج يبقى، ويُكمَّل الناقص فقط
+    const partial = toRequest({ ...AI_OUTPUT, burial: { status: "upcoming", outsideQatar: false, cemetery: "مقبرة الخور" } }, WHATSAPP_TEXT).request.burial;
+    assert.deepEqual([partial.cemetery, partial.time, partial.weekday], ["مقبرة الخور", "بعد صلاة العصر", "الأحد"]);
+    // التأجيل والدفن خارج قطر لا يُكمَّلان
+    const postponed = toRequest({ ...AI_OUTPUT, burial: { status: "postponed", outsideQatar: false } }, WHATSAPP_TEXT).request.burial;
+    assert.equal(postponed.cemetery, undefined);
+    const abroad = toRequest({ ...AI_OUTPUT, burial: { status: "upcoming", outsideQatar: true, outsideLocation: "الرياض" } }, WHATSAPP_TEXT).request.burial;
+    assert.equal(abroad.cemetery, undefined);
+  }],
   ["stripCommentary: تعليقات النموذج تُحذف من حقول النشر وتُنقل إلى الملاحظات", () => {
     const warnings: string[] = [];
     const note = "لم تذكر صلاة جنازة منفصلة عن المقبرة في الإعلان. يرجى مراجعة إدارة المقبرة للتأكيد. تم تحديد الدفن بعد صلاة العشاء. قد يُدفن المتوفى في مقبرة مسيمير إذا تم توفير مكان له هناك. نُقلت الأسماء كما وردت في الإعلان. الله يرحمه ويغفر له. وفيات قطر.";
@@ -172,6 +216,11 @@ const cases: Array<[string, () => void | Promise<void>]> = [
     assert.equal(bodies[1].responseSchema, undefined, "الثانية بدونه");
     assert.equal(result.request.deceasedPeople[0].fullName, "سالم راشد المهندي");
     assert.equal(result.debug, undefined);
+  }],
+  ["extractRequest: النموذج يُرجع الدفن فارغاً → يُكمَّل من نص الرسالة", async () => {
+    const fetchImpl = async () => geminiReply({ ...AI_OUTPUT, burial: { status: "upcoming", outsideQatar: false } });
+    const { request } = await extractRequest(WHATSAPP_TEXT, { apiKey: "k", model: DEFAULT_MODEL, fetchImpl });
+    assert.deepEqual([request.burial.day, request.burial.weekday, request.burial.time, request.burial.cemetery], ["اليوم", "الأحد", "بعد صلاة العصر", "مقبرة مسيمير"]);
   }],
   ["extractRequest: أجوف في المحاولتين → يعود مع تحذير وردّ النموذج مختصراً", async () => {
     const hollow = { deceasedPeople: [{ gender: "man", title: "الوالد" }], relatives: [], prayer: { enabled: false }, burial: { status: "upcoming", outsideQatar: false }, condolences: [], warnings: ["x"] };
