@@ -377,6 +377,16 @@ const cases: Array<[string, () => void]> = [
     assert.match(empty.text, /^الدفن في مقبرة مسيمير$/mu);
     assert.ok(empty.warnings.includes("يوم الدفن غير محدد."));
   }],
+  ["مكان الوفاة «في لندن» لا يُكتب «في في لندن»", () => {
+    const result = text({ deceasedPeople: [{ fullName: "محمد ناصر العطية", gender: "man", deathPlace: "في لندن" }] });
+    assert.match(result, /في لندن/u);
+    assert.doesNotMatch(result, /في في/u);
+  }],
+  ["ما يخص الرجال وحدهم (المقبرة فقط أو الهاتف) قبل عزاء النساء", () => {
+    const women = [{ audience: "women" as const, location: "منزل الفقيدة", area: "الخور" }];
+    includesInOrder(text({ condolenceOptions: ["men_cemetery", "women"], condolences: women }), ["عزاء الرجال في المقبرة فقط", "عزاء النساء في منزل الفقيدة"]);
+    includesInOrder(text({ condolenceOptions: ["phone", "women"], phoneAudience: "men", condolences: women }), ["عزاء الرجال عبر الهاتف", "عزاء النساء في منزل الفقيدة"]);
+  }],
   ["تمييز العدد", () => {
     assert.equal(countNoun(1, { singular: "عام", dual: "عامان", plural: "أعوام", accusative: "عاماً" }), "عام واحد");
     assert.equal(formatAge(2), "عامان");

@@ -539,6 +539,11 @@ export function describeRequestDeceased(request: Pick<ObituaryRequestInput, "dec
   )).join("، ");
 }
 
+/** مكان الوفاة بلا «في» في أوله: الصياغة تضيفها («الوفاة في لندن»)، وقد يصل «في لندن» من الذكاء الاصطناعي أو طلب قديم. */
+function deathPlaceOf(person: { deathPlace?: string }): string {
+  return clean(person.deathPlace).replace(/^(?:في|ب)\s+/u, "");
+}
+
 function personDetailLines(
   person: DeceasedPerson,
   identity: IdentityResult,
@@ -549,7 +554,7 @@ function personDetailLines(
   if (clean(person.spouse?.name) && !identity.consumedSpouse) lines.push(spouseLine(person));
   if (clean(person.father?.name) && !identity.consumedFather) lines.push(fatherLine(person));
   const nationality = clean(person.nationality);
-  const deathPlace = clean(person.deathPlace);
+  const deathPlace = deathPlaceOf(person);
   const placeLine = deathPlace && !options.placeInHeading ? `الوفاة في ${deathPlace}` : "";
   // رأس قالب النسخ (mergePlace): العمر والجنسية ومكان الوفاة في سطر واحد
   const ageLine = [
@@ -644,7 +649,7 @@ function groupRoles(request: ObituaryRequestInput, mode: Mode): RelativeGroup[] 
 
 /** «توفي الوالد / محمد في لندن»: مكان الوفاة يُلحق بسطر الاسم إن كان التعريف بالاسم أو الكنية. */
 function headingPlaceSuffix(person: DeceasedPerson, identity: IdentityResult): string {
-  const deathPlace = clean(person.deathPlace);
+  const deathPlace = deathPlaceOf(person);
   return deathPlace && (identity.mode === "name" || identity.mode === "kunya") ? ` في ${deathPlace}` : "";
 }
 
@@ -1002,9 +1007,14 @@ function condolenceSections(request: ObituaryRequestInput, warnings: string[], n
 
   if (sharedStart && sections.length) sections.unshift({ id: "condolence-start", lines: [`العزاء ${startPhrase(sharedStart, now)}`] });
 
+  // ما يخص الرجال وحدهم (المقبرة فقط، أو الهاتف) يُكتب قبل عزاء النساء كما في بقية الإعلانات
+  const beforeWomen = (section: (typeof sections)[number]) => {
+    const firstWomen = sections.findIndex((item) => item.audience === "women");
+    sections.splice(firstWomen === -1 ? sections.length : firstWomen, 0, section);
+  };
   if (options.includes("men_cemetery")) {
     const hasMenCards = sections.some((section) => section.audience === "men");
-    sections.push({
+    beforeWomen({
       id: hasMenCards ? "men-cemetery" : "men",
       label: "عزاء الرجال",
       lines: [sentence(["عزاء الرجال في المقبرة فقط", note])],
@@ -1022,7 +1032,9 @@ function condolenceSections(request: ObituaryRequestInput, warnings: string[], n
     const prefix = phoneLines.length ? "و" : "";
     // لا تُنشر أرقام الهواتف ولا أسماء أصحابها (قرار جديد)، حتى لو حملها طلب قديم.
     phoneLines.push(`${prefix}${label} عبر الهاتف`);
-    sections.push({ id: "phone", label: "التعزية عبر الهاتف", lines: phoneLines });
+    const phoneSection = { id: "phone", label: "التعزية عبر الهاتف", lines: phoneLines };
+    if (audience === "men") beforeWomen(phoneSection);
+    else sections.push(phoneSection);
   }
   if (options.includes("tbd")) other.push("العزاء: سيُحدَّد لاحقاً");
   if (!options.length) {
@@ -1036,13 +1048,14 @@ function condolenceSections(request: ObituaryRequestInput, warnings: string[], n
 
 // ───────────────────────── تجميع الإعلان ─────────────────────────
 
-function cancellationLines(request: ObituaryRequestInput, shortIdentity: string): string[] {
+/** سطور إلغاء العزاء؛ بلا shortIdentity تُكتب دون «في عزاء فلان» (للصورة، فعنوانها يذكر المتوفى). */
+export function cancellationLines(request: ObituaryRequestInput, shortIdentity: string): string[] {
   const cancellation = request.cancellation ?? {};
   const audience = cancellation.audience === "women" ? "عزاء النساء" : cancellation.audience === "all" ? "العزاء" : "عزاء الرجال";
   const reason = clean(cancellation.reason);
   const people = request.deceasedPeople ?? [];
   const lines = [
-    `${reason ? `${reason}، ` : ""}تقرر إلغاء ${sentence([audience, cancellation.from])} في عزاء ${sentence([shortIdentity, mercyForDeceased(people)])}`,
+    `${reason ? `${reason}، ` : ""}تقرر إلغاء ${sentence([audience, cancellation.from])}${shortIdentity ? ` في عزاء ${sentence([shortIdentity, mercyForDeceased(people)])}` : ""}`,
   ];
   // دون أرقام هواتف (قرار جديد)
   if (cancellation.phoneOnly) lines.push("ويُكتفى بتلقي العزاء عبر الهاتف");

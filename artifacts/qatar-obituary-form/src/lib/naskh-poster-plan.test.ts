@@ -375,6 +375,17 @@ const cases: Array<[string, () => void]> = [
     const footer = withLogo.items.find((item) => item.kind === "band")!;
     assert.ok(lineItems(withLogo).every((item) => item.y + item.h <= footer.y - NASKH_METRICS.bandGap + 0.5));
   }],
+  ["a condolence cancellation poster shows the deceased and the cancellation, without an empty burial", () => {
+    const request = makeRequest({
+      messageType: "condolence_cancellation",
+      relatives: [], condolences: [], condolenceOptions: [],
+      burial: { status: "upcoming", outsideQatar: false },
+      cancellation: { audience: "women", from: "اعتباراً من اليوم", phoneOnly: true },
+    });
+    const sections = buildNaskhSections(normalizeObituaryPresentation(request));
+    assert.deepEqual(sections.map((section) => section.id), ["head", "notes", "closing"]);
+    assert.deepEqual(sections[1].rows.map((row) => row.text), ["تقرر إلغاء عزاء النساء اعتباراً من اليوم", "ويُكتفى بتلقي العزاء عبر الهاتف"]);
+  }],
   ["an edited opening phrase is drawn as text", () => {
     const content = normalizeObituaryPresentation(makeRequest(), { opening: "بسم الله الرحمن الرحيم" });
     const p = planNaskhLayout(content, measure, { ...options, openingIsImage: false });
