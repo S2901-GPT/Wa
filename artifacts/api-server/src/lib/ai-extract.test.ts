@@ -165,6 +165,26 @@ const cases: Array<[string, () => void | Promise<void>]> = [
     // بلا نص مصدر (استدعاء قديم) لا يُحذف شيء
     assert.equal(toRequest({ ...AI_OUTPUT, notes: "العزاء ثلاثة أيام فقط" }).request.notes, "العزاء ثلاثة أيام فقط");
   }],
+  ["toRequest: «تم الدفن» في ملاحظة دفن قادم تُحذف بصمت، وملاحظة أخرى للدفن القادم تُحذف بتنبيه، والدفن المكتمل يحتفظ بوصفه", () => {
+    const upcoming = (note: string) => toRequest({ ...AI_OUTPUT, burial: { status: "upcoming", outsideQatar: false, cemetery: "مقبرة مسيمير", note } }, `${WHATSAPP_TEXT}\nسينقل الجثمان من المستشفى بعد صلاة الظهر`);
+    const bare = upcoming("تم الدفن");
+    assert.equal(bare.request.burial.note, undefined);
+    assert.equal(bare.request.burial.status, "upcoming");
+    assert.ok(!bare.warnings.some((warning) => warning.includes("تم الدفن")), JSON.stringify(bare.warnings));
+    const other = upcoming("سيُنقل الجثمان من المستشفى بعد صلاة الظهر");
+    assert.equal(other.request.burial.note, undefined);
+    assert.ok(other.warnings.some((warning) => warning.startsWith("حُذفت من الإعلان ملاحظة الدفن «سيُنقل الجثمان")), JSON.stringify(other.warnings));
+    // دفن تمّ: «تم الدفن» وحدها تُحذف (الحالة تكفي)، ووصف وارد في الرسالة يبقى
+    const done = (note: string, source: string) => toRequest({ ...AI_OUTPUT, burial: { status: "completed", outsideQatar: false, note } }, source).request.burial;
+    assert.equal(done("وتمت الصلاة والدفن.", "توفي سالم راشد المهندي وتمت الصلاة والدفن.").note, undefined);
+    // المقبرة تذهب إلى حقلها، ويبقى من الملاحظة «تم الدفن» فقط فتُحذف (الإعلان يكتب «تم الدفن في مقبرة الريان» من الحالة والمقبرة)
+    const described = done("تم الدفن في مقبرة الريان", "توفي سالم راشد المهندي وتم الدفن في مقبرة الريان");
+    assert.deepEqual([described.cemetery, described.note], ["مقبرة الريان", undefined]);
+    assert.equal(done("تم الدفن في مكة المكرمة", "توفي سالم راشد المهندي وتم الدفن في مكة المكرمة").note, "تم الدفن في مكة المكرمة");
+    // سبب التأجيل يبقى
+    const postponed = toRequest({ ...AI_OUTPUT, burial: { status: "postponed", outsideQatar: false, note: "لحين وصول الجثمان" } }, "توفي سالم راشد المهندي، وتأجيل الدفن لحين وصول الجثمان").request.burial;
+    assert.equal(postponed.note, "لحين وصول الجثمان");
+  }],
   ["inSource: يقارن الكلمات بعد توحيد الهمزات والتاء المربوطة ونزع «ال» و«و» و«ب»", () => {
     assert.equal(inSource("تأجيل الدفن لحين وصول الجثمان", "تاجيل الدفن لحين وصول الجثمان من الخارج"), true);
     assert.equal(inSource("وبالعزاء في المجلس", "العزاء بمجلس العائلة في المجلس"), true);

@@ -226,8 +226,8 @@ export const SYSTEM_PROMPT = `أنت مساعد يحوّل نص إعلان وف�
 - burial: status = upcoming للدفن القادم، completed إن قال «تم الدفن»، postponed إن قال «تأجيل الدفن». day مثل «اليوم» أو «غداً»،
   weekday اسم اليوم، time مثل «بعد صلاة العصر» أو «الساعة 9:30 مساءً»، cemetery مثل «مقبرة مسيمير». الدفن خارج قطر: outsideQatar=true مع outsideLocation.
   اكتب weekday كلما ورد اسم اليوم ولو مع «اليوم» أو «غداً»، فالتطبيق يحسب «اليوم / غداً» منه لحظة النشر.
-  note فقط لسبب التأجيل أو لوصف دفن تمّ، منقولاً من النص نفسه؛ لا تضع فيه الموعد ولا المقبرة، بل وزّعها على day وweekday وtime وcemetery.
-  إن لم يرد في النص سبب تأجيل ولا وصف دفن تمّ فاترك note فارغاً.
+  note: اتركه فارغاً للدفن القادم (upcoming) دائماً؛ الموعد والمقبرة في حقولهما. يُملأ فقط عند postponed بسبب التأجيل كما ورد،
+  أو عند completed بما ورد في النص عن الدفن الذي تم. لا تكتب «تم الدفن» من عندك.
 - prayer: enabled=true فقط إن ذُكر مسجد أو جامع للصلاة منفصلاً عن المقبرة، مع موعده ومكانه.
 - condolences: بطاقة لكل مقر. عزاء الرجال audience=men وعزاء النساء audience=women، وإن تعددت مقرات النساء فبطاقة لكل مقر.
   location المقر كما ورد، area المنطقة، houseNumber رقم المنزل، start بداية العزاء (اليوم، غداً، أو اسم اليوم)،
@@ -376,6 +376,9 @@ function burialParts(take: (re: RegExp) => string) {
   const day = canonical(take(RELATIVE_DAY_RE));
   return { cemetery, time, weekday, day };
 }
+
+/** ملاحظة لا تقول شيئاً سوى أن الدفن تم («تم الدفن»، «وتمت الصلاة والدفن»)؛ الحالة completed تكفي لكتابتها. */
+const BARE_DONE_RE = /^و?(?:تم(?:ت)?\s+(?:الصلاة\s+و)?(?:الدفن|دفنه|دفنها)|دُفن|دُفنت)\s*[.،]*$/u;
 
 /** بداية جملة الدفن في الرسالة («الدفن»، «والدفن»، «يُدفن»، «سيوارى الثرى»…)، لا «تم الدفن» ولا «تأجيل الدفن». */
 const BURIAL_START_RE = /(?<=^|\s)(?<!(?:تم|وتم|تأجيل|تاجيل)\s)(?:و?الدفن|و?سيتم\s+(?:الدفن|دفن\S*)|و?(?:سي|ست|ي|ت)ُ?(?:دفن|وارى(?:\s+الثرى)?))(?=\s|$)/u;
@@ -542,6 +545,13 @@ export function toRequest(raw: unknown, source = ""): ExtractResult {
     for (const key of filled) fixedBurial[key] = fromText[key];
     // تنبيهات النموذج نفسه عن نقص الدفن لم تعد صحيحة (تنبيهات التطبيق تبقى)
     if (filled.length) warnings.splice(0, modelWarnings, ...warnings.slice(0, modelWarnings).filter((warning) => !/الدفن|المقبرة|مقبرة/u.test(warning)));
+  }
+  // النموذج يكتب أحياناً «تم الدفن» في ملاحظة دفن قادم، فيخرج الإعلان بموعد الدفن ثم «تم الدفن». لا ملاحظة للدفن القادم،
+  // ولا ملاحظة تقول «تم الدفن» فقط في أي حالة (الحالة completed تكتبها).
+  const burialNote = text(fixedBurial.note);
+  if (burialNote && (burialStatus === "upcoming" || BARE_DONE_RE.test(burialNote))) {
+    delete fixedBurial.note;
+    if (!BARE_DONE_RE.test(burialNote)) warnings.push(`حُذفت من الإعلان ملاحظة الدفن «${burialNote}»: الدفن قادم وموعده ومقبرته في حقولهما.`);
   }
   const mode = people.length > 1 ? pick(data.announcementMode, MODES) : undefined;
 
