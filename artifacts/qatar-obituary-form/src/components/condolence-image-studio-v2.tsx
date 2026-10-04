@@ -163,12 +163,12 @@ export function CondolenceImageStudio({
   const queryClient = useQueryClient();
   const updateMutation = useUpdateObituaryRequest();
 
-  // هوية الصورة (الشعار واسم الحساب…) من «الإعدادات»؛ ننتظر وصولها حتى لا يظهر رسم بلا شعار ثم يتبدل
+  // هوية الصورة (الشعار والطول الأقصى) من «الإعدادات»؛ ننتظر وصولها حتى لا يظهر رسم بلا شعار ثم يتبدل
   const posterSettings = useGetPosterSettings({ query: { queryKey: getGetPosterSettingsQueryKey(), retry: false } });
   const settingsReady = !posterSettings.isLoading;
   const branding = useMemo<PosterBranding | undefined>(() => {
     const data = posterSettings.data;
-    return data ? { logoDataUrl: data.logoDataUrl || undefined, handle: data.handle, socials: data.socials, maxHeight: data.maxHeight } : undefined;
+    return data ? { logoDataUrl: data.logoDataUrl || undefined, maxHeight: data.maxHeight } : undefined;
   }, [posterSettings.data]);
 
   // Normalized content via Presentation Normalizer
@@ -394,7 +394,7 @@ export function CondolenceImageStudio({
                   تخطيط الصورة:
                 </span>
                 <Link href="/admin/settings" className="text-xs text-primary hover:underline">
-                  الشعار واسم الحساب من الإعدادات
+                  الشعار من الإعدادات
                 </Link>
               </div>
 

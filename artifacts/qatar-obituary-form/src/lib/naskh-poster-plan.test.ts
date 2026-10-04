@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import type { ObituaryRequest } from "@workspace/api-client-react";
 import { normalizeObituaryPresentation } from "./presentation-normalizer";
 import {
+  NASKH_FOOTER_HEIGHT,
   NASKH_LAYOUTS,
   NASKH_METRICS,
   buildNaskhSections,
@@ -42,7 +43,7 @@ function makeRequest(overrides: Partial<ObituaryRequest> = {}): ObituaryRequest 
 
 // قياس وهمي ثابت: كل حرف يساوي 0.55 من حجم الخط (أعرض من الواقع قليلاً ليُجبر الالتفاف في الحالات الطويلة)
 const measure: MeasureFn = (text, font) => text.length * font.px * 0.55;
-const options: NaskhPlanOptions = { openingIsImage: true, qrAvailable: { men: true, women: true, prayerBurialCombined: true, burial: true, prayer: true } };
+const options: NaskhPlanOptions = { openingIsImage: true, logo: true, qrAvailable: { men: true, women: true, prayerBurialCombined: true, burial: true, prayer: true } };
 const plan = (request: ObituaryRequest, extra: Partial<NaskhPlanOptions> = {}) => planNaskhLayout(normalizeObituaryPresentation(request), measure, { ...options, ...extra });
 const lineItems = (p: ReturnType<typeof plan>) => p.items.filter((item): item is Extract<typeof item, { kind: "line" }> => item.kind === "line");
 const lineText = (item: Extract<ReturnType<typeof plan>["items"][number], { kind: "line" }>) => item.runs.map((run) => run.text).join(" ");
@@ -185,17 +186,21 @@ const cases: Array<[string, () => void]> = [
     assert.deepEqual(sections[5].rows, [{ style: "body", label: "والنساء", text: "في منزل الفقيد رقم 50" }]);
   }],
   ["a common announcement fits the base height at full size", () => {
+    const bare = plan(makeRequest(), { logo: false });
+    assert.deepEqual([bare.height, bare.overflow, bare.namePx], [1350, false, 62]);
+    assert.ok(bare.scale >= 1, `scale ${bare.scale}`);
+    // والشعار الكبير يأخذ من المساحة فيصغر الاسم والنص قليلاً، وتبقى الصورة 1350 والشعار بحجمه الكامل
     const p = plan(makeRequest());
     assert.equal(p.height, 1350);
     assert.equal(p.overflow, false);
-    assert.equal(p.namePx, 62);
-    assert.ok(p.scale >= 1, `scale ${p.scale}`);
+    assert.ok(p.namePx >= NASKH_METRICS.nameMinPx, `name ${p.namePx}`);
+    assert.ok(p.scale >= NASKH_METRICS.softScale, `scale ${p.scale}`);
     assert.ok(p.gap >= NASKH_METRICS.minGap && p.gap <= NASKH_METRICS.maxGap);
-    const band = p.items.find((item) => item.kind === "band")!;
-    assert.equal(band.y, 1350 - 36 - 96);
+    const band = p.items.find((item): item is Extract<typeof item, { kind: "band" }> => item.kind === "band")!;
+    assert.deepEqual([band.position, band.y, band.h, band.x, band.width], ["bottom", 1350 - 36 - NASKH_FOOTER_HEIGHT, NASKH_FOOTER_HEIGHT, 72, 936]);
     const qrs = p.items.filter((item) => item.kind === "qr");
     assert.deepEqual(qrs.map((item) => item.key), ["men", "women"]);
-    assert.ok(qrs.every((item) => item.size >= 150 && item.x === NASKH_METRICS.inset));
+    assert.ok(qrs.every((item) => item.size >= Math.floor(NASKH_METRICS.qrSize * p.scale) && item.x === NASKH_METRICS.inset));
     assert.ok(lineItems(p).every((item) => item.y >= NASKH_METRICS.top && item.y + item.h <= band.y));
     assert.ok(lineItems(p).some((item) => item.runs[0]?.weight === 700 && item.runs[0]?.text === "والنساء"));
   }],
@@ -239,10 +244,14 @@ const cases: Array<[string, () => void]> = [
   }],
   ["every layout fits the common announcement without overflow and keeps every item inside the image", () => {
     for (const layout of NASKH_LAYOUTS) {
+      assert.equal(plan(makeRequest(), { layout: layout.id, logo: false }).height, 1350, `${layout.id} without a logo`);
       const p = plan(makeRequest(), { layout: layout.id });
       assert.equal(p.layout, layout.id);
       assert.equal(p.overflow, false, layout.id);
-      assert.equal(p.height, 1350, layout.id);
+      // مع الشعار قد تطول الصورة خطوة أو خطوتين، والشعار لا يصغر ما دامت الإطالة تكفي
+      assert.ok(p.height <= 1350 + 2 * NASKH_METRICS.heightStep, `${layout.id}: height ${p.height}`);
+      const footer = p.items.find((item): item is Extract<typeof item, { kind: "band" }> => item.kind === "band" && item.position === "bottom")!;
+      assert.equal(footer.h, NASKH_FOOTER_HEIGHT, `${layout.id}: full-size logo`);
       assert.ok(p.minTextPx >= 32, `${layout.id}: min text ${p.minTextPx}`);
       for (const item of lineItems(p)) {
         assert.ok(item.y >= 0 && item.y + item.h <= p.height, `${layout.id}: line outside the image`);
@@ -295,13 +304,13 @@ const cases: Array<[string, () => void]> = [
   ["the newspaper layout frames the image, insets the content and joins the verb to the name", () => {
     const p = plan(makeRequest(), { layout: "paper" });
     const frame = p.items.find((item): item is Extract<typeof item, { kind: "frame" }> => item.kind === "frame")!;
-    assert.deepEqual([frame.x, frame.y, frame.width, frame.height], [30, 30, 1020, 1290]);
+    assert.deepEqual([frame.x, frame.y, frame.width, frame.height], [30, 30, 1020, p.height - 60]);
     const nameLines = lineItems(p).filter((item) => item.section === "head" && Math.abs(item.px - p.namePx * p.scale) < 0.01);
     assert.equal(nameLines.map(lineText).join(" "), "توفي الوالد / محمد بن عبدالله بن سالم");
     assert.ok(!lineItems(p).some((item) => lineText(item) === "توفي"), "no separate statement line");
     assert.ok(p.namePx <= 56 && p.namePx >= 54, `name px ${p.namePx}`);
     const band = p.items.find((item): item is Extract<typeof item, { kind: "band" }> => item.kind === "band")!;
-    assert.deepEqual([band.position, band.y, band.x], ["bottom", 1350 - 52 - 96, 92]);
+    assert.deepEqual([band.position, band.y, band.x], ["bottom", p.height - 52 - NASKH_FOOTER_HEIGHT, 92]);
     assert.ok(lineItems(p).every((item) => item.xRight <= NASKH_METRICS.width - 92));
   }],
   ["the headings layout writes a bold title line above the burial and each venue", () => {
@@ -310,12 +319,12 @@ const cases: Array<[string, () => void]> = [
     assert.deepEqual(headings.map(lineText), ["الدفن", "عزاء الرجال", "عزاء النساء"]);
     assert.ok(!lineItems(p).some((item) => lineText(item).startsWith("والنساء")), "no inline «والنساء»");
   }],
-  ["the letterhead layout moves the opening and the band to the top and starts the text below the double rule", () => {
+  ["the letterhead layout moves the opening to the top, starts the text below the double rule and keeps the logo footer", () => {
     const p = plan(makeRequest(), { layout: "letterhead" });
     assert.ok(!p.items.some((item) => item.kind === "opening"));
-    const band = p.items.find((item): item is Extract<typeof item, { kind: "band" }> => item.kind === "band")!;
-    assert.deepEqual([band.position, band.y, band.h], ["top", 36, 96]);
-    assert.ok(lineItems(p).every((item) => item.y >= NASKH_METRICS.letterheadTop && item.y + item.h <= 1350 - NASKH_METRICS.letterheadBottom));
+    const bands = p.items.filter((item): item is Extract<typeof item, { kind: "band" }> => item.kind === "band");
+    assert.deepEqual(bands.map((band) => [band.position, band.y, band.h]), [["top", 36, 96], ["bottom", 1350 - 36 - NASKH_FOOTER_HEIGHT, NASKH_FOOTER_HEIGHT]]);
+    assert.ok(lineItems(p).every((item) => item.y >= NASKH_METRICS.letterheadTop && item.y + item.h <= bands[1].y));
     const rules = p.items.filter((item): item is Extract<typeof item, { kind: "separator" }> => item.kind === "separator" && item.y < NASKH_METRICS.letterheadTop);
     assert.deepEqual(rules.map((item) => item.y), [148, 152]);
     assert.ok(lineItems(p).find((item) => item.section === "head")!.align === "center");
@@ -326,6 +335,31 @@ const cases: Array<[string, () => void]> = [
     const byAlign = (section: string) => lineItems(p).filter((item) => item.section === section).map((item) => item.align);
     assert.ok(byAlign("head").every((align) => align === "center") && byAlign("closing").every((align) => align === "center"));
     assert.ok(byAlign("relatives").every((align) => align === "right") && byAlign("women").every((align) => align === "right"));
+  }],
+  ["with the height capped, the logo shrinks (never below the old band size) before the text overflows", () => {
+    const many = (prefix: string, count: number) => Array.from({ length: count }, (_, index) => ({ name: `${prefix}${index + 1}`, deceased: false }));
+    const busy = makeRequest({ relatives: [{ relation: "الأبناء", relationKey: "children", people: many("عبدالله", 8) }, { relation: "الإخوة", relationKey: "siblings", people: many("ناصر", 6) }] });
+    const full = plan(busy, { maxHeight: 1350, logo: false });
+    assert.equal(full.overflow, false, "fits without a logo");
+    const p = plan(busy, { maxHeight: 1350 });
+    const footer = p.items.find((item): item is Extract<typeof item, { kind: "band" }> => item.kind === "band" && item.position === "bottom")!;
+    assert.equal(p.height, 1350);
+    assert.ok(footer.h < NASKH_FOOTER_HEIGHT && footer.h >= NASKH_METRICS.footerPad + NASKH_METRICS.footerLogoMin, `footer ${footer.h}`);
+    assert.equal(p.scale, NASKH_METRICS.minScale, "the text shrank to its floor first");
+    assert.ok(lineItems(p).every((item) => item.y + item.h <= footer.y + 0.5));
+  }],
+  ["without a logo no footer is reserved and the text may use the space down to the bottom margin", () => {
+    for (const layout of NASKH_LAYOUTS) {
+      const p = plan(makeRequest(), { layout: layout.id, logo: false });
+      assert.ok(!p.items.some((item) => item.kind === "band" && item.position === "bottom"), `${layout.id}: no footer`);
+      assert.equal(p.overflow, false, layout.id);
+      const bottom = layout.id === "paper" ? NASKH_METRICS.paperTop : layout.id === "letterhead" ? NASKH_METRICS.letterheadBottom : NASKH_METRICS.top;
+      assert.ok(lineItems(p).every((item) => item.y + item.h <= 1350 - bottom + 0.5), `${layout.id}: text above the bottom margin`);
+    }
+    // ومع الشعار يبدأ التذييل تحت آخر سطر بمسافة لا تقل عن bandGap
+    const withLogo = plan(makeRequest());
+    const footer = withLogo.items.find((item) => item.kind === "band")!;
+    assert.ok(lineItems(withLogo).every((item) => item.y + item.h <= footer.y - NASKH_METRICS.bandGap + 0.5));
   }],
   ["an edited opening phrase is drawn as text", () => {
     const content = normalizeObituaryPresentation(makeRequest(), { opening: "بسم الله الرحمن الرحيم" });

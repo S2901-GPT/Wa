@@ -1,4 +1,4 @@
-// إعدادات لوحة الإدارة: هوية صورة التعزية (الشعار، اسم الحساب، أيقونات التواصل، الطول الأقصى).
+// إعدادات لوحة الإدارة: هوية صورة التعزية (الشعار، الطول الأقصى).
 // تُحفظ في الخادم فتظهر في كل صور التعزية ومن أي جهاز.
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
@@ -13,18 +13,8 @@ import { AlertCircle, ChevronRight, ImageUp, Loader2, Save, Trash2 } from "lucid
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { LogoError, fileToLogoDataUrl } from "@/lib/logo-image";
 
-type Social = PosterSettings["socials"][number];
-
-const SOCIAL_OPTIONS: Array<{ id: Social; label: string }> = [
-  { id: "instagram", label: "إنستغرام" },
-  { id: "snapchat", label: "سناب شات" },
-  { id: "x", label: "إكس" },
-];
 const HEIGHT_OPTIONS = [1350, 1620, 1800];
 
 export default function AdminSettingsPage() {
@@ -55,11 +45,6 @@ export default function AdminSettingsPage() {
       setBusy(false);
       if (fileRef.current) fileRef.current.value = "";
     }
-  };
-
-  const toggleSocial = (id: Social, enabled: boolean) => {
-    if (!draft) return;
-    update({ socials: SOCIAL_OPTIONS.map((option) => option.id).filter((option) => (option === id ? enabled : draft.socials.includes(option))) });
   };
 
   const submit = () => {
@@ -135,27 +120,8 @@ export default function AdminSettingsPage() {
                 </div>
               </div>
               <p className="text-xs leading-6 text-muted-foreground">
-                يظهر يمين الشريط السفلي من الصورة (وفي أعلاها مع تخطيط «الترويسة»). يفضَّل PNG بخلفية شفافة، ويُصغَّر تلقائياً إلى 256 بكسل.
+                يظهر كبيراً في وسط أسفل كل صورة. يفضَّل PNG بخلفية شفافة، ويُصغَّر تلقائياً إلى 512 بكسل.
               </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader><CardTitle className="text-lg">التواصل الاجتماعي</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="poster-handle">اسم الحساب (يسار الشريط، تحت الأيقونات)</Label>
-                <Input id="poster-handle" dir="ltr" className="text-left font-mono" placeholder="qatarde" value={draft.handle} onChange={(event) => update({ handle: event.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label>الأيقونات الظاهرة</Label>
-                {SOCIAL_OPTIONS.map((option) => (
-                  <label key={option.id} className="flex items-center justify-between rounded-lg border px-3 py-2.5 cursor-pointer">
-                    <span>{option.label}</span>
-                    <Switch checked={draft.socials.includes(option.id)} onCheckedChange={(checked) => toggleSocial(option.id, checked)} aria-label={option.label} />
-                  </label>
-                ))}
-              </div>
             </CardContent>
           </Card>
 

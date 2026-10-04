@@ -4,10 +4,11 @@
 // هذا الملف نقي (بلا DOM) حتى يُختبر في Node بدالة قياس وهمية؛ الرسم الفعلي في naskh-poster-engine.ts.
 //
 // الترتيب كما في الأرشيف: إنا لله ← توفي ← الاسم ← التفاصيل ← الأقارب ← الصلاة ← الدفن ← عزاء الرجال ← عزاء النساء
-// ← الهاتف ← الملاحظات ← الدعاء، وشريط الشعار والتواصل أسفل الصورة (أو في ترويسة أعلاها).
+// ← الهاتف ← الملاحظات ← الدعاء، والشعار كبيراً في وسط أسفل الصورة (تذييل).
 //
 // الضبط التلقائي عند الامتلاء، بالترتيب: يصغر الاسم (62 ← 54 مع سطرين على الأكثر)، ثم النص قليلاً (حتى 0.94)،
-// ثم تطول الصورة (1350 ← الحد الأقصى بخطوات 90)، ثم النص حتى 0.90 (36 × 0.9 = 32.4 بكسل ولا أقل).
+// ثم تطول الصورة (1350 ← الحد الأقصى بخطوات 90)، ثم النص حتى 0.90 (36 × 0.9 = 32.4 بكسل ولا أقل)، وأخيراً يصغر الشعار
+// (170 ← 72، حجم الشريط القديم) بدل أن يفيض المحتوى.
 import type { NormalizedContent } from "./presentation-normalizer";
 
 export const DEFAULT_OPENING = "إنا لله وإنا إليه راجعون";
@@ -26,6 +27,11 @@ export const NASKH_METRICS = {
   bandHeight: 96,
   bandBottom: 36,
   bandGap: 20,
+  /** تذييل الشعار: خط رفيع، ثم الشعار في وسطه بهذا الارتفاع (وعرض لا يتجاوز footerLogoMaxWidth)، ويصغر حتى footerLogoMin عند الامتلاء. */
+  footerPad: 24,
+  footerLogo: 170,
+  footerLogoMin: 72,
+  footerLogoMaxWidth: 460,
   openingHeight: 96,
   namePx: 62,
   nameMinPx: 54,
@@ -85,7 +91,7 @@ export const NASKH_LAYOUTS: readonly NaskhLayout[] = [
   { id: "cols", name: "العمودان", description: "عزاء الرجال والنساء جنباً إلى جنب في عمودين، ورمز الموقع تحت كل عمود" },
   { id: "paper", name: "الصحيفة", description: "إطار رفيع حول الصورة، وجملة الوفاة مع الاسم في سطر واحد كما في الصحف" },
   { id: "headings", name: "العناوين", description: "عنوان عريض فوق كل قسم (الدفن، عزاء الرجال، عزاء النساء) والنص تحته" },
-  { id: "letterhead", name: "الترويسة", description: "الشعار ومخطوطة «إنا لله» وحسابات التواصل في ترويسة أعلى الصورة" },
+  { id: "letterhead", name: "الترويسة", description: "مخطوطة «إنا لله» في ترويسة أعلى الصورة بين خطين" },
   { id: "hybrid", name: "الهجين", description: "الاسم والدعاء في المنتصف وبقية النص من اليمين" },
 ];
 
@@ -97,8 +103,8 @@ type Align = "right" | "center";
 type LayoutSpec = {
   inset: number;
   top: number;
-  /** المساحة المحجوزة أسفل المحتوى (الشريط السفلي وهامشه، أو الهامش فقط عند الترويسة). */
-  bottomReserve: number;
+  /** الهامش أسفل المحتوى حين لا يوجد شعار. */
+  bottom: number;
   headAlign: Align;
   bodyAlign: Align;
   /** أسماء الأقارب من اليمين داخل صندوق موسّط. */
@@ -111,17 +117,20 @@ type LayoutSpec = {
   inlineHead: boolean;
   namePx: number;
   openingInContent: boolean;
-  band: "bottom" | "top";
+  /** ترويسة أعلى الصورة: مخطوطة «إنا لله» بين خطين. */
+  topBand: boolean;
+  /** الهامش تحت تذييل الشعار. */
   bandBottom: number;
   frame: boolean;
 };
 
-const BOTTOM_BAND_RESERVE = NASKH_METRICS.bandBottom + NASKH_METRICS.bandHeight + NASKH_METRICS.bandGap;
+/** ارتفاع تذييل الشعار بحجمه الكامل (قبل أي تصغير عند الامتلاء). */
+export const NASKH_FOOTER_HEIGHT = NASKH_METRICS.footerPad + NASKH_METRICS.footerLogo;
 
 const BASE_SPEC: LayoutSpec = {
   inset: NASKH_METRICS.inset,
   top: NASKH_METRICS.top,
-  bottomReserve: BOTTOM_BAND_RESERVE,
+  bottom: NASKH_METRICS.top,
   headAlign: "right",
   bodyAlign: "right",
   relativesBox: false,
@@ -131,7 +140,7 @@ const BASE_SPEC: LayoutSpec = {
   inlineHead: false,
   namePx: NASKH_METRICS.namePx,
   openingInContent: true,
-  band: "bottom",
+  topBand: false,
   bandBottom: NASKH_METRICS.bandBottom,
   frame: false,
 };
@@ -145,7 +154,7 @@ const LAYOUT_SPECS: Record<NaskhLayoutId, LayoutSpec> = {
     ...BASE_SPEC,
     inset: NASKH_METRICS.paperInset,
     top: NASKH_METRICS.paperTop,
-    bottomReserve: NASKH_METRICS.paperBandBottom + NASKH_METRICS.bandHeight + NASKH_METRICS.bandGap,
+    bottom: NASKH_METRICS.paperTop,
     bandBottom: NASKH_METRICS.paperBandBottom,
     headAlign: "center",
     bodyAlign: "center",
@@ -159,10 +168,10 @@ const LAYOUT_SPECS: Record<NaskhLayoutId, LayoutSpec> = {
   letterhead: {
     ...BASE_SPEC,
     top: NASKH_METRICS.letterheadTop,
-    bottomReserve: NASKH_METRICS.letterheadBottom,
+    bottom: NASKH_METRICS.letterheadBottom,
     headAlign: "center",
     openingInContent: false,
-    band: "top",
+    topBand: true,
   },
   hybrid: { ...BASE_SPEC, headAlign: "center" },
 };
@@ -235,6 +244,8 @@ export type NaskhPlanOptions = {
   openingIsImage: boolean;
   /** مفاتيح رموز المواقع التي توفرت صورها فعلاً. */
   qrAvailable: Partial<Record<NaskhQrKey, boolean>>;
+  /** يوجد شعار، فيُحجز له تذييل أسفل الصورة؛ وبدونه لا يُترك مكان فارغ. */
+  logo?: boolean;
 };
 
 const NBSP = "\u00A0";
@@ -746,7 +757,10 @@ export function planNaskhLayout(content: NormalizedContent, measure: MeasureFn, 
   const context = (): PlanContext => ({ spec, geo, scale, namePx, measure, opts });
   let blocks = buildBlocks(sections, context());
   const separators = spec.separator === "none" ? 0 : Math.max(0, blocks.filter((block) => block.kind === "section").length - 1);
-  const zone = (h: number) => h - spec.top - spec.bottomReserve;
+  let footerLogo: number = NASKH_METRICS.footerLogo;
+  const footerHeight = () => NASKH_METRICS.footerPad + footerLogo;
+  const bottomReserve = () => (opts.logo ? spec.bandBottom + footerHeight() + NASKH_METRICS.bandGap : spec.bottom);
+  const zone = (h: number) => h - spec.top - bottomReserve();
   const slots = () => Math.max(0, blocks.length - 1) + separators;
   const spanWith = (gap: number) => blocks.reduce((sum, block) => sum + block.h, 0) + separators + slots() * gap;
   const over = () => spanWith(NASKH_METRICS.minGap) > zone(height);
@@ -769,7 +783,9 @@ export function planNaskhLayout(content: NormalizedContent, measure: MeasureFn, 
     scale = Math.round((scale - 0.02) * 100) / 100;
     remeasure();
   }
-  // 5) تكبير خفيف إن بقي فراغ كبير، دون أن يزيد الاسم سطراً
+  // 5) أخيراً يصغر الشعار بدل أن يفيض المحتوى (حتى حجم الشريط القديم، فلا يضيق المحتوى عمّا كان)
+  while (over() && opts.logo && footerLogo > NASKH_METRICS.footerLogoMin) footerLogo = Math.max(NASKH_METRICS.footerLogoMin, footerLogo - 10);
+  // 6) تكبير خفيف إن بقي فراغ كبير، دون أن يزيد الاسم سطراً
   const nameLines = nameLineCount(blocks, namePx, scale);
   const roomy = () => zone(height) - spanWith(0) > slots() * NASKH_METRICS.maxGap;
   while (scale < NASKH_METRICS.maxScale - 1e-9 && roomy()) {
@@ -822,12 +838,13 @@ export function planNaskhLayout(content: NormalizedContent, measure: MeasureFn, 
     y += block.h + gap;
   }
 
-  if (spec.band === "top") {
+  if (spec.topBand) {
     items.push({ kind: "band", position: "top", y: NASKH_METRICS.letterheadBandTop, h: NASKH_METRICS.bandHeight, x: geo.left, width: geo.contentWidth });
     items.push({ kind: "separator", y: NASKH_METRICS.letterheadRule, x: geo.left, width: geo.contentWidth });
     items.push({ kind: "separator", y: NASKH_METRICS.letterheadRule + 4, x: geo.left, width: geo.contentWidth });
-  } else {
-    items.push({ kind: "band", position: "bottom", y: height - spec.bandBottom - NASKH_METRICS.bandHeight, h: NASKH_METRICS.bandHeight, x: geo.left, width: geo.contentWidth });
+  }
+  if (opts.logo) {
+    items.push({ kind: "band", position: "bottom", y: height - spec.bandBottom - footerHeight(), h: footerHeight(), x: geo.left, width: geo.contentWidth });
   }
 
   return { layout, width: NASKH_METRICS.width, height, scale, namePx, minTextPx: Number.isFinite(minTextPx) ? minTextPx : 0, gap, overflow, items };
