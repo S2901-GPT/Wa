@@ -64,8 +64,8 @@ const cases: Array<[string, () => void | Promise<void>]> = [
     assert.throws(() => toRequest({ deceasedPeople: [{ fullName: "" }], warnings: [] }), (error: unknown) => error instanceof AiError && error.status === 422);
     assert.throws(() => toRequest("not an object"), (error: unknown) => error instanceof AiError);
   }],
-  ["toRequest: أرقام التعزية تضيف «phone»، والقيم غير المعروفة تعود للافتراضي", () => {
-    const { request } = toRequest({
+  ["toRequest: أرقام التعزية تعني «phone» لكنها لا تُنقل، و«tbd» يُحذف بملاحظة، والقيم غير المعروفة تعود للافتراضي", () => {
+    const { request, warnings } = toRequest({
       messageType: "weird",
       deceasedPeople: [{ fullName: "حمد", gender: "man" }],
       relatives: [], prayer: {}, burial: { status: "soon" }, condolences: [],
@@ -77,7 +77,12 @@ const cases: Array<[string, () => void | Promise<void>]> = [
     assert.equal(request.burial.outsideQatar, false);
     assert.equal(request.prayer.enabled, false);
     assert.deepEqual(request.condolenceOptions, ["phone"]);
-    assert.equal(request.condolencePhoneContacts.length, 1);
+    assert.deepEqual(request.condolencePhoneContacts, [], "لا تُنشر أرقام الهواتف");
+    assert.ok(!JSON.stringify(request).includes("55123456"));
+    assert.ok(warnings.some((warning) => warning.includes("لم تُنقل أرقام الهواتف")));
+    const later = toRequest({ deceasedPeople: [{ fullName: "حمد", gender: "man" }], relatives: [], prayer: {}, burial: {}, condolences: [], condolenceOptions: ["tbd"], warnings: [] });
+    assert.deepEqual(later.request.condolenceOptions, []);
+    assert.ok(later.warnings.some((warning) => warning.includes("سيُحدَّد لاحقاً")));
   }],
   ["splitBurialNote: موعد الدفن والمقبرة المكدّسة في note أو time تعود إلى حقولها", () => {
     assert.deepEqual(

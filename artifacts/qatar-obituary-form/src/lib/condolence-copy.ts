@@ -173,10 +173,8 @@ export function createCondolenceImageDraft(request: ObituaryRequest): ImageDraft
     closing: announcement.closing,
     men: cardToDraft(men),
     women: cardToDraft(women),
-    phoneContacts: (request.condolencePhoneContacts || []).map((contact) => ({
-      name: contact.name || "",
-      phone: contact.phone || "",
-    })),
+    // لا تُنشر أرقام الهواتف (قرار جديد)
+    phoneContacts: [],
     notes: request.notes || "",
   };
 }

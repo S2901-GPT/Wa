@@ -71,7 +71,8 @@ const MODES = ["single", "unrelated", "siblings", "father_first", "mother_child"
 const GENDERS = ["man", "woman", "boy", "girl"] as const;
 const AGE_UNITS = ["years", "months", "days"] as const;
 const BURIAL_STATUSES = ["upcoming", "completed", "postponed"] as const;
-const OPTIONS = ["phone", "men", "women", "men_cemetery", "tbd"] as const;
+// «tbd» (سيُحدَّد لاحقاً) أُلغي من النموذج، فلا يُستخرج.
+const OPTIONS = ["phone", "men", "women", "men_cemetery"] as const;
 const RELATION_LABELS = {
   children: "الأبناء",
   full_siblings: "الأشقاء",
@@ -160,7 +161,6 @@ export const RESPONSE_SCHEMA: GeminiSchema = obj(
       ),
     ),
     condolenceOptions: list(oneOf(OPTIONS)),
-    condolencePhoneContacts: list(obj({ name: str(), phone: str() })),
     condolenceNote: str(),
     notes: str(),
     warnings: list(str(), "ملاحظات قصيرة بالعربية عمّا لم يتضح في النص"),
@@ -191,7 +191,6 @@ const EXAMPLE_OUTPUT = JSON.stringify(
       { audience: "women", location: "منزل الفقيدة", area: "الغرافة", houseNumber: "12", mapLink: "https://maps.google.com/?q=25.3,51.4" },
     ],
     condolenceOptions: ["men", "women"],
-    condolencePhoneContacts: [],
     warnings: [],
   },
   null,
@@ -232,8 +231,8 @@ export const SYSTEM_PROMPT = `أنت مساعد يحوّل نص إعلان وف�
 - condolences: بطاقة لكل مقر. عزاء الرجال audience=men وعزاء النساء audience=women، وإن تعددت مقرات النساء فبطاقة لكل مقر.
   location المقر كما ورد، area المنطقة، houseNumber رقم المنزل، start بداية العزاء (اليوم، غداً، أو اسم اليوم)،
   durationDays عدد الأيام رقماً، وفترات الاستقبال في schedule مثل {"days":"الفترة المسائية","time":""} والوقت إن ذُكر مثل «من 4:00 مساءً إلى 9:00 مساءً».
-- condolenceOptions: men و/أو women حسب البطاقات، و phone إن ذُكرت أرقام للتعزية (في condolencePhoneContacts)،
-  و men_cemetery إن قال «يقتصر العزاء على المقبرة»، و tbd إن قال «يُحدَّد لاحقاً».
+- condolenceOptions: men و/أو women حسب البطاقات، و phone إن كان العزاء عبر الهاتف، و men_cemetery إن قال «يقتصر العزاء على المقبرة».
+  لا تنقل أي رقم هاتف إلى أي حقل: أرقام الهواتف لا تُنشر في الإعلانات. إن قال النص إن مقر العزاء سيُحدَّد لاحقاً فاترك condolences فارغة واذكر ذلك في warnings.
 - messageType: announcement للإعلان العادي، postponement لرسالة تأجيل الدفن، amendment لتعديل إعلان سابق، condolence_cancellation لإلغاء عزاء.
 - لا تضع في notes ما وضعته في حقل آخر.
 
@@ -431,7 +430,10 @@ export function toRequest(raw: unknown): ExtractResult {
         .map((entry) => ({ days: text(entry.days), time: text(entry.time) }))
         .filter((entry) => entry.days || entry.time),
     }));
+  // أرقام الهواتف لا تُنشر (قرار جديد): لا تُنقل إلى الطلب، ووجودها في الرسالة يعني التعزية عبر الهاتف.
   const phones = array(data.condolencePhoneContacts).filter(isObject).filter((contact) => text(contact.phone));
+  if (phones.length) warnings.push("لم تُنقل أرقام الهواتف الواردة في الرسالة: لا تُنشر أرقام في الإعلانات.");
+  if (array(data.condolenceOptions).includes("tbd")) warnings.push("تذكر الرسالة أن مقر العزاء سيُحدَّد لاحقاً؛ أضفه عند وصوله.");
   let options = [...new Set(array(data.condolenceOptions).map((option) => pick(option, OPTIONS)).filter(Boolean))] as Array<(typeof OPTIONS)[number]>;
   if (!options.length) {
     options = [...new Set(condolences.map((card) => card.audience))];
@@ -457,7 +459,7 @@ export function toRequest(raw: unknown): ExtractResult {
     burial: splitBurialNote({ ...burial, status: pick(burial.status, BURIAL_STATUSES) ?? "upcoming", outsideQatar: burial.outsideQatar === true }),
     condolenceOptions: options,
     condolences,
-    condolencePhoneContacts: phones,
+    condolencePhoneContacts: [],
     condolenceNote: freeText(data.condolenceNote),
     notes: freeText(data.notes),
   };

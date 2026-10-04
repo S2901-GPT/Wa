@@ -116,9 +116,14 @@ const cases: Array<[string, () => void]> = [
   ["أنواع العزاء: المقبرة فقط، الهاتف، سيُحدَّد لاحقاً، ومواقع إضافية", () => {
     const cemetery = form((draft) => { draft.condolences = { ...draft.condolences!, type: "cemetery_only", cancellationOrRestrictionReason: "اتباعاً للسنة" }; });
     assert.match(text(cemetery), /عزاء الرجال في المقبرة فقط اتباعاً للسنة/u);
+    // «هاتف فقط» دون أرقام: لا يُرسل أي رقم حتى لو بقي في النموذج من طلب قديم
     const phone = form((draft) => { draft.condolences = { ...draft.condolences!, type: "phone_only", phones: ["ناصر (الأبناء): 55551234"] }; });
-    assert.match(text(phone), /العزاء عن طريق هاتف ناصر: 55551234/u);
+    assert.match(text(phone), /العزاء عبر الهاتف/u);
+    assert.doesNotMatch(text(phone), /55551234|ناصر/u);
+    assert.deepEqual(mapFormToPayload(phone).condolencePhoneContacts, []);
     serverAccepts(phone);
+    const withVenue = form((draft) => { draft.condolences = { ...draft.condolences!, type: "men_only", men: { ...draft.condolences!.men!, locationName: "مجلس العائلة" }, withPhones: true, phones: ["55551234"] }; });
+    assert.ok(!mapFormToPayload(withVenue).condolenceOptions.includes("phone"));
     const tbd = form((draft) => { draft.condolences = { ...draft.condolences!, type: "tbd" }; });
     assert.match(text(tbd), /سيُحدَّد لاحقاً/u);
     const extra = form((draft) => {

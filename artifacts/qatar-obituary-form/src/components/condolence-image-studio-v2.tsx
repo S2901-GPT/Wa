@@ -28,7 +28,6 @@ import {
   createCondolenceImageDraft,
   type Audience,
   type EditableCard,
-  type EditableContact,
   type ImageDraft,
 } from "@/lib/condolence-copy";
 import { IMAGE_HEIGHT, IMAGE_WIDTH, type PosterBranding, type RenderValidationReport } from "@/lib/naskh-poster-engine";
@@ -244,15 +243,6 @@ export function CondolenceImageStudio({
     }));
   };
 
-  const updateContact = (index: number, key: keyof EditableContact, value: string) => {
-    setDraft((current) => ({
-      ...current,
-      phoneContacts: current.phoneContacts.map((contact, contactIndex) =>
-        contactIndex === index ? { ...contact, [key]: value } : contact
-      ),
-    }));
-  };
-
   const downloadSinglePage = () => {
     const canvas = previewRef.current;
     if (!canvas || rendering) return;
@@ -335,15 +325,8 @@ export function CondolenceImageStudio({
           condolences: updatedCondolences,
           prayer: { ...request.prayer, mapLink: draft.prayerMapLink.trim() || undefined },
           burial: { ...request.burial, mapLink: draft.burialMapLink.trim() || undefined },
-          condolencePhoneContacts:
-            request.condolenceOptions.includes("phone") || request.condolencePhoneContacts.length > 0
-              ? draft.phoneContacts
-                  .filter((c) => c.name.trim() || c.phone.trim())
-                  .map((c) => ({
-                    ...(c.name.trim() ? { name: c.name.trim() } : {}),
-                    ...(c.phone.trim() ? { phone: c.phone.trim() } : {}),
-                  }))
-              : request.condolencePhoneContacts,
+          // لا تُنشر أرقام الهواتف (قرار جديد): الحفظ يحذف أرقام طلب قديم
+          condolencePhoneContacts: [],
           notes: draft.notes.trim() || undefined,
           status: request.status,
         },
@@ -652,34 +635,6 @@ export function CondolenceImageStudio({
                 card={draft.women}
                 onChange={(key, val) => updateCard("women", key, val)}
               />
-            )}
-
-            {/* Phone Contacts */}
-            {draft.phoneContacts.length > 0 && (
-              <Card className="border border-border">
-                <CardHeader className="pb-3 bg-muted/20">
-                  <CardTitle className="text-base text-primary font-bold">التعزية عبر الهاتف (أرقام LTR معزولة)</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2.5 pt-4">
-                  {draft.phoneContacts.map((contact, index) => (
-                    <div key={index} className="grid grid-cols-2 gap-2">
-                      <Input
-                        value={contact.name}
-                        onChange={(e) => updateContact(index, "name", e.target.value)}
-                        placeholder="الاسم أو القرابة (مثال: محمد - ابنه)"
-                        className="text-xs"
-                      />
-                      <Input
-                        value={contact.phone}
-                        onChange={(e) => updateContact(index, "phone", e.target.value)}
-                        dir="ltr"
-                        className="text-left font-mono text-xs"
-                        placeholder="+974 5512 3456"
-                      />
-                    </div>
-                  ))}
-                </CardContent>
-              </Card>
             )}
 
             {/* Notes */}

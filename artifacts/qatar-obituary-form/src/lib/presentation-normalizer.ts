@@ -63,11 +63,8 @@ export type NormalizedContent = {
   };
   men?: VenueContent;
   women?: VenueContent;
-  phoneContacts: Array<{
-    name?: string;
-    phone: string;
-    formatted: string;
-  }>;
+  /** «العزاء عبر الهاتف» وما يسبقه («لا يوجد عزاء للرجال»)، دون أرقام. */
+  phoneLines: string[];
   relatives: Array<{
     heading: string;
     membersText: string;
@@ -257,19 +254,6 @@ export function areLocationsEquivalent(
   return false;
 }
 
-// Phone Number LTR Formatter
-// Keeps "+974 5512 3456" in strict Left-to-Right order so it never gets inverted in RTL context
-export function formatPhoneNumberLtr(phone: string): string {
-  const cleaned = cleanText(phone);
-  if (!cleaned) return "";
-
-  // Normalize spaces in phone numbers
-  const standardPhone = cleaned.replace(/\s+/g, " ");
-
-  // Enclose with Unicode Left-to-Right Embedding (U+202A) and Pop Directional Formatting (U+202C)
-  // or Left-to-Right Isolate (U+2066) / Pop Directional Isolate (U+2069)
-  return `\u2066${standardPhone}\u2069`;
-}
 
 // Natural Arabic date & duration formatter
 export function formatStartAndDuration(start?: string, durationDays?: string | number | null): string {
@@ -428,15 +412,8 @@ export function normalizeObituaryPresentation(
     if (firstVenue) firstVenue.startAndDuration = condolenceStart;
   }
 
-  // 4. أرقام الهاتف (الأرقام معزولة باتجاه LTR)
-  const phoneContacts = (edited.condolencePhoneContacts || [])
-    .filter((c) => cleanText(c.phone))
-    .map((c) => {
-      const name = cleanText(c.name);
-      const rawPhone = cleanText(c.phone);
-      const ltrPhone = formatPhoneNumberLtr(rawPhone);
-      return { name: name || undefined, phone: rawPhone, formatted: name ? `${name}: ${ltrPhone}` : ltrPhone };
-    });
+  // 4. التعزية عبر الهاتف: سطور المولّد نفسها («العزاء عبر الهاتف»)، ولا تُنشر أي أرقام (قرار جديد).
+  const phoneLines = section("phone")?.lines.filter(Boolean) ?? [];
 
   // 5. الأقارب من منظور المتوفى، والترحّم عليهم بالمذكر (رحمه/رحمهما/رحمهم).
   const relatives = announcement.relativeBlocks.map((block) => ({
@@ -471,7 +448,7 @@ export function normalizeObituaryPresentation(
     burial,
     men,
     women,
-    phoneContacts,
+    phoneLines,
     relatives,
     relativesNote,
     condolenceStart,

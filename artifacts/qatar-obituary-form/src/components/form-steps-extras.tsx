@@ -502,10 +502,8 @@ export function VenueExtras({ audience }: { audience: "men" | "women" }) {
   );
 }
 
-/** سبب أو ملاحظة على العزاء، وأرقام التعزية مع المقرات. */
-export function CondolenceExtras({ type }: { type: string }) {
-  const form = useFormContext<ObituaryFormValues>();
-  const withPhones = useWatch({ control: form.control, name: "condolences.withPhones" });
+/** سبب أو ملاحظة على العزاء. (أرقام الهواتف لا تُنشر، فلا خانات لها.) */
+export function CondolenceExtras() {
   return (
     <div className="space-y-3 w-full box-border">
       <TextInput
@@ -513,18 +511,6 @@ export function CondolenceExtras({ type }: { type: string }) {
         label="سبب أو ملاحظة على العزاء (اختياري)"
         placeholder="مثال: اتباعاً للسنة، أو: تنفيذاً لوصية المتوفى"
       />
-      {type !== "phone_only" && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <SwitchInput name="condolences.withPhones" label="إضافة أرقام للتعزية عبر الهاتف" />
-          {withPhones && (
-            <SelectInput
-              name="condolences.phoneAudience"
-              label="التعزية عبر الهاتف لـ"
-              options={[{ value: "all", label: "الجميع" }, { value: "women", label: "النساء" }, { value: "men", label: "الرجال" }]}
-            />
-          )}
-        </div>
-      )}
     </div>
   );
 }
