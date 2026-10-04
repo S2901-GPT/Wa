@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LogoError, fileToLogoDataUrl } from "@/lib/logo-image";
+import { DEFAULT_LOGO_URL } from "@/lib/naskh-poster-engine";
 
 const HEIGHT_OPTIONS = [1350, 1620, 1800];
 
@@ -91,12 +92,11 @@ export default function AdminSettingsPage() {
             <CardHeader><CardTitle className="text-lg">الشعار</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center gap-4">
-                <div className="h-24 w-24 shrink-0 rounded-lg border border-dashed border-border bg-muted/40 grid place-items-center overflow-hidden">
-                  {draft.logoDataUrl ? (
-                    <img src={draft.logoDataUrl} alt="الشعار" className="max-h-full max-w-full object-contain" data-testid="logo-preview" />
-                  ) : (
-                    <span className="text-xs text-muted-foreground">بلا شعار</span>
-                  )}
+                <div className="flex flex-col items-center gap-1 shrink-0">
+                  <div className="h-24 w-24 rounded-lg border border-dashed border-border bg-muted/40 grid place-items-center overflow-hidden p-1.5">
+                    <img src={draft.logoDataUrl || DEFAULT_LOGO_URL} alt="الشعار" className="max-h-full max-w-full object-contain" data-testid="logo-preview" />
+                  </div>
+                  {!draft.logoDataUrl && <span className="text-[11px] text-muted-foreground">الشعار الافتراضي</span>}
                 </div>
                 <div className="flex flex-col gap-2">
                   <input
@@ -114,13 +114,13 @@ export default function AdminSettingsPage() {
                   {draft.logoDataUrl && (
                     <Button type="button" variant="ghost" className="gap-2 text-destructive hover:text-destructive" onClick={() => update({ logoDataUrl: "" })}>
                       <Trash2 className="h-4 w-4" />
-                      إزالة الشعار
+                      العودة للشعار الافتراضي
                     </Button>
                   )}
                 </div>
               </div>
               <p className="text-xs leading-6 text-muted-foreground">
-                يظهر كبيراً في وسط أسفل كل صورة. يفضَّل PNG بخلفية شفافة، ويُصغَّر تلقائياً إلى 512 بكسل.
+                يظهر كبيراً في وسط أسفل كل صورة. بدون رفع يُستخدم شعار «وفيات قطر». يفضَّل PNG بخلفية شفافة، ويُصغَّر تلقائياً إلى 512 بكسل.
               </p>
             </CardContent>
           </Card>
