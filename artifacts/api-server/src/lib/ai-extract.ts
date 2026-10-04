@@ -226,7 +226,8 @@ export const SYSTEM_PROMPT = `أنت مساعد يحوّل نص إعلان وف�
 - burial: status = upcoming للدفن القادم، completed إن قال «تم الدفن»، postponed إن قال «تأجيل الدفن». day مثل «اليوم» أو «غداً»،
   weekday اسم اليوم، time مثل «بعد صلاة العصر» أو «الساعة 9:30 مساءً»، cemetery مثل «مقبرة مسيمير». الدفن خارج قطر: outsideQatar=true مع outsideLocation.
   اكتب weekday كلما ورد اسم اليوم ولو مع «اليوم» أو «غداً»، فالتطبيق يحسب «اليوم / غداً» منه لحظة النشر.
-  note فقط لسبب التأجيل أو لوصف دفن تمّ («تم الدفن في مكة المكرمة»)؛ لا تضع فيه الموعد ولا المقبرة، بل وزّعها على day وweekday وtime وcemetery.
+  note فقط لسبب التأجيل أو لوصف دفن تمّ، منقولاً من النص نفسه؛ لا تضع فيه الموعد ولا المقبرة، بل وزّعها على day وweekday وtime وcemetery.
+  إن لم يرد في النص سبب تأجيل ولا وصف دفن تمّ فاترك note فارغاً.
 - prayer: enabled=true فقط إن ذُكر مسجد أو جامع للصلاة منفصلاً عن المقبرة، مع موعده ومكانه.
 - condolences: بطاقة لكل مقر. عزاء الرجال audience=men وعزاء النساء audience=women، وإن تعددت مقرات النساء فبطاقة لكل مقر.
   location المقر كما ورد، area المنطقة، houseNumber رقم المنزل، start بداية العزاء (اليوم، غداً، أو اسم اليوم)،
@@ -401,6 +402,39 @@ export function burialFromSource(source: string): { day?: string; weekday?: stri
   return Object.fromEntries(Object.entries(parts).filter(([, value]) => value));
 }
 
+/** توحيد الكتابة للمقارنة: بلا تشكيل ولا تطويل، والهمزات ألفاً، والتاء المربوطة هاءً، والألف المقصورة ياءً. */
+function foldArabic(value: string): string {
+  return value
+    .replace(/[\u064B-\u0652\u0670\u0640]/gu, "")
+    .replace(/[أإآ]/gu, "ا")
+    .replace(/ة/gu, "ه")
+    .replace(/ى/gu, "ي")
+    .replace(/ؤ/gu, "و")
+    .replace(/ئ/gu, "ي");
+}
+
+/** كلمات النص (3 أحرف فأكثر) بعد التوحيد ونزع «و/ف» ثم «ب/بال/لل/ال» من أولها. */
+function stems(value: string): string[] {
+  return foldArabic(value)
+    .split(/[^\p{L}\p{N}]+/u)
+    .map((word) => {
+      const bare = word.replace(/^(?:و|ف)?(?:بال|كال|لل|ال|ب)?/u, "");
+      return bare.length >= 3 ? bare : word;
+    })
+    .filter((word) => word.length >= 3);
+}
+
+/**
+ * نص حرّ وردت معظم كلماته في الرسالة. النموذج قد يكتب في الملاحظات جملة ليست في الرسالة إطلاقاً
+ * (نسخ مرة مثالاً من التعليمات: «تم الدفن في مكة المكرمة»)، فتُحذف ولا تُنشر.
+ */
+export function inSource(value: string, source: string): boolean {
+  const words = stems(value);
+  if (!words.length || !source.trim()) return true;
+  const known = new Set(stems(source));
+  return words.filter((word) => known.has(word)).length / words.length >= 0.6;
+}
+
 const COMMENTARY_RE =
   /يرجى|يُرجى|الرجاء|نرجو|للتأكيد|للتأكد|تأكد|التحقق|مراجعة|راجع|التواصل مع|تواصل معنا|يُنصح|ينصح|قد (?:يُ|ي|تُ|ت)[\u0600-\u06FF]+|ربما|محتمل|غير (?:مؤكد|واضح|محدد)|لم (?:يُذكر|يذكر|تُذكر|تذكر)|لم يرد|لم ترد|نُقلت|نقلت|كما وردت|كما ورد|وفيات قطر|الذكاء الاصطناعي|النموذج|في الإعلان|في النص/u;
 
@@ -426,6 +460,16 @@ export function toRequest(raw: unknown, source = ""): ExtractResult {
   const data = (dropEmpty(raw) ?? {}) as Loose;
   if (!isObject(data)) throw new AiError(502, "لم يُرجع الذكاء الاصطناعي بيانات مفهومة، حاول مرة أخرى.");
   const warnings = array(data.warnings).map(text).filter(Boolean).slice(0, 8);
+  const modelWarnings = warnings.length;
+  // الملاحظات تُنشر حرفياً: بلا تعليقات النموذج، وبلا جمل لم ترد في الرسالة
+  const freeText = (value: unknown): string | undefined => {
+    const kept = stripCommentary(value, warnings);
+    if (kept && !inSource(kept, source)) {
+      warnings.push(`حُذف من الإعلان نص لم يرد في الرسالة: «${kept}»`);
+      return undefined;
+    }
+    return kept;
+  };
 
   const people = array(data.deceasedPeople)
     .filter(isObject)
@@ -439,7 +483,7 @@ export function toRequest(raw: unknown, source = ""): ExtractResult {
       return {
         ...person,
         gender,
-        note: stripCommentary(person.note, warnings),
+        note: freeText(person.note),
         age: intOrUndefined(person.age),
         ageUnit: pick(person.ageUnit, AGE_UNITS),
         spouse: isObject(person.spouse) ? { ...person.spouse, kind: pick(person.spouse.kind, ["harem", "widow"] as const) ?? "harem" } : undefined,
@@ -469,7 +513,7 @@ export function toRequest(raw: unknown, source = ""): ExtractResult {
     .map((card) => ({
       ...card,
       audience: card.audience as "men" | "women",
-      locationNotes: stripCommentary(card.locationNotes, warnings),
+      locationNotes: freeText(card.locationNotes),
       durationDays: intOrUndefined(card.durationDays),
       schedule: array(card.schedule)
         .filter(isObject)
@@ -488,7 +532,6 @@ export function toRequest(raw: unknown, source = ""): ExtractResult {
 
   const prayer = isObject(data.prayer) ? data.prayer : {};
   const burial = isObject(data.burial) ? data.burial : {};
-  const freeText = (value: unknown) => stripCommentary(value, warnings);
   burial.note = freeText(burial.note);
   const burialStatus = pick(burial.status, BURIAL_STATUSES) ?? "upcoming";
   const fixedBurial = splitBurialNote({ ...burial, status: burialStatus, outsideQatar: burial.outsideQatar === true });
@@ -497,8 +540,8 @@ export function toRequest(raw: unknown, source = ""): ExtractResult {
     const fromText = burialFromSource(source);
     const filled = (["day", "weekday", "time", "cemetery"] as const).filter((key) => !text(fixedBurial[key]) && fromText[key]);
     for (const key of filled) fixedBurial[key] = fromText[key];
-    // تنبيهات النموذج عن نقص الدفن لم تعد صحيحة
-    if (filled.length) warnings.splice(0, warnings.length, ...warnings.filter((warning) => !/الدفن|المقبرة|مقبرة/u.test(warning)));
+    // تنبيهات النموذج نفسه عن نقص الدفن لم تعد صحيحة (تنبيهات التطبيق تبقى)
+    if (filled.length) warnings.splice(0, modelWarnings, ...warnings.slice(0, modelWarnings).filter((warning) => !/الدفن|المقبرة|مقبرة/u.test(warning)));
   }
   const mode = people.length > 1 ? pick(data.announcementMode, MODES) : undefined;
 
