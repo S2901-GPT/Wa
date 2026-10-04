@@ -187,7 +187,10 @@ const cases: Array<[string, () => void]> = [
   }],
   ["a common announcement fits the base height at full size", () => {
     const bare = plan(makeRequest(), { logo: false });
-    assert.deepEqual([bare.height, bare.overflow, bare.namePx], [1350, false, 62]);
+    assert.deepEqual([bare.height, bare.overflow], [1350, false]);
+    // الاسم في سطر واحد (يصغر قليلاً عن 56 إن لزم)
+    assert.ok(bare.namePx >= NASKH_METRICS.nameOneLinePx && bare.namePx <= NASKH_METRICS.namePx, `name ${bare.namePx}`);
+    assert.equal(lineItems(bare).filter((item) => item.section === "head" && Math.abs(item.px - bare.namePx * bare.scale) < 0.01).length, 1);
     assert.ok(bare.scale >= 1, `scale ${bare.scale}`);
     // والشعار الكبير يأخذ من المساحة فيصغر الاسم والنص قليلاً، وتبقى الصورة 1350 والشعار بحجمه الكامل
     const p = plan(makeRequest());
@@ -212,7 +215,18 @@ const cases: Array<[string, () => void]> = [
     const p = plan(makeRequest({ deceasedPeople: [{ fullName: "محمد بن عبدالله بن سالم بن ناصر بن خليفة بن حمد", title: "الوالد", gender: "man" }] }));
     const nameLines = lineItems(p).filter((item) => item.section === "head" && Math.abs(item.px - p.namePx * p.scale) < 0.01);
     assert.ok(nameLines.length <= 2, `name lines ${nameLines.length}`);
-    assert.ok(p.namePx <= 62);
+    assert.ok(p.namePx <= NASKH_METRICS.namePx);
+  }],
+  ["a name slightly too wide for one line shrinks a little to stay on one line; a long one keeps two lines at full size", () => {
+    const nameLines = (p: ReturnType<typeof plan>) => lineItems(p).filter((item) => item.section === "head" && Math.abs(item.px - p.namePx * p.scale) < 0.01);
+    // 33 حرفاً: أعرض من السطر بحجم 56، ويتسع له بحجم 50 (بالقياس الوهمي)
+    const near = plan(makeRequest({ deceasedPeople: [{ fullName: "عبدالله حمد هادي دخيل علي الودعاني", gender: "man" }] }), { logo: false });
+    assert.equal(nameLines(near).length, 1);
+    assert.ok(near.namePx < NASKH_METRICS.namePx && near.namePx >= NASKH_METRICS.nameOneLinePx, `name px ${near.namePx}`);
+    // اسم طويل لا يتسع لسطر واحد حتى بأصغر حجم: سطران بالحجم الكامل بدل سطرين صغيرين
+    const long = plan(makeRequest({ deceasedPeople: [{ fullName: "محمد بن عبدالله بن سالم بن ناصر بن خليفة", gender: "man" }] }), { logo: false });
+    assert.equal(nameLines(long).length, 2);
+    assert.equal(long.namePx, NASKH_METRICS.namePx);
   }],
   ["a heavy announcement grows the image instead of shrinking the text below 32px", () => {
     const many = (prefix: string, count: number) => Array.from({ length: count }, (_, index) => ({ name: `${prefix}${index + 1}`, deceased: index % 5 === 4 }));
@@ -308,7 +322,7 @@ const cases: Array<[string, () => void]> = [
     const nameLines = lineItems(p).filter((item) => item.section === "head" && Math.abs(item.px - p.namePx * p.scale) < 0.01);
     assert.equal(nameLines.map(lineText).join(" "), "توفي الوالد / محمد بن عبدالله بن سالم");
     assert.ok(!lineItems(p).some((item) => lineText(item) === "توفي"), "no separate statement line");
-    assert.ok(p.namePx <= 56 && p.namePx >= 54, `name px ${p.namePx}`);
+    assert.ok(p.namePx <= NASKH_METRICS.paperNamePx && p.namePx >= NASKH_METRICS.nameOneLinePx, `name px ${p.namePx}`);
     const band = p.items.find((item): item is Extract<typeof item, { kind: "band" }> => item.kind === "band")!;
     assert.deepEqual([band.position, band.y, band.x], ["bottom", p.height - 52 - NASKH_FOOTER_HEIGHT, 92]);
     assert.ok(lineItems(p).every((item) => item.xRight <= NASKH_METRICS.width - 92));

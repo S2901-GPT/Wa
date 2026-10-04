@@ -6,7 +6,8 @@
 // الترتيب كما في الأرشيف: إنا لله ← توفي ← الاسم ← التفاصيل ← الأقارب ← الصلاة ← الدفن ← عزاء الرجال ← عزاء النساء
 // ← الهاتف ← الملاحظات ← الدعاء، والشعار كبيراً في وسط أسفل الصورة (تذييل).
 //
-// الضبط التلقائي عند الامتلاء، بالترتيب: يصغر الاسم (62 ← 54 مع سطرين على الأكثر)، ثم النص قليلاً (حتى 0.94)،
+// الاسم في سطر واحد متى أمكن (56 ← 46)، وإلا سطران بحجمه.
+// الضبط التلقائي عند الامتلاء، بالترتيب: يصغر الاسم (حتى 48 مع سطرين على الأكثر)، ثم النص قليلاً (حتى 0.94)،
 // ثم تطول الصورة (1350 ← الحد الأقصى بخطوات 90)، ثم النص حتى 0.90 (36 × 0.9 = 32.4 بكسل ولا أقل)، وأخيراً يصغر الشعار
 // (170 ← 72، حجم الشريط القديم) بدل أن يفيض المحتوى.
 import type { NormalizedContent } from "./presentation-normalizer";
@@ -33,8 +34,10 @@ export const NASKH_METRICS = {
   footerLogoMin: 72,
   footerLogoMaxWidth: 460,
   openingHeight: 96,
-  namePx: 62,
-  nameMinPx: 54,
+  namePx: 56,
+  /** يصغر الاسم حتى هذا الحد ليبقى في سطر واحد؛ فإن لم يتسع عاد لحجمه في سطرين. */
+  nameOneLinePx: 46,
+  nameMinPx: 48,
   bodyPx: 36,
   headingPx: 38,
   closingPx: 42,
@@ -59,7 +62,7 @@ export const NASKH_METRICS = {
   paperInset: 92,
   paperTop: 66,
   paperBandBottom: 52,
-  paperNamePx: 56,
+  paperNamePx: 52,
   letterheadBandTop: 36,
   letterheadRule: 148,
   letterheadTop: 174,
@@ -766,7 +769,16 @@ export function planNaskhLayout(content: NormalizedContent, measure: MeasureFn, 
   const over = () => spanWith(NASKH_METRICS.minGap) > zone(height);
   const remeasure = () => { blocks = buildBlocks(sections, context()); };
 
-  // 1) الاسم: سطران على الأكثر، ويصغر قبل أي شيء آخر
+  // 1) الاسم: سطر واحد إن اتسع له بتصغير خفيف، وإلا سطران بحجمه الكامل؛ ثم سطران على الأكثر، ويصغر قبل أي شيء آخر
+  const fullNamePx = namePx;
+  while (nameLineCount(blocks, namePx, scale) > 1 && namePx > NASKH_METRICS.nameOneLinePx) {
+    namePx -= 2;
+    remeasure();
+  }
+  if (nameLineCount(blocks, namePx, scale) > 1 && namePx !== fullNamePx) {
+    namePx = fullNamePx;
+    remeasure();
+  }
   while ((nameLineCount(blocks, namePx, scale) > 2 || over()) && namePx > nameMinPx) {
     namePx -= 2;
     remeasure();
