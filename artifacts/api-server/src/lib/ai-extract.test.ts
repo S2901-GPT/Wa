@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import express from "express";
 import { ADMIN_COOKIE, createSessionToken } from "./admin-auth";
-import { AiError, DEFAULT_MODEL, FALLBACK_MODEL, HOLLOW_WARNING, aiConfig, aiEnvHints, buildGeminiBody, burialFromSource, extractRequest, isHollow, readJson, splitBurialNote, stripCommentary, toRequest } from "./ai-extract";
+import { AiError, DEFAULT_MODEL, FALLBACK_MODEL, HOLLOW_WARNING, aiConfig, aiEnvHints, buildGeminiBody, burialFromSource, extractRequest, inSource, isHollow, readJson, splitBurialNote, stripCommentary, toRequest } from "./ai-extract";
 import aiRouter from "../routes/ai";
 
 /** رد نموذجي كما يُرجعه Gemini لإعلان وهمي (بقيم فارغة وnull كما يحدث فعلاً). */
@@ -155,6 +155,21 @@ const cases: Array<[string, () => void | Promise<void>]> = [
     assert.equal(postponed.cemetery, undefined);
     const abroad = toRequest({ ...AI_OUTPUT, burial: { status: "upcoming", outsideQatar: true, outsideLocation: "الرياض" } }, WHATSAPP_TEXT).request.burial;
     assert.equal(abroad.cemetery, undefined);
+  }],
+  ["toRequest: ملاحظة لم ترد في الرسالة (نسخها النموذج من مثال) تُحذف بتنبيه، وما ورد فيها يبقى", () => {
+    const { request, warnings } = toRequest({ ...AI_OUTPUT, burial: { status: "upcoming", outsideQatar: false, note: "تم الدفن في مكة المكرمة" }, notes: "العزاء ثلاثة أيام فقط" }, `${WHATSAPP_TEXT}\nالعزاء ثلاثة ايام فقط`);
+    assert.equal(request.burial.note, undefined);
+    assert.equal(request.burial.cemetery, "مقبرة مسيمير");
+    assert.ok(warnings.includes("حُذف من الإعلان نص لم يرد في الرسالة: «تم الدفن في مكة المكرمة»"), JSON.stringify(warnings));
+    assert.equal(request.notes, "العزاء ثلاثة أيام فقط");
+    // بلا نص مصدر (استدعاء قديم) لا يُحذف شيء
+    assert.equal(toRequest({ ...AI_OUTPUT, notes: "العزاء ثلاثة أيام فقط" }).request.notes, "العزاء ثلاثة أيام فقط");
+  }],
+  ["inSource: يقارن الكلمات بعد توحيد الهمزات والتاء المربوطة ونزع «ال» و«و» و«ب»", () => {
+    assert.equal(inSource("تأجيل الدفن لحين وصول الجثمان", "تاجيل الدفن لحين وصول الجثمان من الخارج"), true);
+    assert.equal(inSource("وبالعزاء في المجلس", "العزاء بمجلس العائلة في المجلس"), true);
+    assert.equal(inSource("تم الدفن في مكة المكرمة", WHATSAPP_TEXT), false);
+    assert.equal(inSource("أي شيء", ""), true);
   }],
   ["stripCommentary: تعليقات النموذج تُحذف من حقول النشر وتُنقل إلى الملاحظات", () => {
     const warnings: string[] = [];
