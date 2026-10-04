@@ -206,7 +206,7 @@ export const SYSTEM_PROMPT = `أنت مساعد يحوّل نص إعلان وف�
   «الرياييل» = الرجال، «الحريم» = النساء، «عقب» = بعد، «الحين» = اليوم، «بكره» = غداً، «المسايه» = الفترة المسائية.
   تجاهل الرموز والعبارات التي ليست من الإعلان (مثل «انشروه» أو «عظم الله أجركم»).
 - انقل أسماء الأشخاص كما وردت حرفياً. أما الكلمات العامة وأسماء الأماكن المعروفة فصحّح إملاءها الشائع
-  (الوالده ← الوالدة، مقبره ← مقبرة، الوكره ← الوكرة، ابو هامور ← أبو هامور، الغرافه ← الغرافة)،
+  (الوالده ← الوالدة، مقبره ← مقبرة، الوكره ← الوكرة، الغرافه ← الغرافة)،
   واكتب وصف المقر بالفصحى (مجلس العيال ← مجلس الأبناء، البيت ← منزل الفقيد أو منزل الفقيدة). انسخ روابط الخرائط كما هي.
 - صلة المرسل بالمتوفى (خالي، عمي، جدتي…) ليست من أقارب الإعلان: لا تضعها في relatives، واذكر ذلك في warnings.
 - إن عُرف المتوفى بكنيته فقط (أم ناصر) فضعها في fullName، ونبّه في warnings إلى أن الاسم الكامل لم يُذكر.
@@ -225,6 +225,8 @@ export const SYSTEM_PROMPT = `أنت مساعد يحوّل نص إعلان وف�
   إن قال النص صراحةً لا أقارب فاجعل noRelatives=true.
 - burial: status = upcoming للدفن القادم، completed إن قال «تم الدفن»، postponed إن قال «تأجيل الدفن». day مثل «اليوم» أو «غداً»،
   weekday اسم اليوم، time مثل «بعد صلاة العصر» أو «الساعة 9:30 مساءً»، cemetery مثل «مقبرة مسيمير». الدفن خارج قطر: outsideQatar=true مع outsideLocation.
+  «مقبرة أبو هامور» (أو ابو هامور، بوهامور) اسم متعارف عليه لمقبرة مسيمير وليست مقبرة مستقلة: اكتب cemetery «مقبرة مسيمير».
+  أما منطقة أبو هامور كمقر للعزاء فاكتبها كما هي.
   اكتب weekday كلما ورد اسم اليوم ولو مع «اليوم» أو «غداً»، فالتطبيق يحسب «اليوم / غداً» منه لحظة النشر.
   note: اتركه فارغاً للدفن القادم (upcoming) دائماً؛ الموعد والمقبرة في حقولهما. يُملأ فقط عند postponed بسبب التأجيل كما ورد،
   أو عند completed بما ورد في النص عن الدفن الذي تم. لا تكتب «تم الدفن» من عندك.
@@ -321,7 +323,7 @@ const WEEKDAY_RE = /(?:^|\s)(السبت|الأحد|الاحد|الاثنين|ا�
 const RELATIVE_DAY_RE = /(?:^|\s)(اليوم|الحين|الليلة|الليله|غداً|غدا|بكرة|بكره|بعد غد)(?=\s|$)/u;
 const PRAYER_TIME_RE = /(?:بعد|عقب) صلاة (?:الفجر|الظهر|العصر|المغرب|العشاء|الجمعة|التراويح)/u;
 const CLOCK_TIME_RE = /(?:الساعة\s*)?\d{1,2}(?::\d{2})?\s*(?:صباحاً|صباحا|ظهراً|ظهرا|عصراً|عصرا|مساءً|مساء)/u;
-const CEMETERY_RE = /(?:(?<!\p{L})|(?<=(?<!\p{L})ب))مقبرة\s+(?:(?:أبو|ابو|أم|ام)\s+\S+|الوكرة\s+الجنوبية|\S+)/u;
+const CEMETERY_RE = /(?:(?<!\p{L})|(?<=(?<!\p{L})ب))(?:مقبرة|مقابر)\s+(?:(?:أبو|ابو|بو|أم|ام)\s+\S+|الوكرة\s+الجنوبية|\S+)/u;
 
 /** الكتابة المعتمدة لما يرد بالعامية أو بلا همزة: «الاحد» ← «الأحد»، «بكره» ← «غداً»، «عقب صلاة» ← «بعد صلاة». */
 const SPELLING: Record<string, string> = {
@@ -368,9 +370,16 @@ export function splitBurialNote(burial: Loose): Loose {
   };
 }
 
+/** «مقبرة أبو هامور» (أو «ابو هامور»، «بوهامور») اسم متعارف عليه لمقبرة مسيمير، لا مقبرة مستقلة. */
+export function canonicalCemetery(value: string): string {
+  const name = value.trim();
+  if (!name) return name;
+  return /^(?:(?:مقبر[ةه]|مقابر)\s*)?[أا]?بو\s*هامور$/u.test(name) ? "مقبرة مسيمير" : name;
+}
+
 /** يلتقط من جملة الدفن المقبرة والوقت واسم اليوم و«اليوم / غداً» بالكتابة المعتمدة؛ take يقتطع ما يطابق من الجملة. */
 function burialParts(take: (re: RegExp) => string) {
-  const cemetery = take(CEMETERY_RE).replace(/^مقبرة (?:ابو|ام) /u, (match) => match.replace(" ا", " أ"));
+  const cemetery = canonicalCemetery(take(CEMETERY_RE).replace(/^مقبرة (?:ابو|ام) /u, (match) => match.replace(" ا", " أ")));
   const time = (take(PRAYER_TIME_RE) || take(CLOCK_TIME_RE)).replace(/^عقب /u, "بعد ");
   const weekday = canonical(take(WEEKDAY_RE));
   const day = canonical(take(RELATIVE_DAY_RE));
@@ -548,6 +557,7 @@ export function toRequest(raw: unknown, source = ""): ExtractResult {
   }
   // النموذج يكتب أحياناً «تم الدفن» في ملاحظة دفن قادم، فيخرج الإعلان بموعد الدفن ثم «تم الدفن». لا ملاحظة للدفن القادم،
   // ولا ملاحظة تقول «تم الدفن» فقط في أي حالة (الحالة completed تكتبها).
+  if (text(fixedBurial.cemetery)) fixedBurial.cemetery = canonicalCemetery(text(fixedBurial.cemetery));
   const burialNote = text(fixedBurial.note);
   if (burialNote && (burialStatus === "upcoming" || BARE_DONE_RE.test(burialNote))) {
     delete fixedBurial.note;

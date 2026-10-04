@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import express from "express";
 import { ADMIN_COOKIE, createSessionToken } from "./admin-auth";
-import { AiError, DEFAULT_MODEL, FALLBACK_MODEL, HOLLOW_WARNING, aiConfig, aiEnvHints, buildGeminiBody, burialFromSource, extractRequest, inSource, isHollow, readJson, splitBurialNote, stripCommentary, toRequest } from "./ai-extract";
+import { AiError, DEFAULT_MODEL, FALLBACK_MODEL, HOLLOW_WARNING, aiConfig, aiEnvHints, buildGeminiBody, burialFromSource, canonicalCemetery, extractRequest, inSource, isHollow, readJson, splitBurialNote, stripCommentary, toRequest } from "./ai-extract";
 import aiRouter from "../routes/ai";
 
 /** رد نموذجي كما يُرجعه Gemini لإعلان وهمي (بقيم فارغة وnull كما يحدث فعلاً). */
@@ -108,7 +108,7 @@ const cases: Array<[string, () => void | Promise<void>]> = [
     );
     assert.deepEqual(
       splitBurialNote({ status: "upcoming", outsideQatar: false, time: "بعد صلاة العصر في مقبرة أبو هامور غداً" }),
-      { status: "upcoming", outsideQatar: false, day: "غداً", weekday: undefined, time: "بعد صلاة العصر", cemetery: "مقبرة أبو هامور", note: undefined },
+      { status: "upcoming", outsideQatar: false, day: "غداً", weekday: undefined, time: "بعد صلاة العصر", cemetery: "مقبرة مسيمير", note: undefined },
     );
     // ما بقي بعد الفكّ يظل ملاحظة، والحقول الموجودة لا تُمحى
     const split = splitBurialNote({ status: "upcoming", outsideQatar: false, day: "اليوم", note: "بعد صلاة المغرب في مقبرة الوكرة ويُرجى الحضور مبكراً" });
@@ -131,7 +131,7 @@ const cases: Array<[string, () => void | Promise<void>]> = [
   }],
   ["burialFromSource: موعد الدفن ومقبرته من جملة الدفن في الرسالة، بالعامية وبلا همزات", () => {
     assert.deepEqual(burialFromSource(WHATSAPP_TEXT), { cemetery: "مقبرة مسيمير", time: "بعد صلاة العصر", weekday: "الأحد", day: "اليوم" });
-    assert.deepEqual(burialFromSource("انتقل الى رحمة الله فلان والدفن بكره عقب صلاة الظهر في مقبرة ابو هامور والعزاء للرجال في مجلسهم"), { cemetery: "مقبرة أبو هامور", time: "بعد صلاة الظهر", day: "غداً" });
+    assert.deepEqual(burialFromSource("انتقل الى رحمة الله فلان والدفن بكره عقب صلاة الظهر في مقبرة ابو هامور والعزاء للرجال في مجلسهم"), { cemetery: "مقبرة مسيمير", time: "بعد صلاة الظهر", day: "غداً" });
     assert.deepEqual(burialFromSource("توفيت فلانة وسيتم دفنها الساعة 9:30 مساءً في مقبرة الوكرة الجنوبية اليوم الاثنين"), { cemetery: "مقبرة الوكرة الجنوبية", time: "الساعة 9:30 مساءً", weekday: "الاثنين", day: "اليوم" });
     assert.deepEqual(burialFromSource("توفي فلان، يُدفن غدا الخميس بعد صلاة المغرب بمقبرة الخور"), { cemetery: "مقبرة الخور", time: "بعد صلاة المغرب", weekday: "الخميس", day: "غداً" });
     // دفن تمّ، أو تأجيل، أو «الدفن» داخل جملة العزاء: لا شيء
@@ -184,6 +184,18 @@ const cases: Array<[string, () => void | Promise<void>]> = [
     // سبب التأجيل يبقى
     const postponed = toRequest({ ...AI_OUTPUT, burial: { status: "postponed", outsideQatar: false, note: "لحين وصول الجثمان" } }, "توفي سالم راشد المهندي، وتأجيل الدفن لحين وصول الجثمان").request.burial;
     assert.equal(postponed.note, "لحين وصول الجثمان");
+  }],
+  ["«مقبرة أبو هامور» هي مقبرة مسيمير (بأي كتابة)، ومنطقة أبو هامور لمقر العزاء تبقى", () => {
+    for (const name of ["مقبرة أبو هامور", "مقبرة ابو هامور", "مقبرة بوهامور", "مقابر أبو هامور", "أبو هامور", "ابوهامور"]) assert.equal(canonicalCemetery(name), "مقبرة مسيمير", name);
+    assert.equal(canonicalCemetery("مقبرة الخور"), "مقبرة الخور");
+    assert.deepEqual(burialFromSource("والدفن اليوم بعد صلاة العصر في مقبرة بو هامور"), { cemetery: "مقبرة مسيمير", time: "بعد صلاة العصر", day: "اليوم" });
+    const { request } = toRequest({
+      ...AI_OUTPUT,
+      burial: { status: "upcoming", outsideQatar: false, day: "اليوم", time: "بعد صلاة العصر", cemetery: "مقبرة أبو هامور" },
+      condolences: [{ audience: "men", location: "مجلس المري", area: "أبو هامور" }],
+    });
+    assert.equal(request.burial.cemetery, "مقبرة مسيمير");
+    assert.equal(request.condolences[0].area, "أبو هامور");
   }],
   ["inSource: يقارن الكلمات بعد توحيد الهمزات والتاء المربوطة ونزع «ال» و«و» و«ب»", () => {
     assert.equal(inSource("تأجيل الدفن لحين وصول الجثمان", "تاجيل الدفن لحين وصول الجثمان من الخارج"), true);

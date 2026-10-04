@@ -831,10 +831,22 @@ function composeIdentity(request: ObituaryRequestInput, warnings: string[]): Ide
 
 // ───────────────────────── الصلاة والدفن ─────────────────────────
 
+/**
+ * «مقبرة أبو هامور» (أو «ابو هامور»، «بوهامور») اسم متعارف عليه لمقبرة مسيمير، لا مقبرة مستقلة، فتُكتب باسمها.
+ * منطقة أبو هامور نفسها (مقر عزاء) لا تتغير: الاستبدال فقط حين تُذكر «مقبرة / مقابر» أو في خانة المقبرة.
+ */
+const ABU_HAMOUR_CEMETERY = /(?:مقبر[ةه]|مقابر)\s*[أا]?بو\s*هامور/gu;
+const ABU_HAMOUR_ONLY = /^[أا]?بو\s*هامور$/u;
+export function fixCemeteryNames(text: string): string {
+  return text.replace(ABU_HAMOUR_CEMETERY, "مقبرة مسيمير");
+}
+
 function cemeteryPhrase(cemetery: string): string {
   const value = clean(cemetery);
   if (!value) return "";
-  return /^مقبر[ةه]/u.test(value) ? value : `مقبرة ${value}`;
+  if (ABU_HAMOUR_ONLY.test(value)) return "مقبرة مسيمير";
+  const fixed = fixCemeteryNames(value);
+  return /^مقبر[ةه]/u.test(fixed) ? fixed : `مقبرة ${fixed}`;
 }
 
 function burialPlace(request: ObituaryRequestInput): string {
@@ -859,11 +871,11 @@ function prayerAndBurial(
   const place = burialPlace(request);
   const burialWhen = dayTimePhrase(burial.day, burial.weekday, burial.time, now);
   const prayerEnabled = prayer.enabled && status !== "postponed";
-  const note = clean(burial.note);
+  const note = fixCemeteryNames(clean(burial.note));
 
   const prayerWhen = prayerEnabled ? dayTimePhrase(prayer.day, prayer.weekday, prayer.time, now) : "";
   if (prayerEnabled) {
-    const prayerPlace = clean(prayer.place);
+    const prayerPlace = fixCemeteryNames(clean(prayer.place));
     prayerLines.push(sentence([
       status === "completed" ? "تمت صلاة الجنازة" : "صلاة الجنازة",
       prayerWhen,

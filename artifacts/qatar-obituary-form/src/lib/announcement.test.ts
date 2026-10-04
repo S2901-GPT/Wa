@@ -379,6 +379,16 @@ const cases: Array<[string, () => void]> = [
     assert.match(empty.text, /^الدفن في مقبرة مسيمير$/mu);
     assert.ok(empty.warnings.includes("يوم الدفن غير محدد."));
   }],
+  ["«مقبرة أبو هامور» تُكتب «مقبرة مسيمير»، ومنطقة أبو هامور في العزاء تبقى", () => {
+    for (const cemetery of ["مقبرة أبو هامور", "أبو هامور", "ابو هامور", "مقبرة بوهامور"]) {
+      assert.match(text({ burial: { status: "upcoming", outsideQatar: false, day: "اليوم", time: "بعد صلاة العصر", cemetery } }), /الدفن اليوم بعد صلاة العصر في مقبرة مسيمير/u, cemetery);
+    }
+    const prayer = text({ prayer: { enabled: true, day: "اليوم", time: "بعد صلاة العصر", place: "جامع أبو هامور" }, burial: { status: "upcoming", outsideQatar: false, cemetery: "مقبرة ابو هامور" } });
+    assert.match(prayer, /جامع أبو هامور/u);
+    assert.match(prayer, /والدفن في مقبرة مسيمير/u);
+    const venue = text({ condolenceOptions: ["men"], condolences: [{ audience: "men", location: "مجلس المري", area: "أبو هامور" }] });
+    assert.match(venue, /مجلس المري بمنطقة أبو هامور/u);
+  }],
   ["مكان الوفاة «في لندن» لا يُكتب «في في لندن»", () => {
     const result = text({ deceasedPeople: [{ fullName: "محمد ناصر العطية", gender: "man", deathPlace: "في لندن" }] });
     assert.match(result, /في لندن/u);
