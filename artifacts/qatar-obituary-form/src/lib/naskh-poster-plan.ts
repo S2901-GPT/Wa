@@ -6,7 +6,8 @@
 // الترتيب كما في الأرشيف: إنا لله ← توفي ← الاسم ← التفاصيل ← الأقارب ← الصلاة ← الدفن ← عزاء الرجال ← عزاء النساء
 // ← الهاتف ← الملاحظات ← الدعاء، والشعار كبيراً في وسط أسفل الصورة (تذييل).
 //
-// الاسم في سطر واحد متى أمكن (56 ← 46)، وإلا سطران بحجمه.
+// الاسم في سطر واحد متى أمكن (يصغر حتى 46)، وإلا سطران بحجمه.
+// أحجام المخطوطة والاسم والنص من التوزيع المختار (NASKH_TYPE_SCALES)، والمسافات والحدود هنا.
 // الضبط التلقائي عند الامتلاء، بالترتيب: يصغر الاسم (حتى 48 مع سطرين على الأكثر)، ثم النص قليلاً (حتى 0.9)،
 // ثم تطول الصورة (1350 ← الحد الأقصى بخطوات 90)، ثم النص حتى 0.76 (42 × 0.78 = 32.7 بكسل ولا أقل)، وأخيراً يصغر الشعار
 // (170 ← 72، حجم الشريط القديم) بدل أن يفيض المحتوى.
@@ -33,14 +34,9 @@ export const NASKH_METRICS = {
   footerLogo: 170,
   footerLogoMin: 72,
   footerLogoMaxWidth: 460,
-  openingHeight: 96,
-  namePx: 56,
   /** يصغر الاسم حتى هذا الحد ليبقى في سطر واحد؛ فإن لم يتسع عاد لحجمه في سطرين. */
   nameOneLinePx: 46,
   nameMinPx: 48,
-  bodyPx: 42,
-  headingPx: 45,
-  closingPx: 48,
   lineHeight: 1.45,
   nameLineHeight: 1.35,
   qrSize: 160,
@@ -63,7 +59,6 @@ export const NASKH_METRICS = {
   paperInset: 92,
   paperTop: 66,
   paperBandBottom: 52,
-  paperNamePx: 52,
   letterheadBandTop: 36,
   letterheadRule: 148,
   letterheadTop: 174,
@@ -102,6 +97,44 @@ export const NASKH_LAYOUTS: readonly NaskhLayout[] = [
 export function isNaskhLayoutId(value: unknown): value is NaskhLayoutId {
   return typeof value === "string" && NASKH_LAYOUTS.some((layout) => layout.id === value);
 }
+
+// ───────────────────────── أحجام الخط ─────────────────────────
+
+export type NaskhTypeScaleId = "classic" | "roomy" | "close" | "even";
+/** توزيع أحجام: المخطوطة والاسم والنص وعناوين الأقسام والدعاء، بالبكسل على صورة عرضها 1080. */
+export type NaskhTypeScale = {
+  id: NaskhTypeScaleId;
+  name: string;
+  description: string;
+  openingHeight: number;
+  namePx: number;
+  /** اسم الصحيفة أصغر لأن «توفي» تُكتب معه في السطر نفسه. */
+  paperNamePx: number;
+  bodyPx: number;
+  headingPx: number;
+  closingPx: number;
+};
+
+export const DEFAULT_NASKH_TYPE_SCALE: NaskhTypeScaleId = "roomy";
+
+/** الأحجام المتاحة في الاستوديو بترتيب عرضها؛ «roomy» هو المعتمد افتراضياً. */
+export const NASKH_TYPE_SCALES: readonly NaskhTypeScale[] = [
+  { id: "classic", name: "الحالي", description: "الاسم أبرز ما في الصورة، والنص أصغر", openingHeight: 96, namePx: 56, paperNamePx: 52, bodyPx: 42, headingPx: 45, closingPx: 48 },
+  { id: "roomy", name: "مخطوطة أصغر", description: "مخطوطة «إنا لله» أصغر، فيكبر النص دون أن تطول الصورة", openingHeight: 72, namePx: 54, paperNamePx: 50, bodyPx: 44, headingPx: 46, closingPx: 48 },
+  { id: "close", name: "متقارب", description: "النص قريب من حجم الاسم، والفرق بينهما أربعة فقط", openingHeight: 68, namePx: 50, paperNamePx: 48, bodyPx: 46, headingPx: 47, closingPx: 48 },
+  { id: "even", name: "متساوٍ", description: "النص بحجم الاسم، ويتميز الاسم بالخط العريض", openingHeight: 62, namePx: 48, paperNamePx: 48, bodyPx: 48, headingPx: 48, closingPx: 50 },
+];
+
+export function isNaskhTypeScaleId(value: unknown): value is NaskhTypeScaleId {
+  return typeof value === "string" && NASKH_TYPE_SCALES.some((scale) => scale.id === value);
+}
+
+export function naskhTypeScale(id: NaskhTypeScaleId | undefined): NaskhTypeScale {
+  return NASKH_TYPE_SCALES.find((scale) => scale.id === (id ?? DEFAULT_NASKH_TYPE_SCALE)) ?? NASKH_TYPE_SCALES[1];
+}
+
+/** قيمة أولية فقط: الحجم الفعلي للاسم يأتي من التوزيع المختار في planNaskhLayout. */
+const DEFAULT_NAME_PX = 56;
 
 type Align = "right" | "center";
 type LayoutSpec = {
@@ -142,7 +175,7 @@ const BASE_SPEC: LayoutSpec = {
   venues: "row",
   sectionHeadings: false,
   inlineHead: false,
-  namePx: NASKH_METRICS.namePx,
+  namePx: DEFAULT_NAME_PX,
   openingInContent: true,
   topBand: false,
   bandBottom: NASKH_METRICS.bandBottom,
@@ -165,7 +198,7 @@ const LAYOUT_SPECS: Record<NaskhLayoutId, LayoutSpec> = {
     relativesBox: true,
     venues: "balanced",
     inlineHead: true,
-    namePx: NASKH_METRICS.paperNamePx,
+    namePx: DEFAULT_NAME_PX,
     frame: true,
   },
   headings: { ...BASE_SPEC, headAlign: "center", bodyAlign: "center", relativesBox: true, separator: "short", venues: "balanced", sectionHeadings: true },
@@ -233,6 +266,7 @@ export type NaskhPlan = {
   namePx: number;
   /** أصغر حجم خط مستخدم في النص بعد الضبط. */
   minTextPx: number;
+  typeScale: NaskhTypeScaleId;
   gap: number;
   /** بقي المحتوى أطول من الصورة حتى بعد كل الضبط (نادر جداً). */
   overflow: boolean;
@@ -250,6 +284,8 @@ export type NaskhPlanOptions = {
   qrAvailable: Partial<Record<NaskhQrKey, boolean>>;
   /** يوجد شعار، فيُحجز له تذييل أسفل الصورة؛ وبدونه لا يُترك مكان فارغ. */
   logo?: boolean;
+  /** توزيع أحجام الخط (المخطوطة والاسم والنص)؛ الافتراضي «مخطوطة أصغر». */
+  typeScale?: NaskhTypeScaleId;
 };
 
 const NBSP = "\u00A0";
@@ -465,23 +501,23 @@ type Placed =
 type Block = { kind: "opening" | "section"; h: number; parts: Placed[]; section?: NaskhSectionId };
 
 type Geometry = { left: number; right: number; center: number; contentWidth: number };
-type PlanContext = { spec: LayoutSpec; geo: Geometry; scale: number; namePx: number; measure: MeasureFn; opts: NaskhPlanOptions };
+type PlanContext = { spec: LayoutSpec; geo: Geometry; scale: number; namePx: number; type: NaskhTypeScale; measure: MeasureFn; opts: NaskhPlanOptions };
 
 function fontFor(style: NaskhRowStyle, ctx: PlanContext): NaskhFont & { color: string; lineHeight: number } {
-  const { scale, namePx } = ctx;
+  const { scale, namePx, type } = ctx;
   switch (style) {
     case "statement":
-      return { px: NASKH_METRICS.bodyPx * scale, weight: 400, color: NASKH_COLORS.muted, lineHeight: NASKH_METRICS.lineHeight };
+      return { px: type.bodyPx * scale, weight: 400, color: NASKH_COLORS.muted, lineHeight: NASKH_METRICS.lineHeight };
     case "name":
       return { px: namePx * scale, weight: 700, color: NASKH_COLORS.ink, lineHeight: NASKH_METRICS.nameLineHeight };
     case "heading":
-      return { px: NASKH_METRICS.bodyPx * scale, weight: 700, color: NASKH_COLORS.ink, lineHeight: NASKH_METRICS.lineHeight };
+      return { px: type.bodyPx * scale, weight: 700, color: NASKH_COLORS.ink, lineHeight: NASKH_METRICS.lineHeight };
     case "title":
-      return { px: NASKH_METRICS.headingPx * scale, weight: 700, color: NASKH_COLORS.ink, lineHeight: NASKH_METRICS.lineHeight };
+      return { px: type.headingPx * scale, weight: 700, color: NASKH_COLORS.ink, lineHeight: NASKH_METRICS.lineHeight };
     case "closing":
-      return { px: NASKH_METRICS.closingPx * scale, weight: 700, color: NASKH_COLORS.ink, lineHeight: NASKH_METRICS.lineHeight };
+      return { px: type.closingPx * scale, weight: 700, color: NASKH_COLORS.ink, lineHeight: NASKH_METRICS.lineHeight };
     default:
-      return { px: NASKH_METRICS.bodyPx * scale, weight: 400, color: NASKH_COLORS.text, lineHeight: NASKH_METRICS.lineHeight };
+      return { px: type.bodyPx * scale, weight: 400, color: NASKH_COLORS.text, lineHeight: NASKH_METRICS.lineHeight };
   }
 }
 
@@ -651,7 +687,7 @@ function tableBlock(sections: NaskhSection[], ctx: PlanContext): Block {
   const gap = NASKH_METRICS.tableGap;
   const keyW = Math.round(NASKH_METRICS.tableKeyWidth * scale);
   const keyFont = fontFor("heading", ctx);
-  const keyPx = NASKH_METRICS.bodyPx * scale;
+  const keyPx = ctx.type.bodyPx * scale;
   const keyLineH = Math.round(keyPx * NASKH_METRICS.lineHeight);
   const parts: Placed[] = [];
   let dy = 0;
@@ -703,7 +739,7 @@ function buildBlocks(sections: NaskhSection[], ctx: PlanContext): Block[] {
   const { spec, scale } = ctx;
   const blocks: Block[] = [];
   if (spec.openingInContent) {
-    const openingH = ctx.opts.openingIsImage ? Math.round(NASKH_METRICS.openingHeight * scale) : Math.round(NASKH_METRICS.closingPx * scale * NASKH_METRICS.lineHeight);
+    const openingH = ctx.opts.openingIsImage ? Math.round(ctx.type.openingHeight * scale) : Math.round(ctx.type.closingPx * scale * NASKH_METRICS.lineHeight);
     blocks.push({ kind: "opening", h: openingH, parts: [] });
   }
 
@@ -745,20 +781,40 @@ function nameLineCount(blocks: Block[], namePx: number, scale: number): number {
   return head.parts.filter((part) => part.kind === "line" && Math.abs(part.px - px) < 0.01).length;
 }
 
+/**
+ * التوزيع المختار ثم الأصغر منه فالأصغر: الإعلان المزدحم ينزل درجة في الحجم بدل أن يفيض،
+ * فالاختيار تفضيل لا قيد. الترتيب بحجم النص تنازلياً (متساوٍ ← متقارب ← مخطوطة أصغر ← الحالي).
+ */
+function typeScaleLadder(chosen: NaskhTypeScale): NaskhTypeScale[] {
+  const smaller = [...NASKH_TYPE_SCALES].sort((a, b) => b.bodyPx - a.bodyPx).filter((scale) => scale.bodyPx < chosen.bodyPx);
+  return [chosen, ...smaller];
+}
+
 export function planNaskhLayout(content: NormalizedContent, measure: MeasureFn, opts: NaskhPlanOptions): NaskhPlan {
+  const chosen = naskhTypeScale(opts.typeScale);
+  for (const [index, candidate] of typeScaleLadder(chosen).entries()) {
+    const plan = planAtTypeScale(content, measure, opts, candidate);
+    if (!plan.overflow || index === typeScaleLadder(chosen).length - 1) return plan;
+  }
+  throw new Error("unreachable");
+}
+
+function planAtTypeScale(content: NormalizedContent, measure: MeasureFn, opts: NaskhPlanOptions, type: NaskhTypeScale): NaskhPlan {
   const layout = opts.layout ?? DEFAULT_NASKH_LAYOUT;
-  const spec = LAYOUT_SPECS[layout];
+  // حجم الاسم من التوزيع المختار، وتخطيط الصحيفة له حجمه الأصغر
+  const spec = { ...LAYOUT_SPECS[layout], namePx: layout === "paper" ? type.paperNamePx : type.namePx };
   const minHeight = opts.minHeight ?? NASKH_METRICS.minHeight;
   const maxHeight = Math.max(minHeight, opts.maxHeight ?? NASKH_METRICS.maxHeight);
   const step = opts.heightStep ?? NASKH_METRICS.heightStep;
   const sections = buildNaskhSections(content);
   const geo: Geometry = { left: spec.inset, right: NASKH_METRICS.width - spec.inset, center: NASKH_METRICS.width / 2, contentWidth: NASKH_METRICS.width - spec.inset * 2 };
   const nameMinPx = Math.min(spec.namePx, NASKH_METRICS.nameMinPx);
+  const oneLinePx = Math.min(spec.namePx, NASKH_METRICS.nameOneLinePx);
 
   let scale = 1;
   let namePx: number = spec.namePx;
   let height = minHeight;
-  const context = (): PlanContext => ({ spec, geo, scale, namePx, measure, opts });
+  const context = (): PlanContext => ({ spec, geo, scale, namePx, type, measure, opts });
   let blocks = buildBlocks(sections, context());
   const separators = spec.separator === "none" ? 0 : Math.max(0, blocks.filter((block) => block.kind === "section").length - 1);
   let footerLogo: number = NASKH_METRICS.footerLogo;
@@ -772,7 +828,7 @@ export function planNaskhLayout(content: NormalizedContent, measure: MeasureFn, 
 
   // 1) الاسم: سطر واحد إن اتسع له بتصغير خفيف، وإلا سطران بحجمه الكامل؛ ثم سطران على الأكثر، ويصغر قبل أي شيء آخر
   const fullNamePx = namePx;
-  while (nameLineCount(blocks, namePx, scale) > 1 && namePx > NASKH_METRICS.nameOneLinePx) {
+  while (nameLineCount(blocks, namePx, scale) > 1 && namePx > oneLinePx) {
     namePx -= 2;
     remeasure();
   }
@@ -832,7 +888,7 @@ export function planNaskhLayout(content: NormalizedContent, measure: MeasureFn, 
       y += 1 + gap;
     }
     if (block.kind === "opening") {
-      items.push({ kind: "opening", y, h: block.h, px: Math.round(NASKH_METRICS.closingPx * scale), text: opts.openingIsImage ? undefined : content.opening });
+      items.push({ kind: "opening", y, h: block.h, px: Math.round(type.closingPx * scale), text: opts.openingIsImage ? undefined : content.opening });
     } else {
       sectionIndex += 1;
       for (const part of block.parts) {
@@ -860,5 +916,5 @@ export function planNaskhLayout(content: NormalizedContent, measure: MeasureFn, 
     items.push({ kind: "band", position: "bottom", y: height - spec.bandBottom - footerHeight(), h: footerHeight(), x: geo.left, width: geo.contentWidth });
   }
 
-  return { layout, width: NASKH_METRICS.width, height, scale, namePx, minTextPx: Number.isFinite(minTextPx) ? minTextPx : 0, gap, overflow, items };
+  return { layout, typeScale: type.id, width: NASKH_METRICS.width, height, scale, namePx, minTextPx: Number.isFinite(minTextPx) ? minTextPx : 0, gap, overflow, items };
 }

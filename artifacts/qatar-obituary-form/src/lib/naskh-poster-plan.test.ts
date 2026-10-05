@@ -9,6 +9,8 @@ import {
   NASKH_FOOTER_HEIGHT,
   NASKH_LAYOUTS,
   NASKH_METRICS,
+  NASKH_TYPE_SCALES,
+  naskhTypeScale,
   buildNaskhSections,
   planNaskhLayout,
   posterQrUrls,
@@ -17,6 +19,7 @@ import {
   wrapAtoms,
   type MeasureFn,
   type NaskhPlanOptions,
+  type NaskhTypeScaleId,
   toArabicIndicDigits,
 } from "./naskh-poster-plan";
 
@@ -40,6 +43,9 @@ function makeRequest(overrides: Partial<ObituaryRequest> = {}): ObituaryRequest 
     ...overrides,
   } as ObituaryRequest;
 }
+
+/** التوزيع الافتراضي للأحجام (المخطوطة والاسم والنص)؛ الاختبارات تقيس عليه لا على أرقام ثابتة. */
+const TYPE = naskhTypeScale(undefined);
 
 // قياس وهمي ثابت: كل حرف يساوي 0.55 من حجم الخط (أعرض من الواقع قليلاً ليُجبر الالتفاف في الحالات الطويلة)
 const measure: MeasureFn = (text, font) => text.length * font.px * 0.55;
@@ -186,21 +192,25 @@ const cases: Array<[string, () => void]> = [
     assert.deepEqual(sections[5].rows, [{ style: "body", label: "والنساء", text: "في منزل الفقيد رقم 50" }]);
   }],
   ["a common announcement fits the base height at full size", () => {
+    // القياس الوهمي أعرض من خط النسخ بنحو الخُمس، فقد تطول الصورة هنا خطوة لا تطولها بالخط الحقيقي
     const bare = plan(makeRequest(), { logo: false });
-    assert.deepEqual([bare.height, bare.overflow], [1350, false]);
+    assert.equal(bare.overflow, false);
+    assert.ok(bare.height <= 1350 + NASKH_METRICS.heightStep, `height ${bare.height}`);
+    assert.equal(plan(makeRequest(), { logo: false, typeScale: "classic" }).height, 1350);
     // الاسم في سطر واحد (يصغر قليلاً عن 56 إن لزم)
-    assert.ok(bare.namePx >= NASKH_METRICS.nameOneLinePx && bare.namePx <= NASKH_METRICS.namePx, `name ${bare.namePx}`);
+    assert.ok(bare.namePx >= Math.min(TYPE.namePx, NASKH_METRICS.nameOneLinePx) && bare.namePx <= TYPE.namePx, `name ${bare.namePx}`);
     assert.equal(lineItems(bare).filter((item) => item.section === "head" && Math.abs(item.px - bare.namePx * bare.scale) < 0.01).length, 1);
     assert.ok(bare.scale >= 1, `scale ${bare.scale}`);
-    // والشعار الكبير يأخذ من المساحة فيصغر الاسم والنص قليلاً، وتبقى الصورة 1350 والشعار بحجمه الكامل
+    // والشعار الكبير يأخذ من المساحة فيصغر الاسم والنص قليلاً، والشعار يبقى بحجمه الكامل
     const p = plan(makeRequest());
-    assert.equal(p.height, 1350);
+    assert.ok(p.height <= 1350 + NASKH_METRICS.heightStep, `height ${p.height}`);
+    assert.equal(plan(makeRequest(), { typeScale: "classic" }).height, 1350);
     assert.equal(p.overflow, false);
-    assert.ok(p.namePx >= NASKH_METRICS.nameMinPx, `name ${p.namePx}`);
+    assert.ok(p.namePx >= Math.min(TYPE.namePx, NASKH_METRICS.nameMinPx), `name ${p.namePx}`);
     assert.ok(p.scale >= NASKH_METRICS.softScale, `scale ${p.scale}`);
     assert.ok(p.gap >= NASKH_METRICS.minGap && p.gap <= NASKH_METRICS.maxGap);
     const band = p.items.find((item): item is Extract<typeof item, { kind: "band" }> => item.kind === "band")!;
-    assert.deepEqual([band.position, band.y, band.h, band.x, band.width], ["bottom", 1350 - 36 - NASKH_FOOTER_HEIGHT, NASKH_FOOTER_HEIGHT, 72, 936]);
+    assert.deepEqual([band.position, band.y, band.h, band.x, band.width], ["bottom", p.height - 36 - NASKH_FOOTER_HEIGHT, NASKH_FOOTER_HEIGHT, 72, 936]);
     const qrs = p.items.filter((item) => item.kind === "qr");
     assert.deepEqual(qrs.map((item) => item.key), ["men", "women"]);
     assert.ok(qrs.every((item) => item.size >= Math.floor(NASKH_METRICS.qrSize * p.scale) && item.x === NASKH_METRICS.inset));
@@ -215,18 +225,18 @@ const cases: Array<[string, () => void]> = [
     const p = plan(makeRequest({ deceasedPeople: [{ fullName: "محمد بن عبدالله بن سالم بن ناصر بن خليفة بن حمد", title: "الوالد", gender: "man" }] }));
     const nameLines = lineItems(p).filter((item) => item.section === "head" && Math.abs(item.px - p.namePx * p.scale) < 0.01);
     assert.ok(nameLines.length <= 2, `name lines ${nameLines.length}`);
-    assert.ok(p.namePx <= NASKH_METRICS.namePx);
+    assert.ok(p.namePx <= TYPE.namePx);
   }],
   ["a name slightly too wide for one line shrinks a little to stay on one line; a long one keeps two lines at full size", () => {
     const nameLines = (p: ReturnType<typeof plan>) => lineItems(p).filter((item) => item.section === "head" && Math.abs(item.px - p.namePx * p.scale) < 0.01);
     // 33 حرفاً: أعرض من السطر بحجم 56، ويتسع له بحجم 50 (بالقياس الوهمي)
     const near = plan(makeRequest({ deceasedPeople: [{ fullName: "عبدالله حمد هادي دخيل علي الودعاني", gender: "man" }] }), { logo: false });
     assert.equal(nameLines(near).length, 1);
-    assert.ok(near.namePx < NASKH_METRICS.namePx && near.namePx >= NASKH_METRICS.nameOneLinePx, `name px ${near.namePx}`);
+    assert.ok(near.namePx < TYPE.namePx && near.namePx >= Math.min(TYPE.namePx, NASKH_METRICS.nameOneLinePx), `name px ${near.namePx}`);
     // اسم طويل لا يتسع لسطر واحد حتى بأصغر حجم: سطران، ولا يصغر لأجل السطر الواحد (قد يصغر لاحقاً لضيق الصفحة فقط)
     const long = plan(makeRequest({ deceasedPeople: [{ fullName: "محمد بن عبدالله بن سالم بن ناصر بن خليفة", gender: "man" }] }), { logo: false });
     assert.equal(nameLines(long).length, 2);
-    assert.ok(long.namePx >= NASKH_METRICS.nameMinPx, `name px ${long.namePx}`);
+    assert.ok(long.namePx >= Math.min(TYPE.namePx, NASKH_METRICS.nameMinPx), `name px ${long.namePx}`);
   }],
   ["a heavy announcement grows the image instead of shrinking the text below 32px", () => {
     const many = (prefix: string, count: number) => Array.from({ length: count }, (_, index) => ({ name: `${prefix}${index + 1}`, deceased: index % 5 === 4 }));
@@ -258,12 +268,12 @@ const cases: Array<[string, () => void]> = [
   }],
   ["every layout fits the common announcement without overflow and keeps every item inside the image", () => {
     for (const layout of NASKH_LAYOUTS) {
-      assert.equal(plan(makeRequest(), { layout: layout.id, logo: false }).height, 1350, `${layout.id} without a logo`);
+      assert.equal(plan(makeRequest(), { layout: layout.id, logo: false, typeScale: "classic" }).height, 1350, `${layout.id} without a logo`);
       const p = plan(makeRequest(), { layout: layout.id });
       assert.equal(p.layout, layout.id);
       assert.equal(p.overflow, false, layout.id);
-      // مع الشعار قد تطول الصورة خطوة أو خطوتين، والشعار لا يصغر ما دامت الإطالة تكفي
-      assert.ok(p.height <= 1350 + 2 * NASKH_METRICS.heightStep, `${layout.id}: height ${p.height}`);
+      // مع الشعار قد تطول الصورة بضع خطوات، والشعار لا يصغر ما دامت الإطالة تكفي
+      assert.ok(p.height <= 1350 + 3 * NASKH_METRICS.heightStep, `${layout.id}: height ${p.height}`);
       const footer = p.items.find((item): item is Extract<typeof item, { kind: "band" }> => item.kind === "band" && item.position === "bottom")!;
       assert.equal(footer.h, NASKH_FOOTER_HEIGHT, `${layout.id}: full-size logo`);
       assert.ok(p.minTextPx >= 32, `${layout.id}: min text ${p.minTextPx}`);
@@ -322,14 +332,14 @@ const cases: Array<[string, () => void]> = [
     const nameLines = lineItems(p).filter((item) => item.section === "head" && Math.abs(item.px - p.namePx * p.scale) < 0.01);
     assert.equal(nameLines.map(lineText).join(" "), "توفي الوالد / محمد بن عبدالله بن سالم");
     assert.ok(!lineItems(p).some((item) => lineText(item) === "توفي"), "no separate statement line");
-    assert.ok(p.namePx <= NASKH_METRICS.paperNamePx && p.namePx >= NASKH_METRICS.nameOneLinePx, `name px ${p.namePx}`);
+    assert.ok(p.namePx <= TYPE.paperNamePx && p.namePx >= Math.min(TYPE.namePx, NASKH_METRICS.nameOneLinePx), `name px ${p.namePx}`);
     const band = p.items.find((item): item is Extract<typeof item, { kind: "band" }> => item.kind === "band")!;
     assert.deepEqual([band.position, band.y, band.x], ["bottom", p.height - 52 - NASKH_FOOTER_HEIGHT, 92]);
     assert.ok(lineItems(p).every((item) => item.xRight <= NASKH_METRICS.width - 92));
   }],
   ["the headings layout writes a bold title line above the burial and each venue", () => {
     const p = plan(makeRequest(), { layout: "headings" });
-    const headings = lineItems(p).filter((item) => item.runs.length === 1 && item.runs[0].weight === 700 && item.section !== "head" && item.section !== "closing" && item.px > NASKH_METRICS.bodyPx * p.scale + 1);
+    const headings = lineItems(p).filter((item) => item.runs.length === 1 && item.runs[0].weight === 700 && item.section !== "head" && item.section !== "closing" && item.px > TYPE.bodyPx * p.scale + 1);
     assert.deepEqual(headings.map(lineText), ["الدفن", "عزاء الرجال", "عزاء النساء"]);
     assert.ok(!lineItems(p).some((item) => lineText(item).startsWith("والنساء")), "no inline «والنساء»");
   }],
@@ -368,7 +378,7 @@ const cases: Array<[string, () => void]> = [
       assert.ok(!p.items.some((item) => item.kind === "band" && item.position === "bottom"), `${layout.id}: no footer`);
       assert.equal(p.overflow, false, layout.id);
       const bottom = layout.id === "paper" ? NASKH_METRICS.paperTop : layout.id === "letterhead" ? NASKH_METRICS.letterheadBottom : NASKH_METRICS.top;
-      assert.ok(lineItems(p).every((item) => item.y + item.h <= 1350 - bottom + 0.5), `${layout.id}: text above the bottom margin`);
+      assert.ok(lineItems(p).every((item) => item.y + item.h <= p.height - bottom + 0.5), `${layout.id}: text above the bottom margin`);
     }
     // ومع الشعار يبدأ التذييل تحت آخر سطر بمسافة لا تقل عن bandGap
     const withLogo = plan(makeRequest());
@@ -385,6 +395,25 @@ const cases: Array<[string, () => void]> = [
     const sections = buildNaskhSections(normalizeObituaryPresentation(request));
     assert.deepEqual(sections.map((section) => section.id), ["head", "notes", "closing"]);
     assert.deepEqual(sections[1].rows.map((row) => row.text), ["تقرر إلغاء عزاء النساء اعتباراً من اليوم", "ويُكتفى بتلقي العزاء عبر الهاتف"]);
+  }],
+  ["the four type scales change the calligraphy, the name and the body; a crowded announcement steps down instead of overflowing", () => {
+    const sizes = (scale: NaskhTypeScaleId) => {
+      const p = plan(makeRequest(), { typeScale: scale, logo: false });
+      const body = lineItems(p).filter((item) => item.section === "burial")[0];
+      return { typeScale: p.typeScale, namePx: p.namePx, bodyPx: Math.round(body.px / p.scale) };
+    };
+    // كل توزيع يُحترم، والنص يكبر كلما صغر الاسم
+    const all = NASKH_TYPE_SCALES.map((scale) => sizes(scale.id));
+    assert.deepEqual(all.map((item) => item.typeScale), NASKH_TYPE_SCALES.map((scale) => scale.id));
+    assert.deepEqual(all.map((item) => item.bodyPx), NASKH_TYPE_SCALES.map((scale) => scale.bodyPx));
+    assert.ok(all[3].bodyPx > all[0].bodyPx && all[3].namePx < all[0].namePx, JSON.stringify(all));
+    // إعلان مزدحم بحجم «متساوٍ» ينزل درجة أو أكثر بدل أن يفيض
+    const many = (prefix: string, count: number) => Array.from({ length: count }, (_, index) => ({ name: `${prefix}${index + 1}`, deceased: false }));
+    const crowded = makeRequest({ relatives: [{ relation: "الأبناء", relationKey: "children", people: many("عبدالله", 12) }, { relation: "الإخوة", relationKey: "siblings", people: many("ناصر", 10) }] });
+    const stepped = plan(crowded, { typeScale: "even", maxHeight: 1350 });
+    assert.notEqual(stepped.typeScale, "even");
+    assert.equal(stepped.overflow, false);
+    assert.ok(stepped.minTextPx >= 32, `min text ${stepped.minTextPx}`);
   }],
   ["an edited opening phrase is drawn as text", () => {
     const content = normalizeObituaryPresentation(makeRequest(), { opening: "بسم الله الرحمن الرحيم" });
