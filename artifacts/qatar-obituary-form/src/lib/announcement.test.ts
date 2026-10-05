@@ -225,8 +225,15 @@ const cases: Array<[string, () => void]> = [
   }],
   ["15 تأجيل الدفن حتى إشعار آخر ثم رسالة تعديل بموعد جديد", () => {
     const deceased = [{ gender: "woman" as const, identifyBy: "spouse" as const, spouse: { kind: "harem" as const, name: "علي حسن", deceased: false } }];
-    const postponed = buildAnnouncement(request({ messageType: "postponement", deceasedPeople: deceased }));
+    const noDate = { status: "postponed" as const, outsideQatar: false };
+    const postponed = buildAnnouncement(request({ messageType: "postponement", deceasedPeople: deceased, burial: noDate }));
     assert.equal(postponed.text, "تأجيل دفن حرم / علي حسن رحمها الله حتى إشعار آخر");
+    // تأجيل إلى موعد جديد معلوم
+    const toNewDate = buildAnnouncement(request({
+      messageType: "postponement", deceasedPeople: deceased,
+      burial: { ...noDate, day: "غداً", weekday: "الجمعة", time: "بعد صلاة العصر", cemetery: "مقبرة مسيمير", note: "لحين وصول الجثمان" },
+    }), { now: THU });
+    assert.equal(toNewDate.text, "تأجيل دفن حرم / علي حسن رحمها الله إلى غداً الجمعة بعد صلاة العصر في مقبرة مسيمير\nلحين وصول الجثمان");
     const amended = text({
       messageType: "amendment",
       relatedRequestNumber: "QTR-1",
