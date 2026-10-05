@@ -231,7 +231,7 @@ export function drawNaskhPlan(ctx: CanvasRenderingContext2D, plan: NaskhPlan, as
         break;
       }
       case "separator":
-        ctx.fillStyle = NASKH_COLORS.line;
+        ctx.fillStyle = NASKH_COLORS.rule;
         ctx.fillRect(item.x, item.y, item.width, 1);
         break;
       case "vline":
