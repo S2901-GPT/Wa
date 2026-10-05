@@ -29,9 +29,10 @@ export const NASKH_METRICS = {
   bandHeight: 96,
   bandBottom: 36,
   bandGap: 20,
-  /** الشارة: حشو أفقي ورأسي حول نصها (بحجم عنوان القسم). */
-  badgePadX: 30,
-  badgePadY: 12,
+  /** شريط الزاوية: سمكه، وبُعد منتصفه عن الزاوية على القطر، وحجم خطه. */
+  ribbonThickness: 86,
+  ribbonOffset: 112,
+  ribbonPx: 40,
   /** تذييل الشعار: خط رفيع، ثم الشعار في وسطه بهذا الارتفاع (وعرض لا يتجاوز footerLogoMaxWidth)، ويصغر حتى footerLogoMin عند الامتلاء. */
   footerPad: 24,
   footerLogo: 170,
@@ -261,8 +262,8 @@ export type PlanItem =
   | { kind: "vline"; x: number; y: number; h: number }
   | { kind: "qr"; key: NaskhQrKey; x: number; y: number; size: number }
   | { kind: "frame"; x: number; y: number; width: number; height: number }
-  /** شارة بارزة أعلى الصورة: «تعديل»، «تأجيل الدفن»، «إلغاء عزاء». */
-  | { kind: "badge"; y: number; h: number; x: number; width: number; text: string; px: number }
+  /** شريط مائل في زاوية الصورة: «تعديل»، «تأجيل الدفن»، «إلغاء عزاء». يُرسم فوق كل شيء ولا يأخذ من مساحة النص. */
+  | { kind: "badge"; text: string; px: number }
   | { kind: "band"; position: "bottom" | "top"; y: number; h: number; x: number; width: number };
 
 export type NaskhPlan = {
@@ -510,10 +511,10 @@ type Placed =
   | { kind: "qr"; key: NaskhQrKey; x: number; dy: number; size: number }
   | { kind: "separator"; dy: number; x: number; width: number }
   | { kind: "vline"; x: number; dy: number; h: number };
-type Block = { kind: "opening" | "badge" | "section"; h: number; parts: Placed[]; section?: NaskhSectionId; text?: string; px?: number };
+type Block = { kind: "opening" | "section"; h: number; parts: Placed[]; section?: NaskhSectionId };
 
 type Geometry = { left: number; right: number; center: number; contentWidth: number };
-type PlanContext = { spec: LayoutSpec; geo: Geometry; scale: number; namePx: number; type: NaskhTypeScale; badge?: string; measure: MeasureFn; opts: NaskhPlanOptions };
+type PlanContext = { spec: LayoutSpec; geo: Geometry; scale: number; namePx: number; type: NaskhTypeScale; measure: MeasureFn; opts: NaskhPlanOptions };
 
 function fontFor(style: NaskhRowStyle, ctx: PlanContext): NaskhFont & { color: string; lineHeight: number } {
   const { scale, namePx, type } = ctx;
@@ -755,11 +756,6 @@ function buildBlocks(sections: NaskhSection[], ctx: PlanContext): Block[] {
     blocks.push({ kind: "opening", h: openingH, parts: [] });
   }
 
-  if (ctx.badge) {
-    const px = Math.round(ctx.type.headingPx * scale);
-    blocks.push({ kind: "badge", h: Math.round(px * NASKH_METRICS.lineHeight) + NASKH_METRICS.badgePadY * 2, parts: [], text: ctx.badge, px });
-  }
-
   const head = sections.find((section) => section.id === "head");
   const closing = sections.find((section) => section.id === "closing");
   const middle = sections.filter((section) => section.id !== "head" && section.id !== "closing");
@@ -836,8 +832,7 @@ function planAtTypeScale(content: NormalizedContent, measure: MeasureFn, opts: N
   let scale = 1;
   let namePx: number = spec.namePx;
   let height = minHeight;
-  const badge = content.notice?.badge;
-  const context = (): PlanContext => ({ spec, geo, scale, namePx, type, badge, measure, opts });
+  const context = (): PlanContext => ({ spec, geo, scale, namePx, type, measure, opts });
   let blocks = buildBlocks(sections, context());
   // الفاصل يُرسم داخل المسافة بين القسمين، فلا يأخذ مساحة لنفسه
   let footerLogo: number = NASKH_METRICS.footerLogo;
@@ -911,11 +906,7 @@ function planAtTypeScale(content: NormalizedContent, measure: MeasureFn, opts: N
       // في منتصف المسافة بين القسمين: يفصل بينهما بصرياً دون أن يزيح النص
       items.push({ kind: "separator", y: Math.round(y - gap / 2), x: spec.separator === "short" ? geo.center - width / 2 : geo.left, width });
     }
-    if (block.kind === "badge") {
-      const px = block.px ?? Math.round(type.headingPx * scale);
-      const width = Math.round(measure(block.text ?? "", { px, weight: 700 })) + NASKH_METRICS.badgePadX * 2;
-      items.push({ kind: "badge", y, h: block.h, x: Math.round((NASKH_METRICS.width - width) / 2), width, text: block.text ?? "", px });
-    } else if (block.kind === "opening") {
+    if (block.kind === "opening") {
       items.push({ kind: "opening", y, h: block.h, px: Math.round(type.closingPx * scale), text: opts.openingIsImage ? undefined : content.opening });
     } else {
       sectionIndex += 1;
@@ -943,6 +934,8 @@ function planAtTypeScale(content: NormalizedContent, measure: MeasureFn, opts: N
   if (opts.logo) {
     items.push({ kind: "band", position: "bottom", y: height - spec.bandBottom - footerHeight(), h: footerHeight(), x: geo.left, width: geo.contentWidth });
   }
+  // آخر عنصر: يُرسم فوق الخلفية والنص
+  if (content.notice?.badge) items.push({ kind: "badge", text: content.notice.badge, px: NASKH_METRICS.ribbonPx });
 
   return { layout, typeScale: type.id, width: NASKH_METRICS.width, height, scale, namePx, minTextPx: Number.isFinite(minTextPx) ? minTextPx : 0, gap, overflow, items };
 }
