@@ -217,17 +217,21 @@ export function drawNaskhPlan(ctx: CanvasRenderingContext2D, plan: NaskhPlan, as
         drawLine(ctx, item);
         break;
       case "badge": {
-        // شارة مملوءة بلون الحبر ونصها أبيض، فيراها القارئ قبل أي سطر
-        const radius = Math.round(item.h / 2);
-        roundedRectPath(ctx, item.x, item.y, item.width, item.h, radius);
+        // شريط مائل في الزاوية العليا اليسرى: يُرى فوراً ولا يزاحم النص
+        const { ribbonThickness: thickness, ribbonOffset: offset } = NASKH_METRICS;
+        const reach = offset * Math.SQRT2 * 2 + thickness * 2;
+        ctx.save();
+        ctx.translate(offset, offset);
+        ctx.rotate(-Math.PI / 4);
         ctx.fillStyle = NASKH_COLORS.ink;
-        ctx.fill();
+        ctx.fillRect(-reach / 2, -thickness / 2, reach, thickness);
         ctx.font = fontString(700, item.px);
         ctx.fillStyle = "#FFFFFF";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         ctx.direction = "rtl";
-        ctx.fillText(toArabicIndicDigits(item.text), item.x + item.width / 2, item.y + item.h / 2);
+        ctx.fillText(toArabicIndicDigits(item.text), 0, 0);
+        ctx.restore();
         break;
       }
       case "separator":

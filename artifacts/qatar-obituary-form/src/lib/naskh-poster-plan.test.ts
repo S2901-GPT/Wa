@@ -403,15 +403,22 @@ const cases: Array<[string, () => void]> = [
       const p = planNaskhLayout(content, measure, { ...options, logo: false });
       const badge = p.items.find((item): item is Extract<typeof item, { kind: "badge" }> => item.kind === "badge")!;
       assert.equal(badge.text, content.notice!.badge);
-      // الشارة موسّطة وقبل كل سطور النص
-      assert.ok(Math.abs(badge.x + badge.width / 2 - NASKH_METRICS.width / 2) <= 1, `badge centre ${badge.x + badge.width / 2}`);
-      assert.ok(lineItems(p).every((item) => item.y >= badge.y), "badge above every line");
+      // شريط الزاوية يُرسم فوق كل شيء، فهو آخر العناصر
+      assert.equal(p.items[p.items.length - 1].kind, "badge");
     }
     // التعديل يحتفظ بكل البيانات، وتُميّزه الشارة وحدها
     const amended = special({ messageType: "amendment" });
     assert.deepEqual(amended.notice, { badge: "تعديل", lines: [] });
     assert.ok(amended.burial || amended.prayerBurialCombined);
-    assert.equal(planNaskhLayout(amended, measure, { ...options, logo: false }).items.filter((item) => item.kind === "badge").length, 1);
+    const withRibbon = planNaskhLayout(amended, measure, { ...options, logo: false });
+    assert.equal(withRibbon.items.filter((item) => item.kind === "badge").length, 1);
+    // الشريط لا يأخذ من مساحة النص: التعديل بنفس أحجام الإعلان العادي ونفس طول الصورة
+    const plain = planNaskhLayout(special({}), measure, { ...options, logo: false });
+    assert.deepEqual(
+      [withRibbon.height, withRibbon.scale, withRibbon.namePx],
+      [plain.height, plain.scale, plain.namePx],
+    );
+    assert.deepEqual(lineItems(withRibbon).map((item) => [item.y, item.px]), lineItems(plain).map((item) => [item.y, item.px]));
   }],
   ["the four type scales change the calligraphy, the name and the body; a crowded announcement steps down instead of overflowing", () => {
     const sizes = (scale: NaskhTypeScaleId) => {
