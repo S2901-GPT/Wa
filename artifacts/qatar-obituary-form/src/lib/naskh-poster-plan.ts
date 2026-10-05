@@ -29,6 +29,9 @@ export const NASKH_METRICS = {
   bandHeight: 96,
   bandBottom: 36,
   bandGap: 20,
+  /** الشارة: حشو أفقي ورأسي حول نصها (بحجم عنوان القسم). */
+  badgePadX: 30,
+  badgePadY: 12,
   /** تذييل الشعار: خط رفيع، ثم الشعار في وسطه بهذا الارتفاع (وعرض لا يتجاوز footerLogoMaxWidth)، ويصغر حتى footerLogoMin عند الامتلاء. */
   footerPad: 24,
   footerLogo: 170,
@@ -220,7 +223,7 @@ export type NaskhRowStyle = "statement" | "name" | "body" | "heading" | "title" 
 export type NaskhRow = { style: NaskhRowStyle; text: string; label?: string };
 /** «men» و«women» لأول موقع عزاء، و«women-2» و«men-2»… لما بعده حين تتعدد المواقع (لكل موقع قسمه ورمزه). */
 export type VenueSectionId = "men" | "women" | `men-${number}` | `women-${number}`;
-export type NaskhSectionId = "head" | "relatives" | "prayer" | "burial" | "condolenceStart" | VenueSectionId | "phone" | "notes" | "closing";
+export type NaskhSectionId = "head" | "notice" | "relatives" | "prayer" | "burial" | "condolenceStart" | VenueSectionId | "phone" | "notes" | "closing";
 export type NaskhQrKey = "prayer" | "burial" | "prayerBurialCombined" | VenueSectionId;
 
 export function isVenueId(id: string): id is VenueSectionId {
@@ -256,6 +259,8 @@ export type PlanItem =
   | { kind: "vline"; x: number; y: number; h: number }
   | { kind: "qr"; key: NaskhQrKey; x: number; y: number; size: number }
   | { kind: "frame"; x: number; y: number; width: number; height: number }
+  /** شارة بارزة أعلى الصورة: «تعديل»، «تأجيل الدفن»، «إلغاء عزاء». */
+  | { kind: "badge"; y: number; h: number; x: number; width: number; text: string; px: number }
   | { kind: "band"; position: "bottom" | "top"; y: number; h: number; x: number; width: number };
 
 export type NaskhPlan = {
@@ -437,6 +442,11 @@ export function buildNaskhSections(content: NormalizedContent): NaskhSection[] {
     sections.push({ id: "relatives", title: "الأقارب", rows: [{ style: "body", text: content.relativesNote }] });
   }
 
+  // بعد التعريف بالمتوفى وأقاربه: نص التأجيل أو الإلغاء، في موضع الدفن والعزاء اللذين يحلّ محلّهما
+  if (content.notice?.lines.length) {
+    sections.push({ id: "notice", title: content.notice.badge, rows: content.notice.lines.map((line) => ({ style: "body" as const, text: line })) });
+  }
+
   if (content.hasCombinedPrayerBurial && content.prayerBurialCombined) {
     const rows = eventRows("الدفن", content.prayerBurialCombined.dayTime);
     if (rows.length) sections.push({ id: "burial", title: "الدفن", rows, qrKey: content.prayerBurialCombined.qrUrl ? "prayerBurialCombined" : undefined });
@@ -498,10 +508,10 @@ type Placed =
   | { kind: "qr"; key: NaskhQrKey; x: number; dy: number; size: number }
   | { kind: "separator"; dy: number; x: number; width: number }
   | { kind: "vline"; x: number; dy: number; h: number };
-type Block = { kind: "opening" | "section"; h: number; parts: Placed[]; section?: NaskhSectionId };
+type Block = { kind: "opening" | "badge" | "section"; h: number; parts: Placed[]; section?: NaskhSectionId; text?: string; px?: number };
 
 type Geometry = { left: number; right: number; center: number; contentWidth: number };
-type PlanContext = { spec: LayoutSpec; geo: Geometry; scale: number; namePx: number; type: NaskhTypeScale; measure: MeasureFn; opts: NaskhPlanOptions };
+type PlanContext = { spec: LayoutSpec; geo: Geometry; scale: number; namePx: number; type: NaskhTypeScale; badge?: string; measure: MeasureFn; opts: NaskhPlanOptions };
 
 function fontFor(style: NaskhRowStyle, ctx: PlanContext): NaskhFont & { color: string; lineHeight: number } {
   const { scale, namePx, type } = ctx;
@@ -743,6 +753,11 @@ function buildBlocks(sections: NaskhSection[], ctx: PlanContext): Block[] {
     blocks.push({ kind: "opening", h: openingH, parts: [] });
   }
 
+  if (ctx.badge) {
+    const px = Math.round(ctx.type.headingPx * scale);
+    blocks.push({ kind: "badge", h: Math.round(px * NASKH_METRICS.lineHeight) + NASKH_METRICS.badgePadY * 2, parts: [], text: ctx.badge, px });
+  }
+
   const head = sections.find((section) => section.id === "head");
   const closing = sections.find((section) => section.id === "closing");
   const middle = sections.filter((section) => section.id !== "head" && section.id !== "closing");
@@ -814,7 +829,8 @@ function planAtTypeScale(content: NormalizedContent, measure: MeasureFn, opts: N
   let scale = 1;
   let namePx: number = spec.namePx;
   let height = minHeight;
-  const context = (): PlanContext => ({ spec, geo, scale, namePx, type, measure, opts });
+  const badge = content.notice?.badge;
+  const context = (): PlanContext => ({ spec, geo, scale, namePx, type, badge, measure, opts });
   let blocks = buildBlocks(sections, context());
   const separators = spec.separator === "none" ? 0 : Math.max(0, blocks.filter((block) => block.kind === "section").length - 1);
   let footerLogo: number = NASKH_METRICS.footerLogo;
@@ -887,7 +903,11 @@ function planAtTypeScale(content: NormalizedContent, measure: MeasureFn, opts: N
       items.push({ kind: "separator", y, x: spec.separator === "short" ? geo.center - width / 2 : geo.left, width });
       y += 1 + gap;
     }
-    if (block.kind === "opening") {
+    if (block.kind === "badge") {
+      const px = block.px ?? Math.round(type.headingPx * scale);
+      const width = Math.round(measure(block.text ?? "", { px, weight: 700 })) + NASKH_METRICS.badgePadX * 2;
+      items.push({ kind: "badge", y, h: block.h, x: Math.round((NASKH_METRICS.width - width) / 2), width, text: block.text ?? "", px });
+    } else if (block.kind === "opening") {
       items.push({ kind: "opening", y, h: block.h, px: Math.round(type.closingPx * scale), text: opts.openingIsImage ? undefined : content.opening });
     } else {
       sectionIndex += 1;

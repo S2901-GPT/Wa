@@ -385,16 +385,33 @@ const cases: Array<[string, () => void]> = [
     const footer = withLogo.items.find((item) => item.kind === "band")!;
     assert.ok(lineItems(withLogo).every((item) => item.y + item.h <= footer.y - NASKH_METRICS.bandGap + 0.5));
   }],
-  ["a condolence cancellation poster shows the deceased and the cancellation, without an empty burial", () => {
-    const request = makeRequest({
-      messageType: "condolence_cancellation",
-      relatives: [], condolences: [], condolenceOptions: [],
-      burial: { status: "upcoming", outsideQatar: false },
-      cancellation: { audience: "women", from: "اعتباراً من اليوم", phoneOnly: true },
-    });
-    const sections = buildNaskhSections(normalizeObituaryPresentation(request));
-    assert.deepEqual(sections.map((section) => section.id), ["head", "notes", "closing"]);
-    assert.deepEqual(sections[1].rows.map((row) => row.text), ["تقرر إلغاء عزاء النساء اعتباراً من اليوم", "ويُكتفى بتلقي العزاء عبر الهاتف"]);
+  ["a cancellation, a postponement and an amendment each carry a badge; the first two drop the old burial and venues", () => {
+    const special = (overrides: Partial<ObituaryRequest>) => normalizeObituaryPresentation(makeRequest({
+      burial: { status: "upcoming", outsideQatar: false, day: "اليوم", time: "بعد صلاة العصر", cemetery: "مقبرة مسيمير" },
+      ...overrides,
+    }));
+    const cancelled = special({ messageType: "condolence_cancellation", cancellation: { audience: "women", from: "اعتباراً من اليوم", phoneOnly: true } });
+    assert.deepEqual(cancelled.notice, { badge: "إلغاء عزاء", lines: ["تقرر إلغاء عزاء النساء اعتباراً من اليوم", "ويُكتفى بتلقي العزاء عبر الهاتف"] });
+    const postponed = special({ messageType: "postponement", burial: { status: "postponed", outsideQatar: false, note: "لحين وصول الجثمان" } });
+    assert.equal(postponed.notice?.badge, "تأجيل الدفن");
+    assert.deepEqual(postponed.notice?.lines, ["تأجيل دفن الوالد / محمد بن عبدالله بن سالم رحمه الله حتى إشعار آخر", "لحين وصول الجثمان"]);
+    // لا دفن ولا عزاء ولا أقارب قديمة في الصورة؛ الشارة ونصها فقط
+    for (const content of [cancelled, postponed]) {
+      assert.deepEqual([content.burial, content.prayerBurialCombined, content.men, content.women], [undefined, undefined, undefined, undefined]);
+      const sections = buildNaskhSections(content);
+      assert.deepEqual(sections.map((section) => section.id), ["head", "relatives", "notice", "closing"]);
+      const p = planNaskhLayout(content, measure, { ...options, logo: false });
+      const badge = p.items.find((item): item is Extract<typeof item, { kind: "badge" }> => item.kind === "badge")!;
+      assert.equal(badge.text, content.notice!.badge);
+      // الشارة موسّطة وقبل كل سطور النص
+      assert.ok(Math.abs(badge.x + badge.width / 2 - NASKH_METRICS.width / 2) <= 1, `badge centre ${badge.x + badge.width / 2}`);
+      assert.ok(lineItems(p).every((item) => item.y >= badge.y), "badge above every line");
+    }
+    // التعديل يحتفظ بكل البيانات، وتُميّزه الشارة وحدها
+    const amended = special({ messageType: "amendment" });
+    assert.deepEqual(amended.notice, { badge: "تعديل", lines: [] });
+    assert.ok(amended.burial || amended.prayerBurialCombined);
+    assert.equal(planNaskhLayout(amended, measure, { ...options, logo: false }).items.filter((item) => item.kind === "badge").length, 1);
   }],
   ["the four type scales change the calligraphy, the name and the body; a crowded announcement steps down instead of overflowing", () => {
     const sizes = (scale: NaskhTypeScaleId) => {
