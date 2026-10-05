@@ -307,7 +307,8 @@ export function mapFormToPayload(data: ObituaryFormValues): ObituaryRequestInput
       day: clean(burial?.dateDescription),
       time: clean(burial?.timeDescription),
       ...(outside ? { outsideLocation: clean(burial?.locationName) } : { cemetery: optional(burial?.locationName) }),
-      ...(optional(burial?.notes) ? { note: clean(burial?.notes) } : {}),
+      // الملاحظة لسبب التأجيل أو لوصف دفن تمّ فقط؛ الدفن القادم موعده ومقبرته في حقولهما
+      ...(optional(burial?.notes) && burialStatus !== "upcoming" ? { note: clean(burial?.notes) } : {}),
     },
     condolenceOptions: options,
     ...(options.includes("phone") ? { phoneAudience: "all" as const } : {}),

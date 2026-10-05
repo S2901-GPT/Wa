@@ -389,6 +389,16 @@ const cases: Array<[string, () => void]> = [
     const venue = text({ condolenceOptions: ["men"], condolences: [{ audience: "men", location: "مجلس المري", area: "أبو هامور" }] });
     assert.match(venue, /مجلس المري بمنطقة أبو هامور/u);
   }],
+  ["سبب تأجيل قديم لا يبقى بعد إعلان موعد الدفن", () => {
+    const postponed = { status: "postponed" as const, outsideQatar: false, note: "لحين وصول الجثمان من الخارج" };
+    assert.match(text({ messageType: "postponement", burial: postponed }), /لحين وصول الجثمان من الخارج/u);
+    // الموعد أُعلن لاحقاً والملاحظة باقية في الطلب: لا تُكتب تحت سطر الدفن
+    const announced = text({ burial: { ...postponed, status: "upcoming", day: "اليوم", time: "بعد صلاة العصر", cemetery: "مقبرة مسيمير" } });
+    assert.match(announced, /^الدفن اليوم بعد صلاة العصر في مقبرة مسيمير$/mu);
+    assert.doesNotMatch(announced, /الجثمان/u);
+    // ووصف دفن تمّ يبقى
+    assert.match(text({ burial: { status: "completed", outsideQatar: false, note: "تم الدفن في مكة المكرمة" } }), /تم الدفن في مكة المكرمة/u);
+  }],
   ["مكان الوفاة «في لندن» لا يُكتب «في في لندن»", () => {
     const result = text({ deceasedPeople: [{ fullName: "محمد ناصر العطية", gender: "man", deathPlace: "في لندن" }] });
     assert.match(result, /في لندن/u);

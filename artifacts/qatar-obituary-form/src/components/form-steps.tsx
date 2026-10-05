@@ -851,11 +851,17 @@ export function BurialPrayerStep() {
             <FormField
               control={form.control}
               name="burial.status"
-              render={({ field }) => (
+              render={({ field }) => {
+                // الملاحظة تخص الحالة التي كُتبت فيها (سبب التأجيل، أو وصف دفن تمّ)، فتُمسح عند تغييرها
+                const setStatus = (status: "scheduled" | "pending" | "done") => {
+                  if (status !== field.value) form.setValue("burial.notes", "", { shouldDirty: true });
+                  field.onChange(status);
+                };
+                return (
                 <div className="flex items-center gap-1 bg-background p-1 rounded-lg border text-xs">
                   <button
                     type="button"
-                    onClick={() => field.onChange("scheduled")}
+                    onClick={() => setStatus("scheduled")}
                     className={`px-2.5 py-1 rounded transition-colors ${
                       !isDone && !isPostponed ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
                     }`}
@@ -864,7 +870,7 @@ export function BurialPrayerStep() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => field.onChange("pending")}
+                    onClick={() => setStatus("pending")}
                     className={`px-2.5 py-1 rounded transition-colors ${
                       isPostponed ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
                     }`}
@@ -874,7 +880,7 @@ export function BurialPrayerStep() {
                   <button
                     type="button"
                     onClick={() => {
-                      field.onChange("done");
+                      setStatus("done");
                       form.setValue("prayer.enabled", false);
                       form.setValue("prayer.locationName", "");
                       form.setValue("prayer.dateDescription", "");
@@ -887,7 +893,8 @@ export function BurialPrayerStep() {
                     تم الدفن
                   </button>
                 </div>
-              )}
+                );
+              }}
             />
 
             {/* خارج قطر (يظهر فقط إذا كان الدفن قادماً) */}

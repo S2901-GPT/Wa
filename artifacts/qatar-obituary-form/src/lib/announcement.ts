@@ -871,7 +871,8 @@ function prayerAndBurial(
   const place = burialPlace(request);
   const burialWhen = dayTimePhrase(burial.day, burial.weekday, burial.time, now);
   const prayerEnabled = prayer.enabled && status !== "postponed";
-  const note = fixCemeteryNames(clean(burial.note));
+  // الملاحظة تخص التأجيل أو دفناً تمّ؛ على الدفن القادم تُتجاهَل (سبب تأجيل قديم بقي بعد إعلان الموعد)
+  const note = status === "upcoming" ? "" : fixCemeteryNames(clean(burial.note));
 
   const prayerWhen = prayerEnabled ? dayTimePhrase(prayer.day, prayer.weekday, prayer.time, now) : "";
   if (prayerEnabled) {
