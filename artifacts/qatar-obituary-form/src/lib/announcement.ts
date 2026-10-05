@@ -871,7 +871,8 @@ function prayerAndBurial(
   const place = burialPlace(request);
   const burialWhen = dayTimePhrase(burial.day, burial.weekday, burial.time, now);
   const prayerEnabled = prayer.enabled && status !== "postponed";
-  const note = fixCemeteryNames(clean(burial.note));
+  // الملاحظة تخص التأجيل أو دفناً تمّ؛ على الدفن القادم تُتجاهَل (سبب تأجيل قديم بقي بعد إعلان الموعد)
+  const note = status === "upcoming" ? "" : fixCemeteryNames(clean(burial.note));
 
   const prayerWhen = prayerEnabled ? dayTimePhrase(prayer.day, prayer.weekday, prayer.time, now) : "";
   if (prayerEnabled) {
@@ -1097,7 +1098,15 @@ export function buildAnnouncement(request: ObituaryRequestInput, options: Announ
   const statement = makeDeathStatement(people);
 
   if (messageType === "postponement") {
-    const lines = [`تأجيل دفن ${sentence([identity.shortIdentity, mercyForDeceased(people)])} حتى إشعار آخر`];
+    // التأجيل إما إلى موعد جديد إن حُدِّد، وإلا «حتى إشعار آخر»
+    const burial = request.burial ?? { status: "postponed" as const, outsideQatar: false };
+    const newWhen = dayTimePhrase(burial.day, burial.weekday, burial.time, now);
+    const newPlace = burialPlace({ ...request, burial });
+    const until = sentence([newWhen, newPlace ? `في ${newPlace}` : ""]);
+    const lines = [sentence([
+      `تأجيل دفن ${sentence([identity.shortIdentity, mercyForDeceased(people)])}`,
+      until ? `إلى ${until}` : "حتى إشعار آخر",
+    ])];
     if (clean(request.burial?.note)) lines.push(clean(request.burial.note));
     const notes = clean(request.notes) ? [clean(request.notes)] : [];
     const sections: AnnouncementSection[] = [

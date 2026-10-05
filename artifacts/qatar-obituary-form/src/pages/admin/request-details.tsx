@@ -1,5 +1,5 @@
 import { useRoute, Link, useLocation } from "wouter";
-import { getGetObituaryRequestQueryKey, getListObituaryRequestsQueryKey, useGetObituaryRequest, useUpdateObituaryRequest } from "@workspace/api-client-react";
+import { getGetObituaryRequestQueryKey, getListObituaryRequestsQueryKey, useGetObituaryRequest, useListObituaryRequests, useUpdateObituaryRequest } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Copy, ChevronRight, Loader2, Check, AlertCircle, AlertTriangle, Edit } from "lucide-react";
@@ -21,6 +21,36 @@ import {
   formatOccupation,
   relationKeyOf,
 } from "@/lib/announcement";
+
+/**
+ * الرسائل اللاحقة على هذا الطلب (تأجيل، تعديل، إلغاء عزاء) مرتبةً بالأحدث.
+ * بدونها لا يعرف المسؤول، وهو ينظر إلى الإعلان الأصلي، أنه أُجِّل أو عُدِّل أو أُلغي عزاؤه.
+ */
+function FollowUps({ requestNumber }: { requestNumber: string }) {
+  const { data: requests } = useListObituaryRequests();
+  const followUps = useMemo(
+    () => (requests ?? [])
+      .filter((item) => item.relatedRequestNumber === requestNumber && item.requestNumber !== requestNumber)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
+    [requests, requestNumber],
+  );
+  if (!followUps.length) return null;
+  return (
+    <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
+      <span className="font-medium text-amber-700 dark:text-amber-500">جرى عليه لاحقاً:</span>
+      {followUps.map((item) => (
+        <Link
+          key={item.id}
+          href={`/admin/${item.requestNumber}`}
+          className="rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"
+        >
+          {MESSAGE_TYPE_LABELS[item.messageType ?? "announcement"]}
+          <span className="font-mono text-[11px] text-muted-foreground"> · {item.requestNumber}</span>
+        </Link>
+      ))}
+    </div>
+  );
+}
 
 const genderLabels = {
   man: "رجل",
@@ -149,9 +179,15 @@ export default function AdminRequestDetailsPage() {
               {req.messageType && req.messageType !== "announcement" && (
                 <div className="mb-2 text-sm font-medium">
                   {MESSAGE_TYPE_LABELS[req.messageType]}
-                  {req.relatedRequestNumber && <span className="text-muted-foreground"> — للطلب <span className="font-mono">{req.relatedRequestNumber}</span></span>}
+                  {req.relatedRequestNumber && (
+                    <span className="text-muted-foreground">
+                      {" — للطلب "}
+                      <Link href={`/admin/${req.relatedRequestNumber}`} className="font-mono text-primary hover:underline">{req.relatedRequestNumber}</Link>
+                    </span>
+                  )}
                 </div>
               )}
+              <FollowUps requestNumber={req.requestNumber} />
               <div className="text-sm font-mono text-muted-foreground">رقم الطلب: {req.requestNumber}</div>
               <div className="text-xs text-muted-foreground mt-2">
                 آخر تعديل: {new Date(req.updatedAt).toLocaleString("ar-QA")}

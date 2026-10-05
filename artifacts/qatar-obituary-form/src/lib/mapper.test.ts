@@ -113,6 +113,12 @@ const cases: Array<[string, () => void]> = [
     const values = form((draft) => { draft.prayer = { ...draft.prayer!, enabled: true, locationName: "جامع الإمام محمد بن عبدالوهاب" }; });
     assert.match(text(values), /صلاة الجنازة اليوم الجمعة بعد صلاة العصر في جامع الإمام محمد بن عبدالوهاب\nوالدفن في مقبرة مسيمير/u);
   }],
+  ["ملاحظة الدفن تُرسل للمؤجل والمنتهي فقط، لا للدفن القادم", () => {
+    const withNote = (status: "scheduled" | "pending" | "done") => form((draft) => { draft.burial = { ...draft.burial!, status, notes: "لحين وصول الجثمان" }; });
+    assert.equal(mapFormToPayload(withNote("scheduled")).burial.note, undefined);
+    assert.equal(mapFormToPayload(withNote("pending")).burial.note, "لحين وصول الجثمان");
+    assert.equal(mapFormToPayload(withNote("done")).burial.note, "لحين وصول الجثمان");
+  }],
   ["أنواع العزاء: المقبرة فقط، الهاتف، سيُحدَّد لاحقاً، ومواقع إضافية", () => {
     const cemetery = form((draft) => { draft.condolences = { ...draft.condolences!, type: "cemetery_only", cancellationOrRestrictionReason: "اتباعاً للسنة" }; });
     assert.match(text(cemetery), /عزاء الرجال في المقبرة فقط اتباعاً للسنة/u);

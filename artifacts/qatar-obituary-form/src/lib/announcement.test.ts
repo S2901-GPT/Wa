@@ -225,8 +225,15 @@ const cases: Array<[string, () => void]> = [
   }],
   ["15 تأجيل الدفن حتى إشعار آخر ثم رسالة تعديل بموعد جديد", () => {
     const deceased = [{ gender: "woman" as const, identifyBy: "spouse" as const, spouse: { kind: "harem" as const, name: "علي حسن", deceased: false } }];
-    const postponed = buildAnnouncement(request({ messageType: "postponement", deceasedPeople: deceased }));
+    const noDate = { status: "postponed" as const, outsideQatar: false };
+    const postponed = buildAnnouncement(request({ messageType: "postponement", deceasedPeople: deceased, burial: noDate }));
     assert.equal(postponed.text, "تأجيل دفن حرم / علي حسن رحمها الله حتى إشعار آخر");
+    // تأجيل إلى موعد جديد معلوم
+    const toNewDate = buildAnnouncement(request({
+      messageType: "postponement", deceasedPeople: deceased,
+      burial: { ...noDate, day: "غداً", weekday: "الجمعة", time: "بعد صلاة العصر", cemetery: "مقبرة مسيمير", note: "لحين وصول الجثمان" },
+    }), { now: THU });
+    assert.equal(toNewDate.text, "تأجيل دفن حرم / علي حسن رحمها الله إلى غداً الجمعة بعد صلاة العصر في مقبرة مسيمير\nلحين وصول الجثمان");
     const amended = text({
       messageType: "amendment",
       relatedRequestNumber: "QTR-1",
@@ -388,6 +395,16 @@ const cases: Array<[string, () => void]> = [
     assert.match(prayer, /والدفن في مقبرة مسيمير/u);
     const venue = text({ condolenceOptions: ["men"], condolences: [{ audience: "men", location: "مجلس المري", area: "أبو هامور" }] });
     assert.match(venue, /مجلس المري بمنطقة أبو هامور/u);
+  }],
+  ["سبب تأجيل قديم لا يبقى بعد إعلان موعد الدفن", () => {
+    const postponed = { status: "postponed" as const, outsideQatar: false, note: "لحين وصول الجثمان من الخارج" };
+    assert.match(text({ messageType: "postponement", burial: postponed }), /لحين وصول الجثمان من الخارج/u);
+    // الموعد أُعلن لاحقاً والملاحظة باقية في الطلب: لا تُكتب تحت سطر الدفن
+    const announced = text({ burial: { ...postponed, status: "upcoming", day: "اليوم", time: "بعد صلاة العصر", cemetery: "مقبرة مسيمير" } });
+    assert.match(announced, /^الدفن اليوم بعد صلاة العصر في مقبرة مسيمير$/mu);
+    assert.doesNotMatch(announced, /الجثمان/u);
+    // ووصف دفن تمّ يبقى
+    assert.match(text({ burial: { status: "completed", outsideQatar: false, note: "تم الدفن في مكة المكرمة" } }), /تم الدفن في مكة المكرمة/u);
   }],
   ["مكان الوفاة «في لندن» لا يُكتب «في في لندن»", () => {
     const result = text({ deceasedPeople: [{ fullName: "محمد ناصر العطية", gender: "man", deathPlace: "في لندن" }] });

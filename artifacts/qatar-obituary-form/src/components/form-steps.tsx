@@ -851,11 +851,23 @@ export function BurialPrayerStep() {
             <FormField
               control={form.control}
               name="burial.status"
-              render={({ field }) => (
+              render={({ field }) => {
+                // الملاحظة تخص الحالة التي كُتبت فيها (سبب التأجيل، أو وصف دفن تمّ)، فتُمسح عند تغييرها.
+                // وعند التأجيل يُمسح الموعد القديم أيضاً: صار لاغياً، ولا يصح أن يُنشر على أنه الموعد الجديد.
+                const setStatus = (status: "scheduled" | "pending" | "done") => {
+                  if (status === field.value) return;
+                  form.setValue("burial.notes", "", { shouldDirty: true });
+                  if (status === "pending") {
+                    form.setValue("burial.dateDescription", "", { shouldDirty: true });
+                    form.setValue("burial.timeDescription", "", { shouldDirty: true });
+                  }
+                  field.onChange(status);
+                };
+                return (
                 <div className="flex items-center gap-1 bg-background p-1 rounded-lg border text-xs">
                   <button
                     type="button"
-                    onClick={() => field.onChange("scheduled")}
+                    onClick={() => setStatus("scheduled")}
                     className={`px-2.5 py-1 rounded transition-colors ${
                       !isDone && !isPostponed ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
                     }`}
@@ -864,7 +876,7 @@ export function BurialPrayerStep() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => field.onChange("pending")}
+                    onClick={() => setStatus("pending")}
                     className={`px-2.5 py-1 rounded transition-colors ${
                       isPostponed ? "bg-primary text-primary-foreground font-semibold" : "text-muted-foreground hover:text-foreground"
                     }`}
@@ -874,7 +886,7 @@ export function BurialPrayerStep() {
                   <button
                     type="button"
                     onClick={() => {
-                      field.onChange("done");
+                      setStatus("done");
                       form.setValue("prayer.enabled", false);
                       form.setValue("prayer.locationName", "");
                       form.setValue("prayer.dateDescription", "");
@@ -887,7 +899,8 @@ export function BurialPrayerStep() {
                     تم الدفن
                   </button>
                 </div>
-              )}
+                );
+              }}
             />
 
             {/* خارج قطر (يظهر فقط إذا كان الدفن قادماً) */}
@@ -934,34 +947,35 @@ export function BurialPrayerStep() {
                 )}
               />
             </div>
-          ) : isPostponed ? (
-            <div className="p-3.5 sm:p-5 rounded-lg bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 space-y-2 animate-in fade-in">
-              <FormLabel className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1.5">
-                <FileText className="w-4 h-4 shrink-0" />
-                تأجيل الدفن حتى إشعار آخر
-              </FormLabel>
-              <FormField
-                control={form.control}
-                name="burial.notes"
-                render={({ field }) => (
-                  <FormItem className="w-full">
-                    <FormControl>
-                      <Input 
-                        placeholder="سبب التأجيل (اختياري، مثال: لحين وصول الجثمان)" 
-                        className="h-10 bg-background text-xs sm:text-sm w-full" 
-                        {...field} 
-                        value={field.value || ""} 
-                      />
-                    </FormControl>
-                    <FormDescription className="text-[11px] text-muted-foreground">
-                      يُكتب «تأجيل الدفن حتى إشعار آخر». عند تحديد الموعد الجديد أرسل «تعديل إعلان سابق».
-                    </FormDescription>
-                  </FormItem>
-                )}
-              />
-            </div>
           ) : (
             <>
+              {isPostponed && (
+                <div className="p-3.5 sm:p-5 rounded-lg bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900/50 space-y-2 animate-in fade-in">
+                  <FormLabel className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-1.5">
+                    <FileText className="w-4 h-4 shrink-0" />
+                    تأجيل الدفن
+                  </FormLabel>
+                  <FormField
+                    control={form.control}
+                    name="burial.notes"
+                    render={({ field }) => (
+                      <FormItem className="w-full">
+                        <FormControl>
+                          <Input
+                            placeholder="سبب التأجيل (اختياري، مثال: لحين وصول الجثمان)"
+                            className="h-10 bg-background text-xs sm:text-sm w-full"
+                            {...field}
+                            value={field.value || ""}
+                          />
+                        </FormControl>
+                        <FormDescription className="text-[11px] text-muted-foreground">
+                          اترك الموعد أدناه فارغاً ليُكتب «تأجيل الدفن حتى إشعار آخر»، أو حدّد الموعد الجديد ليُكتب في الإعلان.
+                        </FormDescription>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
               {/* اختيار المقبرة مع flex-wrap كامل للجوال */}
               {!isBurialOutside ? (
                 <div className="space-y-1.5 w-full">
@@ -1035,7 +1049,7 @@ export function BurialPrayerStep() {
                   name="burial.dateDescription"
                   render={({ field }) => (
                     <FormItem className="w-full min-w-0">
-                      <FormLabel className="text-xs sm:text-sm font-semibold">يوم الدفن</FormLabel>
+                      <FormLabel className="text-xs sm:text-sm font-semibold">{isPostponed ? "يوم الدفن الجديد (اختياري)" : "يوم الدفن"}</FormLabel>
                       <FormControl>
                         <Input 
                           type="date" 
@@ -1059,7 +1073,7 @@ export function BurialPrayerStep() {
                   name="burial.timeDescription"
                   render={({ field }) => (
                     <FormItem className="w-full min-w-0">
-                      <FormLabel className="text-xs sm:text-sm font-semibold">وقت الدفن</FormLabel>
+                      <FormLabel className="text-xs sm:text-sm font-semibold">{isPostponed ? "وقت الدفن الجديد (اختياري)" : "وقت الدفن"}</FormLabel>
                       <div className="flex flex-wrap gap-1 mb-1.5 w-full box-border">
                         {PRAYER_TIMES_OPTIONS.map((t) => {
                           const isOther = t === "وقت آخر...";
