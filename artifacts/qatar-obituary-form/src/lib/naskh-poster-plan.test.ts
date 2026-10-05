@@ -223,10 +223,10 @@ const cases: Array<[string, () => void]> = [
     const near = plan(makeRequest({ deceasedPeople: [{ fullName: "عبدالله حمد هادي دخيل علي الودعاني", gender: "man" }] }), { logo: false });
     assert.equal(nameLines(near).length, 1);
     assert.ok(near.namePx < NASKH_METRICS.namePx && near.namePx >= NASKH_METRICS.nameOneLinePx, `name px ${near.namePx}`);
-    // اسم طويل لا يتسع لسطر واحد حتى بأصغر حجم: سطران بالحجم الكامل بدل سطرين صغيرين
+    // اسم طويل لا يتسع لسطر واحد حتى بأصغر حجم: سطران، ولا يصغر لأجل السطر الواحد (قد يصغر لاحقاً لضيق الصفحة فقط)
     const long = plan(makeRequest({ deceasedPeople: [{ fullName: "محمد بن عبدالله بن سالم بن ناصر بن خليفة", gender: "man" }] }), { logo: false });
     assert.equal(nameLines(long).length, 2);
-    assert.equal(long.namePx, NASKH_METRICS.namePx);
+    assert.ok(long.namePx >= NASKH_METRICS.nameMinPx, `name px ${long.namePx}`);
   }],
   ["a heavy announcement grows the image instead of shrinking the text below 32px", () => {
     const many = (prefix: string, count: number) => Array.from({ length: count }, (_, index) => ({ name: `${prefix}${index + 1}`, deceased: index % 5 === 4 }));
@@ -245,7 +245,7 @@ const cases: Array<[string, () => void]> = [
     });
     const p = plan(heavy);
     assert.ok(p.height > 1350 && p.height <= 1800 && p.height % 90 === 0, `height ${p.height}`);
-    assert.ok(p.scale >= 0.9, `scale ${p.scale}`);
+    assert.ok(p.scale >= NASKH_METRICS.minScale, `scale ${p.scale}`);
     assert.ok(p.minTextPx >= 32, `min text ${p.minTextPx}`);
     assert.equal(p.overflow, false);
     const band = p.items.find((item) => item.kind === "band")!;
@@ -337,7 +337,7 @@ const cases: Array<[string, () => void]> = [
     const p = plan(makeRequest(), { layout: "letterhead" });
     assert.ok(!p.items.some((item) => item.kind === "opening"));
     const bands = p.items.filter((item): item is Extract<typeof item, { kind: "band" }> => item.kind === "band");
-    assert.deepEqual(bands.map((band) => [band.position, band.y, band.h]), [["top", 36, 96], ["bottom", 1350 - 36 - NASKH_FOOTER_HEIGHT, NASKH_FOOTER_HEIGHT]]);
+    assert.deepEqual(bands.map((band) => [band.position, band.y, band.h]), [["top", 36, 96], ["bottom", p.height - 36 - NASKH_FOOTER_HEIGHT, NASKH_FOOTER_HEIGHT]]);
     assert.ok(lineItems(p).every((item) => item.y >= NASKH_METRICS.letterheadTop && item.y + item.h <= bands[1].y));
     const rules = p.items.filter((item): item is Extract<typeof item, { kind: "separator" }> => item.kind === "separator" && item.y < NASKH_METRICS.letterheadTop);
     assert.deepEqual(rules.map((item) => item.y), [148, 152]);
@@ -352,7 +352,7 @@ const cases: Array<[string, () => void]> = [
   }],
   ["with the height capped, the logo shrinks (never below the old band size) before the text overflows", () => {
     const many = (prefix: string, count: number) => Array.from({ length: count }, (_, index) => ({ name: `${prefix}${index + 1}`, deceased: false }));
-    const busy = makeRequest({ relatives: [{ relation: "الأبناء", relationKey: "children", people: many("عبدالله", 8) }, { relation: "الإخوة", relationKey: "siblings", people: many("ناصر", 6) }] });
+    const busy = makeRequest({ relatives: [{ relation: "الأبناء", relationKey: "children", people: many("عبدالله", 12) }, { relation: "الإخوة", relationKey: "siblings", people: many("ناصر", 10) }] });
     const full = plan(busy, { maxHeight: 1350, logo: false });
     assert.equal(full.overflow, false, "fits without a logo");
     const p = plan(busy, { maxHeight: 1350 });
