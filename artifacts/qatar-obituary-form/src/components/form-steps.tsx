@@ -122,12 +122,12 @@ const CONDOLENCE_TYPES = [
   { 
     id: "cemetery_only", 
     title: "يقتصر على المقبرة", 
-    desc: "«عزاء الرجال في المقبرة فقط» اتباعاً للسنة أو تنفيذاً للوصية" 
+    desc: "«عزاء الرجال في المقبرة فقط»، ويمكن إضافة عزاء للنساء" 
   },
   { 
     id: "none", 
     title: "لا يوجد عزاء", 
-    desc: "يُكتب «لا يوجد عزاء» صراحة في الإعلان" 
+    desc: "لا يُكتب شيء عن العزاء في الإعلان" 
   },
 ] as const;
 
@@ -1161,6 +1161,8 @@ export function BurialPrayerStep() {
 export function CondolencesStep() {
   const form = useFormContext<ObituaryFormValues>();
   const condType = form.watch("condolences.type") || "full";
+  const cemeteryWithWomen = condType === "cemetery_only" && !!form.watch("condolences.cemeteryWithWomen");
+  const showWomen = condType === "full" || condType === "women_only" || cemeteryWithWomen;
 
   const copyMenToWomen = () => {
     const menData = form.getValues("condolences.men");
@@ -1220,9 +1222,11 @@ export function CondolencesStep() {
           <AlertCircle className="w-5 h-5 shrink-0" />
           <div>
             <p className="font-semibold">
-              {condType === "none" ? "يُكتب «لا يوجد عزاء»" : condType === "tbd" ? "يُكتب «العزاء: سيُحدَّد لاحقاً»" : condType === "phone_only" ? "يُكتب «العزاء عبر الهاتف» ولا تُنشر أي أرقام" : "يُكتب «عزاء الرجال في المقبرة فقط»"}
+              {condType === "none" ? "لا يُكتب شيء عن العزاء في الإعلان" : condType === "tbd" ? "يُكتب «العزاء: سيُحدَّد لاحقاً»" : condType === "phone_only" ? "يُكتب «العزاء عبر الهاتف» ولا تُنشر أي أرقام" : "يُكتب «عزاء الرجال في المقبرة فقط»"}
             </p>
-            <p className="text-[11px] opacity-90 mt-0.5">يمكن إضافة السبب من «خيارات إضافية» أسفل الصفحة (مثل: اتباعاً للسنة، أو تنفيذاً لوصية المتوفى).</p>
+            {condType !== "none" && (
+              <p className="text-[11px] opacity-90 mt-0.5">يمكن إضافة السبب من «خيارات إضافية» أسفل الصفحة (مثل: اتباعاً للسنة، أو تنفيذاً لوصية المتوفى).</p>
+            )}
           </div>
         </Card>
       )}
@@ -1232,7 +1236,24 @@ export function CondolencesStep() {
         <CondolenceVenueCard audience="men" title="عزاء الرجال" />
       )}
 
-      {(condType === "full" || condType === "women_only") && (
+      {/* «يقتصر على المقبرة» للرجال، مع عزاء للنساء في مقر */}
+      {condType === "cemetery_only" && (
+        <FormField
+          control={form.control}
+          name="condolences.cemeteryWithWomen"
+          render={({ field }) => (
+            <label className="flex items-center justify-between gap-3 rounded-lg border bg-card p-3 cursor-pointer w-full box-border">
+              <span>
+                <span className="block font-bold text-xs sm:text-sm">يوجد عزاء للنساء</span>
+                <span className="block text-[11px] text-muted-foreground">الرجال في المقبرة فقط، والنساء في مقر تحدده</span>
+              </span>
+              <Switch checked={!!field.value} onCheckedChange={(checked) => field.onChange(checked)} aria-label="يوجد عزاء للنساء" />
+            </label>
+          )}
+        />
+      )}
+
+      {showWomen && (
         <div className="space-y-2 w-full box-border">
           {condType === "full" && (
             <div className="flex justify-end">
@@ -1253,6 +1274,7 @@ export function CondolencesStep() {
       )}
 
       {/* سبب العزاء والمواقع الإضافية (مطوية). لا تُنشر أرقام هواتف (قرار جديد)، فلا خانات لها. */}
+      {condType !== "none" && (
       <MoreOptions
         hint="سبب العزاء، مواقع إضافية"
         paths={[
@@ -1261,12 +1283,13 @@ export function CondolencesStep() {
         ]}
       >
         <CondolenceExtras />
-        {(condType === "full" || condType === "men_only" || condType === "women_only") && (
+        {(condType === "full" || condType === "men_only" || showWomen) && (
           <ExtraVenuesSection
             audiences={condType === "full" ? ["men", "women"] : condType === "men_only" ? ["men"] : ["women"]}
           />
         )}
       </MoreOptions>
+      )}
     </div>
   );
 }
@@ -1809,13 +1832,11 @@ export function ReviewStep() {
                 {condolences?.type === "full" ? "رجال ونساء" :
                  condolences?.type === "men_only" ? "رجال فقط" :
                  condolences?.type === "women_only" ? "نساء فقط" :
-                 condolences?.type === "phone_only" ? "هاتف فقط" : "يقتصر على المقبرة"}
+                 condolences?.type === "phone_only" ? "هاتف فقط" :
+                 condolences?.type === "none" ? "لا يوجد عزاء" :
+                 condolences?.cemeteryWithWomen ? "الرجال في المقبرة، والنساء في مقر" : "يقتصر على المقبرة"}
               </Badge>
             </div>
-
-            {condolences?.type === "none" && (
-              <p className="text-muted-foreground text-xs">يقتصر العزاء على المقبرة تنفيذاً للوصية أو الظروف.</p>
-            )}
 
             {(startDate || data.condolenceStartTime) && (
               <div>
@@ -1880,7 +1901,7 @@ export function ReviewStep() {
             )}
 
             {/* عزاء النساء */}
-            {(condolences?.type === "full" || condolences?.type === "women_only") && (
+            {(condolences?.type === "full" || condolences?.type === "women_only" || (condolences?.type === "cemetery_only" && condolences?.cemeteryWithWomen)) && (
               <div className="p-2.5 rounded-lg bg-muted/30 border space-y-1">
                 <div className="font-bold text-primary text-xs flex items-center gap-1">
                   <MapPin className="w-3.5 h-3.5 shrink-0" />

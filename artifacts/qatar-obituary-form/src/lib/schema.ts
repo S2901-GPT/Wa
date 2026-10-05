@@ -139,6 +139,8 @@ export const ExtraVenueSchema = CondolenceDetailsSchema.extend({
 
 export const CondolenceSchema = z.object({
   type: z.enum(["full", "men_only", "women_only", "cemetery_only", "phone_only", "tbd", "none"]).default("full"),
+  /** «يقتصر على المقبرة» للرجال، مع عزاء للنساء في مقر. */
+  cemeteryWithWomen: z.boolean().optional().default(false),
   men: CondolenceDetailsSchema.optional(),
   women: CondolenceDetailsSchema.optional(),
   /** مواقع إضافية: «عزاء النساء الأول / الثاني» أو عزاء منفصل لكل متوفى. */
@@ -158,7 +160,7 @@ export const CondolenceSchema = z.object({
       });
     }
   }
-  if (data.type === "full" || data.type === "women_only") {
+  if (data.type === "full" || data.type === "women_only" || (data.type === "cemetery_only" && data.cemeteryWithWomen)) {
     if (!data.women?.locationName || data.women.locationName.trim().length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -292,6 +294,7 @@ export function emptyFormValues(): ObituaryFormValues {
     },
     condolences: {
       type: "full",
+      cemeteryWithWomen: false,
       men: emptyCondolenceDetails(),
       women: emptyCondolenceDetails(),
       extraVenues: [],

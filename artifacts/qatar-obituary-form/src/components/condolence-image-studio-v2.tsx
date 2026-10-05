@@ -7,6 +7,7 @@ import {
   Check,
   Copy,
   Sparkles,
+  Type,
   AlertTriangle,
 } from "lucide-react";
 import {
@@ -31,13 +32,14 @@ import {
   type ImageDraft,
 } from "@/lib/condolence-copy";
 import { IMAGE_HEIGHT, IMAGE_WIDTH, type PosterBranding, type RenderValidationReport } from "@/lib/naskh-poster-engine";
-import { DEFAULT_NASKH_LAYOUT, NASKH_LAYOUTS, isNaskhLayoutId, posterQrUrls, type NaskhLayoutId } from "@/lib/naskh-poster-plan";
+import { DEFAULT_NASKH_LAYOUT, DEFAULT_NASKH_TYPE_SCALE, NASKH_LAYOUTS, NASKH_TYPE_SCALES, isNaskhLayoutId, isNaskhTypeScaleId, posterQrUrls, type NaskhLayoutId, type NaskhTypeScaleId } from "@/lib/naskh-poster-plan";
 import { normalizeObituaryPresentation } from "@/lib/presentation-normalizer";
 import { buildAnnouncement } from "@/lib/announcement";
 import { generateQrImages, type QrCodeMap } from "@/lib/qr-images";
 import { renderPoster } from "@/lib/poster-render";
 
 const LAYOUT_STORAGE_KEY = "qatar_poster_layout_v1";
+const TYPE_SCALE_STORAGE_KEY = "qatar_poster_type_scale_v1";
 
 /** آخر تخطيط اختاره المستخدم في هذا المتصفح. */
 function readStoredLayout(): NaskhLayoutId {
@@ -54,6 +56,24 @@ function storeLayout(layout: NaskhLayoutId) {
     localStorage.setItem(LAYOUT_STORAGE_KEY, layout);
   } catch {
     /* التخزين المحلي غير متاح (وضع خاص مثلاً)؛ الاختيار يبقى لهذه الجلسة فقط */
+  }
+}
+
+/** آخر حجم خط اختاره المستخدم في هذا المتصفح. */
+function readStoredTypeScale(): NaskhTypeScaleId {
+  try {
+    const stored = localStorage.getItem(TYPE_SCALE_STORAGE_KEY);
+    return isNaskhTypeScaleId(stored) ? stored : DEFAULT_NASKH_TYPE_SCALE;
+  } catch {
+    return DEFAULT_NASKH_TYPE_SCALE;
+  }
+}
+
+function storeTypeScale(scale: NaskhTypeScaleId) {
+  try {
+    localStorage.setItem(TYPE_SCALE_STORAGE_KEY, scale);
+  } catch {
+    /* كما في التخطيط: الاختيار يبقى لهذه الجلسة فقط */
   }
 }
 
@@ -152,6 +172,7 @@ export function CondolenceImageStudio({
 }) {
   const previewRef = useRef<HTMLCanvasElement>(null);
   const [layout, setLayout] = useState<NaskhLayoutId>(readStoredLayout);
+  const [typeScale, setTypeScale] = useState<NaskhTypeScaleId>(readStoredTypeScale);
   const [previewSize, setPreviewSize] = useState({ width: IMAGE_WIDTH, height: IMAGE_HEIGHT });
   const [draft, setDraft] = useState<ImageDraft>(() => createCondolenceImageDraft(request));
   const [qrImages, setQrImages] = useState<QrCodeMap>({});
@@ -208,7 +229,7 @@ export function CondolenceImageStudio({
     setRendering(true);
     void (async () => {
       try {
-        const { canvas: compiled, report } = await renderPoster(layout, normalizedContent, qrImages, branding);
+        const { canvas: compiled, report } = await renderPoster(layout, normalizedContent, qrImages, branding, typeScale);
         if (cancelled) return;
 
         setValidationReport(report);
@@ -234,7 +255,7 @@ export function CondolenceImageStudio({
     return () => {
       cancelled = true;
     };
-  }, [layout, normalizedContent, qrImages, branding, settingsReady]);
+  }, [layout, typeScale, normalizedContent, qrImages, branding, settingsReady]);
 
   const updateCard = (audience: Audience, key: keyof EditableCard, value: string) => {
     setDraft((current) => ({
@@ -410,6 +431,42 @@ export function CondolenceImageStudio({
                       onClick={() => {
                         setLayout(option.id);
                         storeLayout(option.id);
+                      }}
+                      className={`relative flex flex-col text-right p-3 rounded-xl border transition-all text-xs ${
+                        isSelected
+                          ? "border-primary bg-primary/10 text-primary ring-2 ring-primary/20 shadow-sm font-semibold"
+                          : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full mb-1">
+                        <span className="font-bold text-sm text-foreground">{option.name}</span>
+                        {isSelected && <Check className="w-4 h-4 text-primary shrink-0" />}
+                      </div>
+                      <span className="text-[11px] leading-4 opacity-80 line-clamp-2">{option.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* TYPE SCALE SWITCHER: توزيع أحجام المخطوطة والاسم والنص */}
+            <div className="w-full max-w-[560px] mb-4">
+              <span className="mb-2 flex items-center gap-1.5 text-sm font-bold text-foreground">
+                <Type className="w-4 h-4 text-primary" />
+                حجم الخط:
+              </span>
+              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="حجم الخط">
+                {NASKH_TYPE_SCALES.map((option) => {
+                  const isSelected = typeScale === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      onClick={() => {
+                        setTypeScale(option.id);
+                        storeTypeScale(option.id);
                       }}
                       className={`relative flex flex-col text-right p-3 rounded-xl border transition-all text-xs ${
                         isSelected

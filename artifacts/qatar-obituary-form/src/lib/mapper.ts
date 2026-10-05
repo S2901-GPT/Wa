@@ -261,8 +261,9 @@ export function mapFormToPayload(data: ObituaryFormValues): ObituaryRequestInput
   const type = cond?.type ?? "none";
   const options: ObituaryRequestInput["condolenceOptions"] = [];
   if (type === "full" || type === "men_only") options.push("men");
-  if (type === "full" || type === "women_only") options.push("women");
   if (type === "cemetery_only") options.push("men_cemetery");
+  // «يقتصر على المقبرة» للرجال، ومعه عزاء للنساء إن اختير
+  if (type === "full" || type === "women_only" || (type === "cemetery_only" && cond?.cemeteryWithWomen)) options.push("women");
   if (type === "tbd") options.push("tbd");
   // «هاتف فقط» دون أرقام: لا يُرسل أي رقم هاتف (قرار جديد بعدم نشر الأرقام).
   if (type === "phone_only") options.push("phone");
@@ -473,6 +474,7 @@ export function mapPayloadToForm(request: ObituaryRequest): ObituaryFormValues {
     condolences: {
       ...base.condolences!,
       type,
+      cemeteryWithWomen: type === "cemetery_only" && hasWomen,
       men: menCards[0] ? cardToForm(menCards[0]) : emptyCondolenceDetails(),
       women: womenCards[0] ? cardToForm(womenCards[0]) : emptyCondolenceDetails(),
       extraVenues: [

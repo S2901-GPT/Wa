@@ -1,5 +1,5 @@
 import type { CondolenceCard, ObituaryRequest } from "@workspace/api-client-react";
-import { buildAnnouncement, describeDeceased, noRelativesPhrase, posterCardLines } from "./announcement";
+import { buildAnnouncement, cancellationLines, describeDeceased, noRelativesPhrase, posterCardLines } from "./announcement";
 import { formatDuration } from "./condolence-copy";
 
 /** موقع عزاء واحد: عنوانه («عزاء النساء الأول»)، وأسطره، ورمز موقعه إن وُجد رابط. */
@@ -435,6 +435,22 @@ export function normalizeObituaryPresentation(
     ...announcement.headline,
     verb: edited.messageType === "amendment" ? `تعديل / ${announcement.headline.verb}` : announcement.headline.verb,
   };
+
+  // إلغاء العزاء: المتوفى ثم نص الإلغاء فقط؛ الدفن والعزاء نُشرا في الإعلان الأصلي، فلا يظهر «الدفن» فارغاً
+  if (request.messageType === "condolence_cancellation") {
+    return {
+      opening,
+      statement,
+      headline,
+      deceasedList,
+      deceasedCombinedNames,
+      hasCombinedPrayerBurial: false,
+      phoneLines: [],
+      relatives,
+      notes: [...cancellationLines(edited, ""), notes].filter(Boolean).join("\n"),
+      closing,
+    };
+  }
 
   return {
     opening,
