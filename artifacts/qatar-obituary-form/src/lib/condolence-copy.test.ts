@@ -87,8 +87,11 @@ const cases: Array<[string, () => void]> = [
     assert.equal(content.women?.flowLabel, "والنساء");
     const womenOnly = normalizeObituaryPresentation(makeRequest({ condolenceOptions: ["women"], condolences: [{ audience: "women", location: "منزل العائلة" }] }));
     assert.equal(womenOnly.women?.flowLabel, "عزاء النساء");
+    // «تعديل» شارة بارزة في الصورة، لا بادئة صغيرة في أول السطر
     const amendment = normalizeObituaryPresentation(makeRequest({ messageType: "amendment" }));
-    assert.equal(amendment.headline.verb, "تعديل / توفي");
+    assert.equal(amendment.headline.verb, "توفي");
+    assert.deepEqual(amendment.notice, { badge: "تعديل", lines: [] });
+    assert.ok(amendment.burial || amendment.prayerBurialCombined, "بيانات الدفن تبقى في التعديل");
   }],
   ["naskh headline without a title drops the slash and merges age, nationality and death place", () => {
     const content = normalizeObituaryPresentation(makeRequest({

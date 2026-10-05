@@ -75,6 +75,11 @@ export type NormalizedContent = {
   relativesNote?: string;
   /** «العزاء من …» المشتركة بين المواقع، تُكتب مرة واحدة قبلها. */
   condolenceStart?: string;
+  /**
+   * رسالة ليست إعلاناً أولاً: شارة بارزة أعلى الصورة (تعديل، تأجيل الدفن، إلغاء عزاء)،
+   * وسطورها تحت الاسم. في التأجيل والإلغاء لا تُعرض بيانات الدفن والعزاء القديمة أصلاً.
+   */
+  notice?: { badge: string; lines: string[] };
   notes?: string;
   closing: string;
 };
@@ -431,31 +436,38 @@ export function normalizeObituaryPresentation(
   const closing = cleanText(draftOverrides?.closing) || announcement.closing;
   const opening = cleanText(draftOverrides?.opening) || "إنا لله وإنا إليه راجعون";
   const statement = edited.messageType === "amendment" ? `تعديل / ${announcement.statement}` : announcement.statement;
-  const headline = {
-    ...announcement.headline,
-    verb: edited.messageType === "amendment" ? `تعديل / ${announcement.headline.verb}` : announcement.headline.verb,
-  };
+  // «تعديل» شارة بارزة أعلى الصورة بدل بادئة صغيرة في أول السطر لا يكاد القارئ ينتبه لها
+  const headline = announcement.headline;
 
-  // إلغاء العزاء: المتوفى ثم نص الإلغاء فقط؛ الدفن والعزاء نُشرا في الإعلان الأصلي، فلا يظهر «الدفن» فارغاً
+  // التأجيل والإلغاء: الاسم ثم الشارة ونصها فقط. بيانات الدفن والعزاء نُشرت في الإعلان الأصلي،
+  // فعرضها هنا يناقض الرسالة نفسها، ولذلك تُحذف من الصورة.
+  const noticeOnly = (badge: string, lines: string[]): NormalizedContent => ({
+    opening,
+    statement,
+    headline,
+    deceasedList,
+    deceasedCombinedNames,
+    hasCombinedPrayerBurial: false,
+    phoneLines: [],
+    relatives,
+    notice: { badge, lines: lines.filter(Boolean) },
+    notes: notes || undefined,
+    closing,
+  });
   if (request.messageType === "condolence_cancellation") {
-    return {
-      opening,
-      statement,
-      headline,
-      deceasedList,
-      deceasedCombinedNames,
-      hasCombinedPrayerBurial: false,
-      phoneLines: [],
-      relatives,
-      notes: [...cancellationLines(edited, ""), notes].filter(Boolean).join("\n"),
-      closing,
-    };
+    return noticeOnly("إلغاء عزاء", cancellationLines(edited, ""));
+  }
+  if (request.messageType === "postponement") {
+    // سطور التأجيل من المولّد نفسه، فلا يختلف نص الصورة عن النص المنسوخ
+    const postponement = buildAnnouncement({ ...edited, messageType: "postponement" });
+    return noticeOnly("تأجيل الدفن", postponement.sections.find((section) => section.id === "notice")?.lines ?? []);
   }
 
   return {
     opening,
     statement,
     headline,
+    ...(edited.messageType === "amendment" ? { notice: { badge: "تعديل", lines: [] } } : {}),
     deceasedList,
     deceasedCombinedNames,
     hasCombinedPrayerBurial,

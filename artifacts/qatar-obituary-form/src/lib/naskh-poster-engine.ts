@@ -216,8 +216,22 @@ export function drawNaskhPlan(ctx: CanvasRenderingContext2D, plan: NaskhPlan, as
       case "line":
         drawLine(ctx, item);
         break;
+      case "badge": {
+        // شارة مملوءة بلون الحبر ونصها أبيض، فيراها القارئ قبل أي سطر
+        const radius = Math.round(item.h / 2);
+        roundedRectPath(ctx, item.x, item.y, item.width, item.h, radius);
+        ctx.fillStyle = NASKH_COLORS.ink;
+        ctx.fill();
+        ctx.font = fontString(700, item.px);
+        ctx.fillStyle = "#FFFFFF";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.direction = "rtl";
+        ctx.fillText(toArabicIndicDigits(item.text), item.x + item.width / 2, item.y + item.h / 2);
+        break;
+      }
       case "separator":
-        ctx.fillStyle = NASKH_COLORS.line;
+        ctx.fillStyle = NASKH_COLORS.rule;
         ctx.fillRect(item.x, item.y, item.width, 1);
         break;
       case "vline":
