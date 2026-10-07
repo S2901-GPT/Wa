@@ -46,6 +46,8 @@ export const NASKH_METRICS = {
   qrSize: 160,
   qrGap: 24,
   minGap: 12,
+  /** زيادة بهذا القدر أو أقل لا تظهر في الصورة، فلا تُعدّ فيضاً أمام المسؤول. */
+  overflowTolerance: 24,
   maxGap: 40,
   groupGap: 8,
   /** الأحجام أعلاه للإعلان المعتاد؛ ولا ينزل النص عن 32 بكسل مهما طال (42 × 0.76). */
@@ -137,6 +139,36 @@ export function isNaskhTypeScaleId(value: unknown): value is NaskhTypeScaleId {
 
 export function naskhTypeScale(id: NaskhTypeScaleId | undefined): NaskhTypeScale {
   return NASKH_TYPE_SCALES.find((scale) => scale.id === (id ?? DEFAULT_NASKH_TYPE_SCALE)) ?? NASKH_TYPE_SCALES[1];
+}
+
+/**
+ * مقاس الصورة النهائي. كل منصة تعيد تحجيم ما لا يطابق مقاسها، وتحجيم النص هو ما يطمس الخط،
+ * فالتصدير بمقاس المنصة نفسه يعني أنها تضغطه فقط ولا تحجّمه.
+ */
+export type NaskhPosterSizeId = "dynamic" | "instagram" | "story";
+export type NaskhPosterSize = {
+  id: NaskhPosterSizeId;
+  name: string;
+  description: string;
+  /** حين يتساوى الحدان فالطول ثابت لا يتغير بالمحتوى. */
+  minHeight: number;
+  maxHeight: number;
+};
+
+export const NASKH_POSTER_SIZES: readonly NaskhPosterSize[] = [
+  { id: "dynamic", name: "تلقائي", description: "يطول حسب المحتوى: ١٠٨٠ × ١٣٥٠ حتى ١٨٠٠", minHeight: NASKH_METRICS.minHeight, maxHeight: NASKH_METRICS.maxHeight },
+  { id: "instagram", name: "إنستقرام ٤:٥", description: "١٠٨٠ × ١٣٥٠ بالضبط، مقاس المنشور فلا يُقصّ ولا يُصغَّر", minHeight: 1350, maxHeight: 1350 },
+  { id: "story", name: "ستوري وسناب ٩:١٦", description: "١٠٨٠ × ١٩٢٠ بالضبط، ملء الشاشة في القصة والسناب", minHeight: 1920, maxHeight: 1920 },
+];
+
+export const DEFAULT_NASKH_POSTER_SIZE: NaskhPosterSizeId = "dynamic";
+
+export function isNaskhPosterSizeId(value: unknown): value is NaskhPosterSizeId {
+  return typeof value === "string" && NASKH_POSTER_SIZES.some((size) => size.id === value);
+}
+
+export function naskhPosterSize(id: NaskhPosterSizeId | undefined): NaskhPosterSize {
+  return NASKH_POSTER_SIZES.find((size) => size.id === (id ?? DEFAULT_NASKH_POSTER_SIZE)) ?? NASKH_POSTER_SIZES[0];
 }
 
 /** قيمة أولية فقط: الحجم الفعلي للاسم يأتي من التوزيع المختار في planNaskhLayout. */
@@ -278,6 +310,8 @@ export type NaskhPlan = {
   gap: number;
   /** بقي المحتوى أطول من الصورة حتى بعد كل الضبط (نادر جداً). */
   overflow: boolean;
+  /** مقدار الزيادة بالبكسل: بضعة بكسلات لا تُرى، وما زاد يقضم التذييل. */
+  overflowBy: number;
   items: PlanItem[];
 };
 
@@ -888,6 +922,7 @@ function planAtTypeScale(content: NormalizedContent, measure: MeasureFn, opts: N
   }
 
   const overflow = over();
+  const overflowBy = Math.max(0, Math.round(spanWith(NASKH_METRICS.minGap) - zone(height)));
   const gap = overflow ? NASKH_METRICS.minGap : Math.max(NASKH_METRICS.minGap, Math.min(NASKH_METRICS.maxGap, (zone(height) - spanWith(0)) / Math.max(1, slots())));
   const span = spanWith(gap);
   const contentTop = spec.top + Math.max(0, (zone(height) - span) / 2);
@@ -937,5 +972,5 @@ function planAtTypeScale(content: NormalizedContent, measure: MeasureFn, opts: N
   // آخر عنصر: يُرسم فوق الخلفية والنص
   if (content.notice?.badge) items.push({ kind: "badge", text: content.notice.badge, px: NASKH_METRICS.ribbonPx });
 
-  return { layout, typeScale: type.id, width: NASKH_METRICS.width, height, scale, namePx, minTextPx: Number.isFinite(minTextPx) ? minTextPx : 0, gap, overflow, items };
+  return { layout, typeScale: type.id, width: NASKH_METRICS.width, height, scale, namePx, minTextPx: Number.isFinite(minTextPx) ? minTextPx : 0, gap, overflow, overflowBy, items };
 }
