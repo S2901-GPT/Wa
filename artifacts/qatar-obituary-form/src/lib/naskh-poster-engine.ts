@@ -7,7 +7,7 @@ import type { NormalizedContent } from "./presentation-normalizer";
 import { normalizeArabic } from "./presentation-normalizer";
 import type { QrCodeMap } from "./qr-images";
 import { trimTransparent } from "./logo-image";
-import { DEFAULT_OPENING, NASKH_COLORS, NASKH_METRICS, naskhTypeScale, planNaskhLayout, toArabicIndicDigits, type MeasureFn, type NaskhLayoutId, type NaskhPlan, type NaskhQrKey, type NaskhTypeScaleId, type PlanItem } from "./naskh-poster-plan";
+import { DEFAULT_OPENING, NASKH_COLORS, NASKH_METRICS, naskhPosterSize, naskhTypeScale, planNaskhLayout, toArabicIndicDigits, type MeasureFn, type NaskhLayoutId, type NaskhPlan, type NaskhPosterSizeId, type NaskhQrKey, type NaskhTypeScaleId, type PlanItem } from "./naskh-poster-plan";
 
 export const IMAGE_WIDTH: number = NASKH_METRICS.width;
 export const IMAGE_HEIGHT: number = NASKH_METRICS.minHeight;
@@ -36,7 +36,7 @@ export type PosterBranding = {
   maxHeight?: number;
 };
 
-export type PosterOptions = { layout: NaskhLayoutId; typeScale?: NaskhTypeScaleId; branding?: PosterBranding };
+export type PosterOptions = { layout: NaskhLayoutId; typeScale?: NaskhTypeScaleId; size?: NaskhPosterSizeId; branding?: PosterBranding };
 
 export type ValidationIssue = { severity: "error" | "warning"; code: string; message: string };
 export type RenderValidationReport = {
@@ -288,20 +288,34 @@ export function renderNaskhPoster(options: PosterOptions, content: NormalizedCon
   const openingIsImage = !!assets.opening && normalizeArabic(content.opening) === normalizeArabic(DEFAULT_OPENING);
   // كل رمز توفرت صورته (الصلاة، الدفن، وكل موقع عزاء بمفتاحه)
   const qrAvailable: Partial<Record<NaskhQrKey, boolean>> = Object.fromEntries(Object.entries(qrImages).map(([key, image]) => [key, !!image]));
-  const plan = planNaskhLayout(content, measure, { layout: options.layout, typeScale: options.typeScale, openingIsImage, qrAvailable, maxHeight: branding.maxHeight, logo: !!assets.logo });
+  // المقاس الثابت يُلزم الطول من الطرفين؛ والتلقائي يبدأ من أدناه ويطول حتى حد الإعدادات.
+  const size = naskhPosterSize(options.size);
+  const fixedHeight = size.minHeight === size.maxHeight;
+  const maxHeight = fixedHeight ? size.maxHeight : Math.max(size.minHeight, branding.maxHeight);
+  const plan = planNaskhLayout(content, measure, { layout: options.layout, typeScale: options.typeScale, openingIsImage, qrAvailable, minHeight: size.minHeight, maxHeight, logo: !!assets.logo });
 
   canvas.height = plan.height;
   drawNaskhPlan(ctx, plan, assets, qrImages);
 
   const issues: ValidationIssue[] = [];
-  if (plan.overflow) issues.push({ severity: "error", code: "naskh-overflow", message: "المحتوى أطول من الحد الأقصى لطول الصورة؛ اختصر النص أو جرّب تخطيطاً آخر." });
+  // فيض بضعة بكسلات لا يُرى في الصورة، فلا يُعرض كخطأ
+  if (plan.overflow && plan.overflowBy > NASKH_METRICS.overflowTolerance) {
+    issues.push({
+      severity: "error",
+      code: "naskh-overflow",
+      // المقاس الثابت لا يطول، فالمخرج هو مقاس آخر؛ والتلقائي بلغ حده فالمخرج هو اختصار النص
+      message: fixedHeight
+        ? `هذا الإعلان أطول من مقاس «${size.name}»؛ اختر «تلقائي» أو «ستوري وسناب» له، أو اختصر النص.`
+        : "المحتوى أطول من الحد الأقصى لطول الصورة؛ اختصر النص أو جرّب تخطيطاً آخر.",
+    });
+  }
   if (!assets.background) issues.push({ severity: "warning", code: "naskh-background-missing", message: "تعذر تحميل صورة الخلفية، فاستُخدم لون سادة." });
   if (!assets.opening) issues.push({ severity: "warning", code: "naskh-opening-missing", message: "تعذر تحميل مخطوطة «إنا لله»، فكُتبت نصاً." });
   const report: RenderValidationReport = {
     isValid: !plan.overflow,
     isCompactMode: plan.scale < 1 || plan.namePx < naskhTypeScale(plan.typeScale).namePx || plan.height > NASKH_METRICS.minHeight,
     totalUsedHeight: plan.height,
-    maxAllowedHeight: branding.maxHeight,
+    maxAllowedHeight: maxHeight,
     issues,
   };
   if (import.meta.env.DEV && typeof window !== "undefined") (window as unknown as { __naskhPlan?: NaskhPlan }).__naskhPlan = plan;

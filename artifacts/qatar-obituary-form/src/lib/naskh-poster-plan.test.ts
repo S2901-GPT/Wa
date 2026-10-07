@@ -9,7 +9,9 @@ import {
   NASKH_FOOTER_HEIGHT,
   NASKH_LAYOUTS,
   NASKH_METRICS,
+  NASKH_POSTER_SIZES,
   NASKH_TYPE_SCALES,
+  naskhPosterSize,
   naskhTypeScale,
   buildNaskhSections,
   planNaskhLayout,
@@ -438,6 +440,51 @@ const cases: Array<[string, () => void]> = [
     assert.notEqual(stepped.typeScale, "even");
     assert.equal(stepped.overflow, false);
     assert.ok(stepped.minTextPx >= 32, `min text ${stepped.minTextPx}`);
+  }],
+  ["each platform size pins the height exactly, and the content stays centred inside it", () => {
+    for (const size of NASKH_POSTER_SIZES.filter((option) => option.minHeight === option.maxHeight)) {
+      const p = plan(makeRequest(), { minHeight: size.minHeight, maxHeight: size.maxHeight });
+      assert.equal(p.height, size.minHeight, `${size.id} height ${p.height}`);
+      assert.equal(p.overflow, false, `${size.id} overflow`);
+      // المحتوى داخل الصورة: لا سطر فوق الحد الأعلى ولا تحت التذييل
+      const lines = lineItems(p);
+      assert.ok(lines.length > 0);
+      assert.ok(lines[0].y >= 0, `${size.id} first line y ${lines[0].y}`);
+      const last = lines[lines.length - 1];
+      assert.ok(last.y + last.h <= size.minHeight, `${size.id} last line bottom ${last.y + last.h}`);
+      // الشعار في تذييل أسفل الصورة
+      const band = p.items.find((item) => item.kind === "band")!;
+      assert.ok(band.y + band.h <= size.minHeight, `${size.id} band bottom ${band.y + band.h}`);
+    }
+    // المقاس التلقائي وحده يطول بالمحتوى
+    const dynamic = naskhPosterSize("dynamic");
+    assert.notEqual(dynamic.minHeight, dynamic.maxHeight);
+    assert.equal(naskhPosterSize(undefined).id, "dynamic");
+    assert.equal(naskhPosterSize("story").minHeight, 1920);
+    assert.equal(naskhPosterSize("instagram").minHeight, 1350);
+  }],
+  ["overflow carries how many pixels are over, so a hairline excess is not reported as an error", () => {
+    const fits = plan(makeRequest());
+    assert.equal(fits.overflow, false);
+    assert.equal(fits.overflowBy, 0);
+    // إعلان لا يدخل في أقصر مقاس مهما صغر الخط
+    const crowded = makeRequest({
+      relatives: Array.from({ length: 6 }, (_, group) => ({
+        relation: `المجموعة ${group + 1}`,
+        relationKey: "children",
+        people: Array.from({ length: 10 }, (_, i) => ({ name: `قريب ${group + 1}-${i + 1}`, deceased: false })),
+      })),
+    } as Partial<ObituaryRequest>);
+    const over = plan(crowded, { minHeight: 1350, maxHeight: 1350 });
+    assert.equal(over.overflow, true);
+    assert.ok(over.overflowBy > NASKH_METRICS.overflowTolerance, `overflowBy ${over.overflowBy}`);
+  }],
+  ["the tallest platform size never shrinks the text below the automatic size", () => {
+    const request = makeRequest();
+    const auto = plan(request);
+    const story = plan(request, { minHeight: 1920, maxHeight: 1920 });
+    assert.ok(story.minTextPx >= auto.minTextPx, `story ${story.minTextPx} < auto ${auto.minTextPx}`);
+    assert.equal(story.height, 1920);
   }],
   ["an edited opening phrase is drawn as text", () => {
     const content = normalizeObituaryPresentation(makeRequest(), { opening: "بسم الله الرحمن الرحيم" });

@@ -9,6 +9,7 @@ import {
   ImageDown,
   Sparkles,
   Type,
+  Crop,
   AlertTriangle,
 } from "lucide-react";
 import {
@@ -33,7 +34,7 @@ import {
   type ImageDraft,
 } from "@/lib/condolence-copy";
 import { IMAGE_HEIGHT, IMAGE_WIDTH, type PosterBranding, type RenderValidationReport } from "@/lib/naskh-poster-engine";
-import { DEFAULT_NASKH_LAYOUT, DEFAULT_NASKH_TYPE_SCALE, NASKH_LAYOUTS, NASKH_TYPE_SCALES, isNaskhLayoutId, isNaskhTypeScaleId, posterQrUrls, type NaskhLayoutId, type NaskhTypeScaleId } from "@/lib/naskh-poster-plan";
+import { DEFAULT_NASKH_LAYOUT, DEFAULT_NASKH_POSTER_SIZE, DEFAULT_NASKH_TYPE_SCALE, NASKH_LAYOUTS, NASKH_POSTER_SIZES, NASKH_TYPE_SCALES, isNaskhLayoutId, isNaskhPosterSizeId, isNaskhTypeScaleId, posterQrUrls, type NaskhLayoutId, type NaskhPosterSizeId, type NaskhTypeScaleId } from "@/lib/naskh-poster-plan";
 import { normalizeObituaryPresentation } from "@/lib/presentation-normalizer";
 import { buildAnnouncement } from "@/lib/announcement";
 import { generateQrImages, type QrCodeMap } from "@/lib/qr-images";
@@ -41,6 +42,7 @@ import { renderPoster } from "@/lib/poster-render";
 
 const LAYOUT_STORAGE_KEY = "qatar_poster_layout_v1";
 const TYPE_SCALE_STORAGE_KEY = "qatar_poster_type_scale_v1";
+const POSTER_SIZE_STORAGE_KEY = "qatar_poster_size_v1";
 
 /** آخر تخطيط اختاره المستخدم في هذا المتصفح. */
 function readStoredLayout(): NaskhLayoutId {
@@ -76,6 +78,30 @@ function storeTypeScale(scale: NaskhTypeScaleId) {
   } catch {
     /* كما في التخطيط: الاختيار يبقى لهذه الجلسة فقط */
   }
+}
+
+/** آخر مقاس صورة اختاره المستخدم في هذا المتصفح. */
+function readStoredPosterSize(): NaskhPosterSizeId {
+  try {
+    const stored = localStorage.getItem(POSTER_SIZE_STORAGE_KEY);
+    return isNaskhPosterSizeId(stored) ? stored : DEFAULT_NASKH_POSTER_SIZE;
+  } catch {
+    return DEFAULT_NASKH_POSTER_SIZE;
+  }
+}
+
+function storePosterSize(size: NaskhPosterSizeId) {
+  try {
+    localStorage.setItem(POSTER_SIZE_STORAGE_KEY, size);
+  } catch {
+    /* كما في التخطيط: الاختيار يبقى لهذه الجلسة فقط */
+  }
+}
+
+/** اسم ملف الصورة: رقم الطلب والتخطيط، والمقاس حين لا يكون التلقائي. */
+function posterFileName(requestNumber: string, layout: NaskhLayoutId, size: NaskhPosterSizeId): string {
+  const suffix = size === DEFAULT_NASKH_POSTER_SIZE ? "" : `-${size}`;
+  return `${requestNumber}-${layout}${suffix}.png`;
 }
 
 function parseAddressDraft(address: string) {
@@ -174,6 +200,7 @@ export function CondolenceImageStudio({
   const previewRef = useRef<HTMLCanvasElement>(null);
   const [layout, setLayout] = useState<NaskhLayoutId>(readStoredLayout);
   const [typeScale, setTypeScale] = useState<NaskhTypeScaleId>(readStoredTypeScale);
+  const [posterSize, setPosterSize] = useState<NaskhPosterSizeId>(readStoredPosterSize);
   const [previewSize, setPreviewSize] = useState({ width: IMAGE_WIDTH, height: IMAGE_HEIGHT });
   const [draft, setDraft] = useState<ImageDraft>(() => createCondolenceImageDraft(request));
   const [qrImages, setQrImages] = useState<QrCodeMap>({});
@@ -239,7 +266,7 @@ export function CondolenceImageStudio({
     setRendering(true);
     void (async () => {
       try {
-        const { canvas: compiled, report } = await renderPoster(layout, normalizedContent, qrImages, branding, typeScale);
+        const { canvas: compiled, report } = await renderPoster(layout, normalizedContent, qrImages, branding, typeScale, posterSize);
         if (cancelled) return;
 
         setValidationReport(report);
@@ -265,7 +292,7 @@ export function CondolenceImageStudio({
     return () => {
       cancelled = true;
     };
-  }, [layout, typeScale, normalizedContent, qrImages, branding, settingsReady]);
+  }, [layout, typeScale, posterSize, normalizedContent, qrImages, branding, settingsReady]);
 
   const updateCard = (audience: Audience, key: keyof EditableCard, value: string) => {
     setDraft((current) => ({
@@ -280,7 +307,7 @@ export function CondolenceImageStudio({
       const canvas = previewRef.current;
       if (!canvas || rendering) return resolve(null);
       canvas.toBlob(
-        (blob) => resolve(blob ? new File([blob], `${request.requestNumber}-${layout}.png`, { type: "image/png" }) : null),
+        (blob) => resolve(blob ? new File([blob], posterFileName(request.requestNumber, layout, posterSize), { type: "image/png" }) : null),
         "image/png",
       );
     });
@@ -316,7 +343,7 @@ export function CondolenceImageStudio({
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `${request.requestNumber}-${layout}.png`;
+      link.download = posterFileName(request.requestNumber, layout, posterSize);
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1500);
       toast.success(`تم تنزيل صورة التعزية بصيغة PNG عالية الدقة (${previewSize.width} × ${previewSize.height})`);
@@ -416,7 +443,7 @@ export function CondolenceImageStudio({
               </span>
               <span className="text-xs text-muted-foreground">·</span>
               <span className="text-xs text-green-700 dark:text-green-400 font-bold bg-green-500/10 px-2 py-0.5 rounded">
-                {previewSize.height > IMAGE_HEIGHT ? `طول ديناميكي (1080 × ${previewSize.height} px)` : "صفحة واحدة فقط (1080 × 1350 px)"}
+                {`${previewSize.width} × ${previewSize.height} px`}
               </span>
             </div>
             <h2 className="text-lg font-bold text-foreground sm:text-xl mt-0.5">
@@ -489,6 +516,45 @@ export function CondolenceImageStudio({
               </div>
             </div>
 
+            {/* POSTER SIZE SWITCHER: مقاس الصورة النهائي حسب المنصة */}
+            <div className="w-full max-w-[560px] mb-4">
+              <span className="mb-2 flex items-center gap-1.5 text-sm font-bold text-foreground">
+                <Crop className="w-4 h-4 text-primary" />
+                مقاس الصورة:
+              </span>
+              <div className="grid grid-cols-3 gap-2" role="radiogroup" aria-label="مقاس الصورة">
+                {NASKH_POSTER_SIZES.map((option) => {
+                  const isSelected = posterSize === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      role="radio"
+                      aria-checked={isSelected}
+                      onClick={() => {
+                        setPosterSize(option.id);
+                        storePosterSize(option.id);
+                      }}
+                      className={`relative flex flex-col text-right p-3 rounded-xl border transition-all text-xs ${
+                        isSelected
+                          ? "border-primary bg-primary/10 text-primary ring-2 ring-primary/20 shadow-sm font-semibold"
+                          : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between w-full mb-1">
+                        <span className="font-bold text-sm text-foreground">{option.name}</span>
+                        {isSelected && <Check className="w-4 h-4 text-primary shrink-0" />}
+                      </div>
+                      <span className="text-[11px] leading-4 opacity-80 line-clamp-3">{option.description}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">
+                إنستقرام وسناب يعيدان ضغط كل صورة؛ واختيار مقاسهما يمنعهما من تحجيمها أيضاً، فيبقى الخط أوضح.
+              </p>
+            </div>
+
             {/* TYPE SCALE SWITCHER: توزيع أحجام المخطوطة والاسم والنص */}
             <div className="w-full max-w-[560px] mb-4">
               <span className="mb-2 flex items-center gap-1.5 text-sm font-bold text-foreground">
@@ -524,6 +590,18 @@ export function CondolenceImageStudio({
                 })}
               </div>
             </div>
+
+            {/* BLOCKING ISSUES: المحتوى لا يدخل في المقاس المختار، فلا تُنشر الصورة كما هي */}
+            {validationReport?.issues.filter((issue) => issue.severity === "error").map((issue) => (
+              <div
+                key={issue.code}
+                role="alert"
+                className="mb-3 flex w-full max-w-[560px] items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-xs font-semibold leading-5 text-destructive"
+              >
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{issue.message}</span>
+              </div>
+            ))}
 
             {/* PREVIEW STATUS BAR */}
             <div className="mb-3 flex w-full max-w-[560px] items-center justify-between text-xs text-muted-foreground px-1">
