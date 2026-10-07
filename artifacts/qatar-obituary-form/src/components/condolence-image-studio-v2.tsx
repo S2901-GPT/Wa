@@ -6,6 +6,7 @@ import {
   X,
   Check,
   Copy,
+  ImageDown,
   Sparkles,
   Type,
   AlertTriangle,
@@ -179,6 +180,15 @@ export function CondolenceImageStudio({
   const [rendering, setRendering] = useState(true);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  // مشاركة الملفات متاحة على الجوال غالباً؛ نفحصها بملف وهمي لأن canShare تتطلب ملفاً فعلياً
+  const canShareImage = useMemo(() => {
+    if (typeof navigator === "undefined" || !navigator.canShare || !navigator.share) return false;
+    try {
+      return navigator.canShare({ files: [new File([new Blob([""], { type: "image/png" })], "a.png", { type: "image/png" })] });
+    } catch {
+      return false;
+    }
+  }, []);
   const [validationReport, setValidationReport] = useState<RenderValidationReport | null>(null);
 
   const queryClient = useQueryClient();
@@ -262,6 +272,36 @@ export function CondolenceImageStudio({
       ...current,
       [audience]: current[audience] ? { ...current[audience], [key]: value } : undefined,
     }));
+  };
+
+  /** ملف PNG من المعاينة، باسم الطلب وتخطيطه. */
+  const posterFile = (): Promise<File | null> =>
+    new Promise((resolve) => {
+      const canvas = previewRef.current;
+      if (!canvas || rendering) return resolve(null);
+      canvas.toBlob(
+        (blob) => resolve(blob ? new File([blob], `${request.requestNumber}-${layout}.png`, { type: "image/png" }) : null),
+        "image/png",
+      );
+    });
+
+  /**
+   * «حفظ في الصور»: على الجوال يفتح ورقة المشاركة، وفيها «حفظ الصورة» الذي يضعها في ألبوم الصور مباشرة،
+   * ومنها المشاركة إلى واتساب. زر «تنزيل» وحده يضعها في «الملفات» على iOS لا في الصور.
+   */
+  const shareImage = async () => {
+    const file = await posterFile();
+    if (!file) {
+      toast.error("تعذر إنشاء ملف PNG");
+      return;
+    }
+    try {
+      await navigator.share({ files: [file], title: `إعلان ${request.requestNumber}` });
+    } catch (error) {
+      // إلغاء المستخدم ليس خطأ
+      if ((error as { name?: string })?.name === "AbortError") return;
+      toast.error("تعذّرت المشاركة، استخدم «تنزيل» ثم احفظ الصورة.");
+    }
   };
 
   const downloadSinglePage = () => {
@@ -520,14 +560,27 @@ export function CondolenceImageStudio({
 
             {/* DOWNLOAD ACTION BUTTONS */}
             <div className="mt-5 flex w-full max-w-[560px] flex-col sm:flex-row items-center gap-2.5">
+              {canShareImage && (
+                <Button
+                  type="button"
+                  onClick={() => void shareImage()}
+                  disabled={rendering}
+                  className="w-full sm:flex-1 gap-2 h-11 bg-primary text-primary-foreground font-semibold shadow hover:bg-primary/90"
+                >
+                  <ImageDown className="h-4 w-4" />
+                  حفظ في الصور
+                </Button>
+              )}
+
               <Button
                 type="button"
                 onClick={downloadSinglePage}
                 disabled={rendering}
-                className="w-full sm:flex-1 gap-2 h-11 bg-primary text-primary-foreground font-semibold shadow hover:bg-primary/90"
+                variant={canShareImage ? "outline" : "default"}
+                className={`w-full gap-2 h-11 font-semibold ${canShareImage ? "sm:w-auto border-border" : "sm:flex-1 bg-primary text-primary-foreground shadow hover:bg-primary/90"}`}
               >
                 <Download className="h-4 w-4" />
-                تنزيل صورة التعزية (PNG عالية الدقة)
+                {canShareImage ? "تنزيل" : "تنزيل صورة التعزية (PNG عالية الدقة)"}
               </Button>
 
               <Button
