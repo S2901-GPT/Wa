@@ -16,6 +16,7 @@ import AdminRequestDetailsPage from '@/pages/admin/request-details';
 import AdminEditRequestPage from '@/pages/admin/edit-request';
 import AdminSettingsPage from '@/pages/admin/settings';
 import AdminFromTextPage from '@/pages/admin/from-text';
+import AdminLabPage from '@/pages/admin/lab';
 import { AdminGate } from '@/components/admin-gate';
 
 const queryClient = new QueryClient();
@@ -29,6 +30,7 @@ const guarded = (Page: () => ReactNode) => () => (
 const GuardedAdminPage = guarded(AdminPage);
 const GuardedAdminSettingsPage = guarded(AdminSettingsPage);
 const GuardedAdminFromTextPage = guarded(AdminFromTextPage);
+const GuardedAdminLabPage = guarded(AdminLabPage);
 const GuardedAdminRequestDetailsPage = guarded(AdminRequestDetailsPage);
 const GuardedAdminEditRequestPage = guarded(AdminEditRequestPage);
 
@@ -41,6 +43,7 @@ function Router() {
         <Route path="/admin" component={GuardedAdminPage} />
         <Route path="/admin/settings" component={GuardedAdminSettingsPage} />
         <Route path="/admin/from-text" component={GuardedAdminFromTextPage} />
+        <Route path="/admin/lab" component={GuardedAdminLabPage} />
         <Route path="/admin/:requestNumber" component={GuardedAdminRequestDetailsPage} />
         <Route path="/admin/:requestNumber/edit" component={GuardedAdminEditRequestPage} />
         <Route component={NotFound} />
