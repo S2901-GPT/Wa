@@ -157,8 +157,8 @@ export type NaskhPosterSize = {
 
 export const NASKH_POSTER_SIZES: readonly NaskhPosterSize[] = [
   { id: "dynamic", name: "تلقائي", description: "يطول حسب المحتوى: ١٠٨٠ × ١٣٥٠ حتى ١٨٠٠", minHeight: NASKH_METRICS.minHeight, maxHeight: NASKH_METRICS.maxHeight },
-  { id: "instagram", name: "إنستقرام ٤:٥", description: "١٠٨٠ × ١٣٥٠ بالضبط، مقاس المنشور فلا يُقصّ ولا يُصغَّر", minHeight: 1350, maxHeight: 1350 },
-  { id: "story", name: "ستوري وسناب ٩:١٦", description: "١٠٨٠ × ١٩٢٠ بالضبط، ملء الشاشة في القصة والسناب", minHeight: 1920, maxHeight: 1920 },
+  { id: "instagram", name: "منشور إنستقرام", description: "١٠٨٠ × ١٣٥٠ بالضبط، مقاس المنشور فلا يُقصّ ولا يُصغَّر", minHeight: 1350, maxHeight: 1350 },
+  { id: "story", name: "ستوري سناب وإنستغرام", description: "١٠٨٠ × ١٩٢٠ بالضبط، ملء الشاشة في القصة والسناب", minHeight: 1920, maxHeight: 1920 },
 ];
 
 export const DEFAULT_NASKH_POSTER_SIZE: NaskhPosterSizeId = "dynamic";
