@@ -33,50 +33,12 @@ import {
   type ImageDraft,
 } from "@/lib/condolence-copy";
 import { IMAGE_HEIGHT, IMAGE_WIDTH, type PosterBranding, type RenderValidationReport } from "@/lib/naskh-poster-engine";
-import { DEFAULT_NASKH_LAYOUT, DEFAULT_NASKH_TYPE_SCALE, NASKH_LAYOUTS, NASKH_TYPE_SCALES, isNaskhLayoutId, isNaskhTypeScaleId, posterQrUrls, type NaskhLayoutId, type NaskhTypeScaleId } from "@/lib/naskh-poster-plan";
+import { NASKH_LAYOUTS, NASKH_TYPE_SCALES, posterQrUrls, type NaskhLayoutId, type NaskhTypeScaleId } from "@/lib/naskh-poster-plan";
+import { readStoredLayout, readStoredTypeScale, storeLayout, storeTypeScale } from "@/lib/poster-preferences";
 import { normalizeObituaryPresentation } from "@/lib/presentation-normalizer";
 import { buildAnnouncement } from "@/lib/announcement";
 import { generateQrImages, type QrCodeMap } from "@/lib/qr-images";
 import { renderPoster } from "@/lib/poster-render";
-
-const LAYOUT_STORAGE_KEY = "qatar_poster_layout_v1";
-const TYPE_SCALE_STORAGE_KEY = "qatar_poster_type_scale_v1";
-
-/** آخر تخطيط اختاره المستخدم في هذا المتصفح. */
-function readStoredLayout(): NaskhLayoutId {
-  try {
-    const stored = localStorage.getItem(LAYOUT_STORAGE_KEY);
-    return isNaskhLayoutId(stored) ? stored : DEFAULT_NASKH_LAYOUT;
-  } catch {
-    return DEFAULT_NASKH_LAYOUT;
-  }
-}
-
-function storeLayout(layout: NaskhLayoutId) {
-  try {
-    localStorage.setItem(LAYOUT_STORAGE_KEY, layout);
-  } catch {
-    /* التخزين المحلي غير متاح (وضع خاص مثلاً)؛ الاختيار يبقى لهذه الجلسة فقط */
-  }
-}
-
-/** آخر حجم خط اختاره المستخدم في هذا المتصفح. */
-function readStoredTypeScale(): NaskhTypeScaleId {
-  try {
-    const stored = localStorage.getItem(TYPE_SCALE_STORAGE_KEY);
-    return isNaskhTypeScaleId(stored) ? stored : DEFAULT_NASKH_TYPE_SCALE;
-  } catch {
-    return DEFAULT_NASKH_TYPE_SCALE;
-  }
-}
-
-function storeTypeScale(scale: NaskhTypeScaleId) {
-  try {
-    localStorage.setItem(TYPE_SCALE_STORAGE_KEY, scale);
-  } catch {
-    /* كما في التخطيط: الاختيار يبقى لهذه الجلسة فقط */
-  }
-}
 
 function parseAddressDraft(address: string) {
   type AddressField = "area" | "street" | "houseNumber" | "buildingNumber" | "floor" | "apartmentNumber";
