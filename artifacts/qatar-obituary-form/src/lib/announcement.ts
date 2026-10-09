@@ -461,7 +461,23 @@ type IdentityResult = {
   movedTitleLine?: string;
 };
 
-function buildIdentity(person: DeceasedPerson, roles: RelativeGroup[]): IdentityResult {
+/** للمقارنة بين اسمين: بلا همزات ولا تاء مربوطة ولا فراغات زائدة. */
+const foldName = (value: string) => clean(value).replace(/[أإآ]/gu, "ا").replace(/ة/gu, "ه").replace(/\s+/gu, " ");
+
+/**
+ * الذكاء الاصطناعي قد يضع «حرم فلان» في خانة الاسم ويضع فلاناً زوجاً أيضاً (طلبات محفوظة قبل إصلاح الخادم)،
+ * فيُكتب «حرم فلان» مرتين. هنا يُهمل الاسم ويبقى التعريف بالزوج وحده.
+ */
+function withoutSpousePrefixedName(person: DeceasedPerson): DeceasedPerson {
+  const fullName = clean(person.fullName);
+  const spouseName = clean(person.spouse?.name);
+  if (!spouseName || !SPOUSE_TITLE_PATTERN.test(fullName)) return person;
+  const rest = fullName.replace(SPOUSE_TITLE_PATTERN, "").replace(/^\/\s*/u, "").trim();
+  return foldName(rest) === foldName(spouseName) ? { ...person, fullName: "" } : person;
+}
+
+function buildIdentity(given: DeceasedPerson, roles: RelativeGroup[]): IdentityResult {
+  const person = withoutSpousePrefixedName(given);
   const mode = resolveIdentifyBy(person, roles);
   const gender = person.gender;
   let title = clean(person.title);

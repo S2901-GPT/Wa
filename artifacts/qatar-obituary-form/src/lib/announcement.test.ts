@@ -94,6 +94,17 @@ const cases: Array<[string, () => void]> = [
     });
     assert.ok(result.startsWith("توفيت الشيخة / مريم بنت عبدالله\nحرم الشيخ / خليفة بن حمد رحمه الله"), result);
   }],
+  ["5ب «حرم فلان» في خانة الاسم وفلان زوجاً أيضاً: يُكتب مرة واحدة", () => {
+    const result = text({
+      deceasedPeople: [{ gender: "woman", fullName: "حرم حسين هلال حسين البوحدود", spouse: { kind: "harem", name: "حسين هلال حسين البوحدود" } }],
+    });
+    assert.equal(result.match(/حرم/gu)?.length, 1, result);
+    assert.ok(result.startsWith("توفيت حرم / حسين هلال حسين البوحدود"), result);
+    assert.equal(describeDeceased({ gender: "woman", fullName: "حرم حسين هلال", spouse: { kind: "harem", name: "حسين هلال" } }), "حرم حسين هلال");
+    // اسم مختلف عن الزوج يبقى كما هو
+    const other = text({ deceasedPeople: [{ gender: "woman", fullName: "حرم مريم", spouse: { kind: "harem", name: "حسين هلال" } }] });
+    assert.ok(other.includes("حرم مريم") && other.includes("حرم / حسين هلال"), other);
+  }],
   ["5 «حرم» وزوجها متوفى", () => {
     const people = [{
       gender: "woman" as const,
