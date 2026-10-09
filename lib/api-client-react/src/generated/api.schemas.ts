@@ -113,6 +113,8 @@ export interface AuditInfo {
   /** @pattern ^[A-Za-z0-9_-]{8,64}$ */
   visitId?: string;
   client?: AuditClient;
+  /** استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات) */
+  inferred?: boolean;
 }
 
 /**

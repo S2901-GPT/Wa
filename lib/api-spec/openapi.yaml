@@ -703,6 +703,9 @@ components:
           pattern: "^[A-Za-z0-9_-]{8,64}$"
         client:
           $ref: "#/components/schemas/AuditClient"
+        inferred:
+          type: boolean
+          description: استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)
     HistoryEntry:
       type: object
       required: [at, channel, changes]
