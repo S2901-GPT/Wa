@@ -23,6 +23,8 @@ import type {
   AdminLoginInput,
   AdminSession,
   HealthStatus,
+  LabCount,
+  LabStatus,
   ObituaryRequest,
   ObituaryRequestInput,
   ObituaryRequestUpdate,
@@ -511,6 +513,606 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getDeleteObituaryRequestMutationOptions(options));
+    }
+
+export const getListLabObituaryRequestsUrl = () => {
+
+
+
+
+  return `/api/lab/obituary-requests`
+}
+
+/**
+ * طلبات التجارب (مجموعة مستقلة)، للمسؤول فقط
+ */
+export const listLabObituaryRequests = async ( options?: Parameters<typeof customFetch>[1]): Promise<ObituaryRequest[]> => {
+
+  return customFetch<ObituaryRequest[]>(getListLabObituaryRequestsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListLabObituaryRequestsQueryKey = () => {
+    return [
+    `/api/lab/obituary-requests`
+    ] as const;
+    }
+
+
+export const getListLabObituaryRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listLabObituaryRequests>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLabObituaryRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListLabObituaryRequestsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listLabObituaryRequests>>> = ({ signal }) => listLabObituaryRequests({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listLabObituaryRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListLabObituaryRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listLabObituaryRequests>>>
+export type ListLabObituaryRequestsQueryError = ErrorType<void>
+
+
+
+export function useListLabObituaryRequests<TData = Awaited<ReturnType<typeof listLabObituaryRequests>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listLabObituaryRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListLabObituaryRequestsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateLabObituaryRequestUrl = () => {
+
+
+
+
+  return `/api/lab/obituary-requests`
+}
+
+export const createLabObituaryRequest = async (obituaryRequestInput: ObituaryRequestInput, options?: Parameters<typeof customFetch>[1]): Promise<ObituaryRequest> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ObituaryRequest>(getCreateLabObituaryRequestUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(obituaryRequestInput)
+  }
+);}
+
+
+
+
+
+export const getCreateLabObituaryRequestMutationKey = () => ['createLabObituaryRequest'] as const;
+
+export const getCreateLabObituaryRequestMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLabObituaryRequest>>, TError,CreateLabObituaryRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createLabObituaryRequest>>, TError,CreateLabObituaryRequestMutationVariables, TContext> => {
+
+const mutationKey = getCreateLabObituaryRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createLabObituaryRequest>>, CreateLabObituaryRequestMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  createLabObituaryRequest(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateLabObituaryRequestMutationResult = NonNullable<Awaited<ReturnType<typeof createLabObituaryRequest>>>
+    export type CreateLabObituaryRequestMutationBody = BodyType<ObituaryRequestInput>
+    export type CreateLabObituaryRequestMutationError = ErrorType<unknown>
+    export type CreateLabObituaryRequestMutationVariables = {data: BodyType<ObituaryRequestInput>}
+
+    export const useCreateLabObituaryRequest = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLabObituaryRequest>>, TError,CreateLabObituaryRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createLabObituaryRequest>>,
+        TError,
+        CreateLabObituaryRequestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getCreateLabObituaryRequestMutationOptions(options));
+    }
+
+export const getGetLabObituaryRequestUrl = (requestNumber: string,) => {
+
+
+
+
+  return `/api/lab/obituary-requests/${requestNumber}`
+}
+
+export const getLabObituaryRequest = async (requestNumber: string, options?: Parameters<typeof customFetch>[1]): Promise<ObituaryRequest> => {
+
+  return customFetch<ObituaryRequest>(getGetLabObituaryRequestUrl(requestNumber),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLabObituaryRequestQueryKey = (requestNumber: string,) => {
+    return [
+    `/api/lab/obituary-requests/${requestNumber}`
+    ] as const;
+    }
+
+
+export const getGetLabObituaryRequestQueryOptions = <TData = Awaited<ReturnType<typeof getLabObituaryRequest>>, TError = ErrorType<void>>(requestNumber: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLabObituaryRequest>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLabObituaryRequestQueryKey(requestNumber);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLabObituaryRequest>>> = ({ signal }) => getLabObituaryRequest(requestNumber, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: requestNumber !== null && requestNumber !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLabObituaryRequest>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLabObituaryRequestQueryResult = NonNullable<Awaited<ReturnType<typeof getLabObituaryRequest>>>
+export type GetLabObituaryRequestQueryError = ErrorType<void>
+
+
+
+export function useGetLabObituaryRequest<TData = Awaited<ReturnType<typeof getLabObituaryRequest>>, TError = ErrorType<void>>(
+ requestNumber: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLabObituaryRequest>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLabObituaryRequestQueryOptions(requestNumber,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getUpdateLabObituaryRequestUrl = (requestNumber: string,) => {
+
+
+
+
+  return `/api/lab/obituary-requests/${requestNumber}`
+}
+
+/**
+ * طلبات التجارب (مجموعة مستقلة)، للمسؤول فقط
+ */
+export const updateLabObituaryRequest = async (requestNumber: string,
+    obituaryRequestUpdate: ObituaryRequestUpdate, options?: Parameters<typeof customFetch>[1]): Promise<ObituaryRequest> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ObituaryRequest>(getUpdateLabObituaryRequestUrl(requestNumber),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(obituaryRequestUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateLabObituaryRequestMutationKey = () => ['updateLabObituaryRequest'] as const;
+
+export const getUpdateLabObituaryRequestMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLabObituaryRequest>>, TError,UpdateLabObituaryRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateLabObituaryRequest>>, TError,UpdateLabObituaryRequestMutationVariables, TContext> => {
+
+const mutationKey = getUpdateLabObituaryRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateLabObituaryRequest>>, UpdateLabObituaryRequestMutationVariables> = (props) => {
+          const {requestNumber,data} = props ?? {};
+
+          return  updateLabObituaryRequest(requestNumber,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateLabObituaryRequestMutationResult = NonNullable<Awaited<ReturnType<typeof updateLabObituaryRequest>>>
+    export type UpdateLabObituaryRequestMutationBody = BodyType<ObituaryRequestUpdate>
+    export type UpdateLabObituaryRequestMutationError = ErrorType<void>
+    export type UpdateLabObituaryRequestMutationVariables = {requestNumber: string;data: BodyType<ObituaryRequestUpdate>}
+
+    export const useUpdateLabObituaryRequest = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateLabObituaryRequest>>, TError,UpdateLabObituaryRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateLabObituaryRequest>>,
+        TError,
+        UpdateLabObituaryRequestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getUpdateLabObituaryRequestMutationOptions(options));
+    }
+
+export const getDeleteLabObituaryRequestUrl = (requestNumber: string,) => {
+
+
+
+
+  return `/api/lab/obituary-requests/${requestNumber}`
+}
+
+/**
+ * طلبات التجارب (مجموعة مستقلة)، للمسؤول فقط
+ */
+export const deleteLabObituaryRequest = async (requestNumber: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteLabObituaryRequestUrl(requestNumber),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteLabObituaryRequestMutationKey = () => ['deleteLabObituaryRequest'] as const;
+
+export const getDeleteLabObituaryRequestMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLabObituaryRequest>>, TError,DeleteLabObituaryRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteLabObituaryRequest>>, TError,DeleteLabObituaryRequestMutationVariables, TContext> => {
+
+const mutationKey = getDeleteLabObituaryRequestMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteLabObituaryRequest>>, DeleteLabObituaryRequestMutationVariables> = (props) => {
+          const {requestNumber} = props ?? {};
+
+          return  deleteLabObituaryRequest(requestNumber,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteLabObituaryRequestMutationResult = NonNullable<Awaited<ReturnType<typeof deleteLabObituaryRequest>>>
+
+    export type DeleteLabObituaryRequestMutationError = ErrorType<void>
+    export type DeleteLabObituaryRequestMutationVariables = {requestNumber: string}
+
+    export const useDeleteLabObituaryRequest = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteLabObituaryRequest>>, TError,DeleteLabObituaryRequestMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteLabObituaryRequest>>,
+        TError,
+        DeleteLabObituaryRequestMutationVariables,
+        TContext
+      > => {
+      return useMutation(getDeleteLabObituaryRequestMutationOptions(options));
+    }
+
+export const getGetLabStatusUrl = () => {
+
+
+
+
+  return `/api/lab/status`
+}
+
+/**
+ * حالة مجموعات التجارب — عدد الطلبات، وهل قواعد Firestore منشورة لكل مجموعة
+ */
+export const getLabStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<LabStatus> => {
+
+  return customFetch<LabStatus>(getGetLabStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetLabStatusQueryKey = () => {
+    return [
+    `/api/lab/status`
+    ] as const;
+    }
+
+
+export const getGetLabStatusQueryOptions = <TData = Awaited<ReturnType<typeof getLabStatus>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLabStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetLabStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getLabStatus>>> = ({ signal }) => getLabStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getLabStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetLabStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getLabStatus>>>
+export type GetLabStatusQueryError = ErrorType<void>
+
+
+
+export function useGetLabStatus<TData = Awaited<ReturnType<typeof getLabStatus>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getLabStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetLabStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getImportLabRequestsUrl = () => {
+
+
+
+
+  return `/api/lab/import`
+}
+
+/**
+ * نسخ كل الطلبات الحية إلى التجارب (استبدالاً بالرقم نفسه)
+ */
+export const importLabRequests = async ( options?: Parameters<typeof customFetch>[1]): Promise<LabCount> => {
+
+  return customFetch<LabCount>(getImportLabRequestsUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getImportLabRequestsMutationKey = () => ['importLabRequests'] as const;
+
+export const getImportLabRequestsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importLabRequests>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importLabRequests>>, TError,void, TContext> => {
+
+const mutationKey = getImportLabRequestsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importLabRequests>>, void> = () => {
+
+
+          return  importLabRequests(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportLabRequestsMutationResult = NonNullable<Awaited<ReturnType<typeof importLabRequests>>>
+
+    export type ImportLabRequestsMutationError = ErrorType<void>
+
+
+    export const useImportLabRequests = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importLabRequests>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importLabRequests>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getImportLabRequestsMutationOptions(options));
+    }
+
+export const getResetLabRequestsUrl = () => {
+
+
+
+
+  return `/api/lab/reset`
+}
+
+/**
+ * حذف كل طلبات التجارب
+ */
+export const resetLabRequests = async ( options?: Parameters<typeof customFetch>[1]): Promise<LabCount> => {
+
+  return customFetch<LabCount>(getResetLabRequestsUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getResetLabRequestsMutationKey = () => ['resetLabRequests'] as const;
+
+export const getResetLabRequestsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetLabRequests>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resetLabRequests>>, TError,void, TContext> => {
+
+const mutationKey = getResetLabRequestsMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resetLabRequests>>, void> = () => {
+
+
+          return  resetLabRequests(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResetLabRequestsMutationResult = NonNullable<Awaited<ReturnType<typeof resetLabRequests>>>
+
+    export type ResetLabRequestsMutationError = ErrorType<void>
+
+
+    export const useResetLabRequests = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetLabRequests>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resetLabRequests>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getResetLabRequestsMutationOptions(options));
     }
 
 export const getGetAdminSessionUrl = () => {

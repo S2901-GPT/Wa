@@ -107,6 +107,137 @@ paths:
           description: يلزم تسجيل الدخول كمسؤول
         "404":
           description: الطلب غير موجود
+  /lab/obituary-requests:
+    get:
+      operationId: listLabObituaryRequests
+      tags: [lab]
+      description: طلبات التجارب (مجموعة مستقلة)، للمسؤول فقط
+      responses:
+        "200":
+          description: قائمة الطلبات من الأحدث
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ObituaryRequest"
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
+    post:
+      operationId: createLabObituaryRequest
+      tags: [lab]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ObituaryRequestInput"
+      responses:
+        "201":
+          description: تم إنشاء الطلب
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ObituaryRequest"
+  /lab/obituary-requests/{requestNumber}:
+    get:
+      operationId: getLabObituaryRequest
+      tags: [lab]
+      parameters:
+        - $ref: "#/components/parameters/RequestNumber"
+      responses:
+        "200":
+          description: تفاصيل الطلب
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ObituaryRequest"
+        "404":
+          description: الطلب غير موجود
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
+    put:
+      operationId: updateLabObituaryRequest
+      tags: [lab]
+      parameters:
+        - $ref: "#/components/parameters/RequestNumber"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ObituaryRequestUpdate"
+      description: طلبات التجارب (مجموعة مستقلة)، للمسؤول فقط
+      responses:
+        "200":
+          description: تم تحديث الطلب
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ObituaryRequest"
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
+        "404":
+          description: الطلب غير موجود
+    delete:
+      operationId: deleteLabObituaryRequest
+      tags: [lab]
+      description: طلبات التجارب (مجموعة مستقلة)، للمسؤول فقط
+      parameters:
+        - $ref: "#/components/parameters/RequestNumber"
+      responses:
+        "204":
+          description: تم حذف الطلب
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
+        "404":
+          description: الطلب غير موجود
+  /lab/status:
+    get:
+      operationId: getLabStatus
+      tags: [lab]
+      description: حالة مجموعات التجارب — عدد الطلبات، وهل قواعد Firestore منشورة لكل مجموعة
+      responses:
+        "200":
+          description: حالة التجارب
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabStatus"
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
+  /lab/import:
+    post:
+      operationId: importLabRequests
+      tags: [lab]
+      description: نسخ كل الطلبات الحية إلى التجارب (استبدالاً بالرقم نفسه)
+      responses:
+        "200":
+          description: عدد الطلبات المنسوخة
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabCount"
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
+        "503":
+          description: قواعد Firestore لمجموعة التجارب غير منشورة
+  /lab/reset:
+    post:
+      operationId: resetLabRequests
+      tags: [lab]
+      description: حذف كل طلبات التجارب
+      responses:
+        "200":
+          description: عدد الطلبات المحذوفة
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LabCount"
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
+        "503":
+          description: قواعد Firestore لمجموعة التجارب غير منشورة
   /admin/session:
     get:
       operationId: getAdminSession
@@ -234,6 +365,27 @@ components:
       properties:
         status:
           type: string
+    LabStoreState:
+      type: string
+      description: ok تعمل، rules-missing قواعد Firestore غير منشورة للمجموعة، offline لا اتصال بقاعدة البيانات
+      enum: [ok, rules-missing, offline]
+    LabStatus:
+      type: object
+      required: [count, labRequests, formVisits]
+      properties:
+        count:
+          type: integer
+          description: عدد طلبات التجارب الحالية
+        labRequests:
+          $ref: "#/components/schemas/LabStoreState"
+        formVisits:
+          $ref: "#/components/schemas/LabStoreState"
+    LabCount:
+      type: object
+      required: [count]
+      properties:
+        count:
+          type: integer
     AdminSession:
       type: object
       required: [authenticated, configured]

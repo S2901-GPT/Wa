@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type NextFunction, type Request, type Response } from "express";
 import {
   CreateObituaryRequestBody,
   CreateObituaryRequestResponse,
@@ -10,17 +10,10 @@ import {
   UpdateObituaryRequestParams,
   UpdateObituaryRequestResponse,
 } from "@workspace/api-zod";
-import { obituaryRequestsDb, type ObituaryRequestRow } from "@workspace/db";
+import { labRequestsDb, obituaryRequestsDb, type ObituaryRequestRow, type RequestsStore } from "@workspace/db";
 import { clientKey, createRateLimiter, isAdminRequest, requireAdmin } from "../lib/admin-auth";
 
-const router: IRouter = Router();
 type RequestPayload = Record<string, unknown>;
-
-/**
- * البحث برقم الطلب مفتوح لغير المسؤول (يحتاجه المستخدم ليحمّل طلبه السابق فيعدّله)، لكن رقم الطلب من ستة
- * أرقام فقط، فيُحدّ عدد المحاولات لكل عنوان حتى لا يمكن تجريب الأرقام كلها لقراءة طلبات الآخرين.
- */
-const publicLookups = createRateLimiter({ windowMs: 10 * 60 * 1000, max: 30 });
 
 function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};
@@ -213,7 +206,7 @@ function normalizePayload(payload: RequestPayload) {
   };
 }
 
-function serialize(row: ObituaryRequestRow) {
+export function serialize(row: ObituaryRequestRow) {
   return {
     ...normalizePayload(row.payload as RequestPayload),
     id: row.id,
@@ -224,30 +217,52 @@ function serialize(row: ObituaryRequestRow) {
   };
 }
 
-/** رقم الطلب: رقما السنة ثم أربعة أرقام عشوائية («261234»)، مع التأكد من عدم وجود طلب بالرقم نفسه. */
-async function makeRequestNumber(): Promise<string> {
+/** رقم الطلب: رقما السنة ثم أربعة أرقام عشوائية («261234»)، مع التأكد من عدم وجود طلب بالرقم نفسه في المخزن. */
+async function makeRequestNumber(store: RequestsStore): Promise<string> {
   const year = String(new Date().getFullYear()).slice(-2);
   for (let attempt = 0; attempt < 25; attempt += 1) {
     const candidate = `${year}${String(Math.floor(Math.random() * 10000)).padStart(4, "0")}`;
-    if (!(await obituaryRequestsDb.getByRequestNumber(candidate))) return candidate;
+    if (!(await store.getByRequestNumber(candidate))) return candidate;
   }
   throw new Error("Could not allocate a unique request number");
 }
 
+/** خطأ من مخزن صارم (التجارب): قواعد Firestore غير منشورة أو لا اتصال؛ يُعاد 503 برسالة واضحة بدل 500. */
+export function storeUnavailable(err: unknown): string | null {
+  const code = String((err as { code?: string })?.code ?? "");
+  if (code === "permission-denied") return "قواعد Firestore لمجموعة التجارب غير منشورة بعد؛ انشرها من Firebase Console ثم أعد المحاولة.";
+  if (code === "unavailable" || code === "unauthenticated") return "تعذر الوصول إلى قاعدة البيانات، حاول بعد قليل.";
+  return null;
+}
+
+/**
+ * مسارات الطلبات على مخزن بعينه. الحي يُركَّب على /obituary-requests (الإنشاء والجلب برقم الطلب مفتوحان
+ * للجمهور)، والتجارب على /lab/obituary-requests بكل مساراتها للمسؤول فقط (`allPrivate`).
+ */
+export function makeObituaryRequestsRouter(store: RequestsStore, { allPrivate }: { allPrivate: boolean }): IRouter {
+  const router: IRouter = Router();
+  const guard = allPrivate ? [requireAdmin] : [];
+
+  /**
+   * البحث برقم الطلب مفتوح لغير المسؤول (يحتاجه المستخدم ليحمّل طلبه السابق فيعدّله)، لكن رقم الطلب من ستة
+   * أرقام فقط، فيُحدّ عدد المحاولات لكل عنوان حتى لا يمكن تجريب الأرقام كلها لقراءة طلبات الآخرين.
+   */
+  const publicLookups = createRateLimiter({ windowMs: 10 * 60 * 1000, max: 30 });
+
 router.get("/obituary-requests", requireAdmin, async (_req, res): Promise<void> => {
-  const rows = await obituaryRequestsDb.list();
+  const rows = await store.list();
   res.json(ListObituaryRequestsResponse.parse(rows.map(serialize)));
 });
 
-router.post("/obituary-requests", async (req, res): Promise<void> => {
+router.post("/obituary-requests", ...guard, async (req, res): Promise<void> => {
   const parsed = CreateObituaryRequestBody.safeParse(req.body);
   if (!parsed.success) {
     req.log.warn({ errors: parsed.error.flatten() }, "Invalid obituary request");
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const row = await obituaryRequestsDb.create({
-    requestNumber: await makeRequestNumber(),
+  const row = await store.create({
+    requestNumber: await makeRequestNumber(store),
     deceasedName: summarizeDeceased(parsed.data.deceasedPeople),
     payload: normalizePayload(parsed.data as RequestPayload),
     status: "new",
@@ -255,7 +270,7 @@ router.post("/obituary-requests", async (req, res): Promise<void> => {
   res.status(201).json(CreateObituaryRequestResponse.parse(serialize(row)));
 });
 
-router.get("/obituary-requests/:requestNumber", async (req, res): Promise<void> => {
+router.get("/obituary-requests/:requestNumber", ...guard, async (req, res): Promise<void> => {
   if (!isAdminRequest(req)) {
     const lookup = publicLookups.hit(clientKey(req));
     if (!lookup.allowed) {
@@ -269,7 +284,7 @@ router.get("/obituary-requests/:requestNumber", async (req, res): Promise<void> 
     res.status(400).json({ error: params.error.message });
     return;
   }
-  const row = await obituaryRequestsDb.getByRequestNumber(params.data.requestNumber);
+  const row = await store.getByRequestNumber(params.data.requestNumber);
   if (!row) {
     res.status(404).json({ error: "الطلب غير موجود" });
     return;
@@ -290,7 +305,7 @@ router.put("/obituary-requests/:requestNumber", requireAdmin, async (req, res): 
   }
   const { status, ...inputPayload } = parsed.data;
   const payload = normalizePayload(inputPayload as RequestPayload);
-  const row = await obituaryRequestsDb.update(params.data.requestNumber, {
+  const row = await store.update(params.data.requestNumber, {
     deceasedName: summarizeDeceased(payload.deceasedPeople),
     payload,
     status,
@@ -309,7 +324,7 @@ router.delete("/obituary-requests/:requestNumber", requireAdmin, async (req, res
     return;
   }
   try {
-    const mode = await obituaryRequestsDb.remove(params.data.requestNumber);
+    const mode = await store.remove(params.data.requestNumber);
     if (!mode) {
       res.status(404).json({ error: "الطلب غير موجود" });
       return;
@@ -318,8 +333,28 @@ router.delete("/obituary-requests/:requestNumber", requireAdmin, async (req, res
     res.status(204).end();
   } catch (err) {
     req.log.error({ err, requestNumber: params.data.requestNumber }, "Failed to delete obituary request");
-    res.status(500).json({ error: "تعذر حذف الطلب، حاول مرة أخرى." });
+    res.status(500).json({ error: storeUnavailable(err) ?? "تعذر حذف الطلب، حاول مرة أخرى." });
   }
 });
+
+  // أخطاء المخزن الصارم تصل هنا كرفض وعد (Express 5 يمرر رفض المعالجات غير المتزامنة إلى معالج الأخطاء)
+  router.use((err: unknown, _req: Request, res: Response, next: NextFunction) => {
+    const message = storeUnavailable(err);
+    if (message) {
+      res.status(503).json({ error: message });
+      return;
+    }
+    next(err);
+  });
+
+  return router;
+}
+
+/** الطلبات الحية كما كانت. */
+const router: IRouter = makeObituaryRequestsRouter(obituaryRequestsDb, { allPrivate: false });
+
+/** طلبات التجارب على مجموعة مستقلة، للمسؤول فقط. */
+export const labObituaryRequestsRouter: IRouter = Router();
+labObituaryRequestsRouter.use("/lab", makeObituaryRequestsRouter(labRequestsDb, { allPrivate: true }));
 
 export default router;
