@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import type { AddressInfo } from "node:net";
 import express from "express";
 import { ADMIN_COOKIE, createSessionToken } from "./admin-auth";
-import { AiError, DEFAULT_MODEL, FALLBACK_MODEL, HOLLOW_WARNING, aiConfig, aiEnvHints, buildGeminiBody, burialFromSource, canonicalCemetery, extractRequest, inSource, isHollow, readJson, splitBurialNote, stripCommentary, toRequest } from "./ai-extract";
+import { AiError, DEFAULT_MODEL, FALLBACK_MODEL, HOLLOW_WARNING, aiConfig, aiEnvHints, buildGeminiBody, burialFromSource, canonicalCemetery, condolenceFromSource, extractRequest, inSource, isHollow, readJson, splitBurialNote, stripCommentary, toRequest } from "./ai-extract";
 import aiRouter from "../routes/ai";
 
 /** رد نموذجي كما يُرجعه Gemini لإعلان وهمي (بقيم فارغة وnull كما يحدث فعلاً). */
@@ -128,6 +128,43 @@ const cases: Array<[string, () => void | Promise<void>]> = [
     assert.equal(request.burial.cemetery, "مقبرة مسيمير");
     assert.equal(request.burial.weekday, "الاثنين");
     assert.equal(request.burial.note, undefined);
+  }],
+  ["condolenceFromSource: مقر الرجال والنساء من نص الرسالة بصيغ مختلفة", () => {
+    const whatsapp = "توفيت فلانة والدفن اليوم بعد صلاة العصر في مقبرة مسيمير والعزاء للرجال في مجلس البوحدود بالهلال https://maps.app.goo.gl/abc والنساء في منزل الفقيدة بمنطقة الهلال منزل رقم 9";
+    assert.deepEqual(condolenceFromSource(whatsapp, "men"), { location: "مجلس البوحدود بالهلال", mapLink: "https://maps.app.goo.gl/abc" });
+    assert.deepEqual(condolenceFromSource(whatsapp, "women"), { location: "منزل الفقيدة بمنطقة الهلال منزل رقم 9" });
+    assert.deepEqual(condolenceFromSource("عزاء الرجال: مجلس سعود كليفيخ\nعزاء النساء: منزل أم محمد بمنطقة الفروش\nالدفن اليوم", "women"), { location: "منزل أم محمد بمنطقة الفروش" });
+    assert.deepEqual(condolenceFromSource("وللحريم في بيت الفقيد بالوكرة", "women"), { location: "بيت الفقيد بالوكرة" });
+    assert.equal(condolenceFromSource("توفي فلان والدفن اليوم", "women"), undefined);
+  }],
+  ["toRequest: بطاقة أسقطها النموذج تُؤخذ من النص، ولا تُضاف إن كانت موجودة، والمقر بلا وصف يصير «منزل الفقيدة»", () => {
+    const source = "توفيت أم محمد والدفن اليوم بعد صلاة العصر في مقبرة مسيمير والعزاء للرجال في مجلس البوحدود بالهلال والنساء في الهلال منزل رقم 9";
+    const dropped = toRequest({ deceasedPeople: [{ fullName: "أم محمد", gender: "woman" }], burial: { status: "upcoming" }, condolences: [{ audience: "men", location: "مجلس البوحدود", area: "الهلال" }], condolenceOptions: ["men"] }, source);
+    const women = dropped.request.condolences.find((card) => card.audience === "women");
+    assert.ok(women, "women card added from source");
+    assert.equal(women?.location, "الهلال منزل رقم 9");
+    assert.ok(dropped.request.condolenceOptions.includes("women"));
+    assert.ok(dropped.warnings.some((w) => w.includes("أُخذ عزاء النساء من نص الرسالة")));
+    // بطاقة موجودة لا تتكرر
+    const present = toRequest({ deceasedPeople: [{ fullName: "أم محمد", gender: "woman" }], burial: { status: "upcoming" }, condolences: [{ audience: "men", location: "مجلس" }, { audience: "women", location: "منزل الفقيدة", area: "الهلال" }] }, source);
+    assert.equal(present.request.condolences.filter((card) => card.audience === "women").length, 1);
+    // منطقة ورقم منزل بلا وصف
+    const bare = toRequest({ deceasedPeople: [{ fullName: "أم محمد", gender: "woman" }], burial: { status: "upcoming" }, condolences: [{ audience: "women", area: "الهلال", houseNumber: "9" }] }, source);
+    assert.equal(bare.request.condolences[0].location, "منزل الفقيدة");
+    const bareMan = toRequest({ deceasedPeople: [{ fullName: "محمد", gender: "man" }], burial: { status: "upcoming" }, condolences: [{ audience: "men", area: "الهلال", houseNumber: "9" }] }, "");
+    assert.equal(bareMan.request.condolences[0].location, "منزل الفقيد");
+  }],
+  ["toRequest: «حرم فلان» في خانة الاسم يُنقل إلى الزوج ولا يُكتب مرتين", () => {
+    const both = toRequest({ deceasedPeople: [{ fullName: "حرم حسين هلال حسين البوحدود", gender: "woman", spouse: { kind: "harem", name: "حسين هلال حسين البوحدود" } }], burial: { status: "upcoming" } });
+    assert.equal(both.request.deceasedPeople[0].fullName, undefined);
+    assert.equal(both.request.deceasedPeople[0].spouse?.name, "حسين هلال حسين البوحدود");
+    assert.equal(both.request.deceasedPeople[0].spouse?.kind, "harem");
+    const alone = toRequest({ deceasedPeople: [{ fullName: "أرملة سيف سعيد", gender: "woman" }], burial: { status: "upcoming" } });
+    assert.equal(alone.request.deceasedPeople[0].fullName, undefined);
+    assert.deepEqual({ name: alone.request.deceasedPeople[0].spouse?.name, kind: alone.request.deceasedPeople[0].spouse?.kind, deceased: alone.request.deceasedPeople[0].spouse?.deceased }, { name: "سيف سعيد", kind: "widow", deceased: true });
+    // اسم مختلف عن الزوج يبقى
+    const other = toRequest({ deceasedPeople: [{ fullName: "حرم مريم علي", gender: "woman", spouse: { kind: "harem", name: "حسين هلال" } }], burial: { status: "upcoming" } });
+    assert.equal(other.request.deceasedPeople[0].fullName, "حرم مريم علي");
   }],
   ["burialFromSource: موعد الدفن ومقبرته من جملة الدفن في الرسالة، بالعامية وبلا همزات", () => {
     assert.deepEqual(burialFromSource(WHATSAPP_TEXT), { cemetery: "مقبرة مسيمير", time: "بعد صلاة العصر", weekday: "الأحد", day: "اليوم" });
