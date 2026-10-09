@@ -234,6 +234,7 @@ export const SYSTEM_PROMPT = `أنت مساعد يحوّل نص إعلان وف�
 - condolences: بطاقة لكل مقر. عزاء الرجال audience=men وعزاء النساء audience=women، وإن تعددت مقرات النساء فبطاقة لكل مقر.
   location المقر كما ورد، area المنطقة، houseNumber رقم المنزل، start بداية العزاء (اليوم، غداً، أو اسم اليوم)،
   durationDays عدد الأيام رقماً، وفترات الاستقبال في schedule مثل {"days":"الفترة المسائية","time":""} والوقت إن ذُكر مثل «من 4:00 مساءً إلى 9:00 مساءً».
+  إن ذُكر عزاء للنساء بأي صيغة (النساء، الحريم، للنساء) فلا بد من بطاقة audience=women ولو كان المقر مقر الرجال نفسه، والمثل للرجال.
 - condolenceOptions: men و/أو women حسب البطاقات، و phone إن كان العزاء عبر الهاتف، و men_cemetery إن قال «يقتصر العزاء على المقبرة».
   لا تنقل أي رقم هاتف إلى أي حقل: أرقام الهواتف لا تُنشر في الإعلانات. إن قال النص إن مقر العزاء سيُحدَّد لاحقاً فاترك condolences فارغة واذكر ذلك في warnings.
 - messageType: announcement للإعلان العادي، postponement لرسالة تأجيل الدفن، amendment لتعديل إعلان سابق، condolence_cancellation لإلغاء عزاء.
@@ -306,6 +307,7 @@ export function dropEmpty(value: unknown): unknown {
   return value;
 }
 
+const SPOUSE_PREFIX_RE = /^(حرم|زوجة|أرملة|ارملة)\s*\/?\s*/u;
 const FEMALE_TITLE = /(الوالدة|الشابة|الطفلة|الرضيعة|السيدة|الحاجة|المرحومة|الجدة|الأم)/u;
 const CHILD_TITLE = /(الطفل|الرضيع)/u;
 
@@ -414,6 +416,29 @@ export function burialFromSource(source: string): { day?: string; weekday?: stri
   return Object.fromEntries(Object.entries(parts).filter(([, value]) => value));
 }
 
+const WOMEN_START_RE = /(?<=^|\s)(?:و?عزاء\s+(?:النساء|الحريم)|و?للنساء|و?للحريم|و?النساء|و?الحريم)(?=\s|:|$)/u;
+const MEN_START_RE = /(?<=^|\s)(?:و?عزاء\s+(?:الرجال|الرياييل)|و?للرجال|و?للرياييل|و?الرجال|و?الرياييل)(?=\s|:|$)/u;
+/** نهاية جملة العزاء: سطر جديد، أو بداية جملة الجمهور الآخر، أو الدفن/الصلاة. */
+const CONDOLENCE_END_RE = /\n|\s(?=و?عزاء\s|و?للرجال|و?للنساء|و?للحريم|و?للرياييل|و?الرجال|و?النساء|و?الحريم|و?الرياييل|و?الدفن|و?الصلاة|و?صلاة\s)/u;
+
+/**
+ * يقرأ مقر عزاء الرجال أو النساء من نص الرسالة نفسه. النموذج (خاصة بالمخطط الصارم) قد يُسقط بطاقة النساء
+ * أو العزاء كله رغم وضوحه («والنساء في منزل الفقيدة بالهلال»)، فتُكمَّل البطاقة الناقصة منه فقط.
+ */
+export function condolenceFromSource(source: string, audience: "men" | "women"): { location: string; mapLink?: string } | undefined {
+  const start = (audience === "women" ? WOMEN_START_RE : MEN_START_RE).exec(source);
+  if (!start) return undefined;
+  const after = source.slice(start.index + start[0].length);
+  const end = CONDOLENCE_END_RE.exec(after);
+  let rest = (end ? after.slice(0, end.index) : after).trim().replace(/^[:،,]\s*/u, "");
+  const link = /https?:\/\/\S+/u.exec(rest);
+  const mapLink = link?.[0].replace(/[.،,]+$/u, "");
+  if (link) rest = rest.replace(link[0], " ");
+  rest = rest.replace(/^(?:في|ب)\s+/u, "").replace(/\s+/gu, " ").replace(/[\s.،,:]+$/u, "").trim();
+  if (!rest) return undefined;
+  return mapLink ? { location: rest, mapLink } : { location: rest };
+}
+
 /** توحيد الكتابة للمقارنة: بلا تشكيل ولا تطويل، والهمزات ألفاً، والتاء المربوطة هاءً، والألف المقصورة ياءً. */
 function foldArabic(value: string): string {
   return value
@@ -492,13 +517,29 @@ export function toRequest(raw: unknown, source = ""): ExtractResult {
         gender = guessGender(person);
         warnings.push("لم يتضح جنس المتوفى من النص، فراجعه قبل الحفظ.");
       }
+      let fullName: string | undefined = text(person.fullName) || undefined;
+      type Spouse = Loose & { kind: "harem" | "widow" };
+      let spouse: Spouse | undefined = isObject(person.spouse) ? { ...person.spouse, kind: pick(person.spouse.kind, ["harem", "widow"] as const) ?? "harem" } : undefined;
+      // «حرم فلان» في خانة الاسم: المتوفاة معرّفة بزوجها، فيُنقل إلى spouse ولا يُكتب مرتين
+      const prefixed = fullName ? SPOUSE_PREFIX_RE.exec(fullName) : null;
+      if (prefixed && fullName) {
+        const rest = fullName.slice(prefixed[0].length).trim();
+        const spouseName = spouse ? text(spouse.name) : "";
+        if (rest && (!spouseName || foldArabic(rest) === foldArabic(spouseName))) {
+          const widow = /أرملة|ارملة/u.test(prefixed[1]);
+          spouse = { ...(spouse ?? {}), name: spouseName || rest, kind: widow ? "widow" : (spouse?.kind ?? "harem"), deceased: widow ? true : spouse?.deceased === true };
+          fullName = undefined;
+          warnings.push("عُرِّفت المتوفاة بزوجها ولم يُذكر اسمها في الرسالة.");
+        }
+      }
       return {
         ...person,
+        fullName,
         gender,
         note: freeText(person.note),
         age: intOrUndefined(person.age),
         ageUnit: pick(person.ageUnit, AGE_UNITS),
-        spouse: isObject(person.spouse) ? { ...person.spouse, kind: pick(person.spouse.kind, ["harem", "widow"] as const) ?? "harem" } : undefined,
+        spouse,
       };
     });
   if (!people.length) throw new AiError(422, "لم أجد في النص اسم المتوفى. تأكد أن النص إعلان وفاة ثم حاول مرة أخرى.");
@@ -519,10 +560,11 @@ export function toRequest(raw: unknown, source = ""): ExtractResult {
     })
     .filter((group) => group.people.length > 0);
 
-  const condolences = array(data.condolences)
+  type Card = Loose & { audience: "men" | "women"; schedule: Array<{ days: string; time: string }> };
+  const condolences: Card[] = array(data.condolences)
     .filter(isObject)
     .filter((card) => card.audience === "men" || card.audience === "women")
-    .map((card) => ({
+    .map((card): Card => ({
       ...card,
       audience: card.audience as "men" | "women",
       locationNotes: freeText(card.locationNotes),
@@ -532,6 +574,14 @@ export function toRequest(raw: unknown, source = ""): ExtractResult {
         .map((entry) => ({ days: text(entry.days), time: text(entry.time) }))
         .filter((entry) => entry.days || entry.time),
     }));
+  // بطاقة أسقطها النموذج رغم ورودها في الرسالة تُؤخذ من النص مباشرة
+  for (const audience of ["men", "women"] as const) {
+    if (condolences.some((card) => card.audience === audience)) continue;
+    const found = condolenceFromSource(source, audience);
+    if (!found) continue;
+    condolences.push({ audience, ...found, schedule: [] });
+    warnings.push(`أُخذ عزاء ${audience === "women" ? "النساء" : "الرجال"} من نص الرسالة مباشرة لأن النموذج أغفله؛ راجعه قبل الحفظ.`);
+  }
   // أرقام الهواتف لا تُنشر (قرار جديد): لا تُنقل إلى الطلب، ووجودها في الرسالة يعني التعزية عبر الهاتف.
   const phones = array(data.condolencePhoneContacts).filter(isObject).filter((contact) => text(contact.phone));
   if (phones.length) warnings.push("لم تُنقل أرقام الهواتف الواردة في الرسالة: لا تُنشر أرقام في الإعلانات.");
@@ -541,6 +591,7 @@ export function toRequest(raw: unknown, source = ""): ExtractResult {
     options = [...new Set(condolences.map((card) => card.audience))];
     if (phones.length) options.push("phone");
   }
+  for (const card of condolences) if (!options.includes(card.audience)) options.push(card.audience);
 
   const prayer = isObject(data.prayer) ? data.prayer : {};
   const burial = isObject(data.burial) ? data.burial : {};

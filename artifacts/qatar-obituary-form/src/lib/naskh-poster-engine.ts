@@ -152,11 +152,21 @@ function drawImageContain(ctx: CanvasRenderingContext2D, image: HTMLImageElement
 
 /** المخطّط يحسب الحافة اليمنى للسطر (موسّطاً أو من اليمين)، فالرسم دائماً من اليمين إلى اليسار من xRight. */
 function drawLine(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind: "line" }>) {
+  // سطر فيه حروف لاتينية أو أرقام داخل العربي (مثل «عمارة M-4») يرسمه Safari بعرض يخالف measureText فيبرز عن الهامش؛
+  // يُرسم أولاً على لوحة جانبية ثم يُثبَّت على حافة حبره الفعلية.
+  if (item.runs.some((run) => /[A-Za-z0-9]/u.test(run.text))) {
+    drawLineByInk(ctx, item);
+    return;
+  }
+  drawRuns(ctx, item, item.xRight, item.y);
+}
+
+function drawRuns(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind: "line" }>, xRight: number, y: number) {
   ctx.textBaseline = "middle";
   ctx.direction = "rtl";
-  const midY = item.y + item.h / 2;
+  const midY = y + item.h / 2;
   ctx.textAlign = "right";
-  let x = item.xRight;
+  let x = xRight;
   item.runs.forEach((run, index) => {
     if (!run.text) return;
     const shown = toArabicIndicDigits(run.text);
@@ -172,6 +182,41 @@ function drawLine(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind:
     ctx.fillText(shown, x, midY);
     x -= ctx.measureText(shown).width;
   });
+}
+
+let inkCanvas: HTMLCanvasElement | null = null;
+
+/** يرسم السطر على لوحة شفافة، يقيس أقصى يمين حبره، ثم ينقله بحيث تقع تلك الحافة على xRight بالضبط. */
+function drawLineByInk(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind: "line" }>) {
+  const pad = Math.ceil(item.px);
+  const width = ctx.canvas.width;
+  const height = Math.ceil(item.h) + pad * 2;
+  inkCanvas ??= document.createElement("canvas");
+  if (inkCanvas.width !== width) inkCanvas.width = width;
+  if (inkCanvas.height !== height) inkCanvas.height = height;
+  const side = inkCanvas.getContext("2d");
+  if (!side) {
+    drawRuns(ctx, item, item.xRight, item.y);
+    return;
+  }
+  side.clearRect(0, 0, width, height);
+  // يُرسم بعيداً عن الحافة اليمنى حتى لا يُقصّ ما يبرز
+  const drawnRight = width - pad;
+  drawRuns(side, item, drawnRight, pad);
+  const data = side.getImageData(0, 0, width, height).data;
+  let inkRight = -1;
+  for (let x = width - 1; x >= 0 && inkRight < 0; x -= 1) {
+    for (let y = 0; y < height; y += 1) {
+      if (data[(y * width + x) * 4 + 3] > 40) {
+        inkRight = x;
+        break;
+      }
+    }
+  }
+  if (inkRight < 0) return;
+  // الحافة الفعلية على xRight (+1 لأن inkRight آخر عمود مرسوم)
+  const dx = item.xRight - (inkRight + 1);
+  ctx.drawImage(inkCanvas, 0, 0, width, height, dx, item.y - pad, width, height);
 }
 
 /** تذييل الشعار أسفل الصورة: خط رفيع ثم الشعار كبيراً في الوسط؛ أو ترويسة أعلاها تتوسطها مخطوطة «إنا لله». */
