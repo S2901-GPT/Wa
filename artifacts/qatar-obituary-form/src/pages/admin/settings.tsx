@@ -66,7 +66,7 @@ export default function AdminSettingsPage() {
   return (
     <div className="container max-w-2xl mx-auto py-10 px-4 pb-24">
       <div className="mb-6 flex items-center justify-between gap-3">
-        <Link href="/admin">
+        <Link href="/">
           <Button variant="ghost" className="gap-2 -mr-4 text-muted-foreground hover:text-foreground">
             <ChevronRight className="h-4 w-4 rtl:rotate-180" />
             عودة للطلبات

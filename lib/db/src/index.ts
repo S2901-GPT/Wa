@@ -7,8 +7,9 @@ import {
   getDoc,
   setDoc,
   deleteDoc,
+  limit,
   query,
-  orderBy,
+  writeBatch,
   type Firestore,
 } from "@firebase/firestore";
 import firebaseConfig from "../../../firebase-applet-config.json";
@@ -24,97 +25,95 @@ try {
   console.warn("[AI Studio] Firebase Firestore initialization error:", err);
 }
 
-// In-memory cache & fallback store
-const inMemoryRequests: ObituaryRequestRow[] = [
-  {
-    id: 1,
-    requestNumber: "261001",
-    deceasedName: "عبدالله بن ناصر",
-    status: "new",
-    payload: {
-      deceasedPeople: [
-        {
-          fullName: "عبدالله بن ناصر",
-          gender: "man",
-          age: 78,
-          nationality: "قطري",
-          deathPlace: "الدوحة",
-          title: "الوالد",
-          occupation: "",
-          note: "",
-        },
-      ],
-      relatives: [
-        {
-          relation: "الأبناء",
-          familyReference: "",
-          people: [
-            { name: "ناصر", occupation: "", deceased: false },
-            { name: "محمد", occupation: "", deceased: false },
-            { name: "سلطان", occupation: "", deceased: false },
-          ],
-        },
-        {
-          relation: "الإخوة",
-          familyReference: "",
-          people: [
-            { name: "خليفة", occupation: "", deceased: false },
-            { name: "أحمد", occupation: "", deceased: true },
-            { name: "سالم", occupation: "", deceased: false },
-          ],
-        },
-      ],
-      prayer: {
-        enabled: true,
-        day: "الأحد 28 سبتمبر 2026",
-        time: "بعد صلاة العصر",
-        place: "جامع الإمام محمد بن عبدالوهاب",
-        mapLink: "https://maps.google.com/?q=Imam+Muhammad+ibn+Abd+al-Wahhab+Mosque+Doha",
+/** السجل التجريبي للنسخة المحلية فقط (حين لا تتوفر Firestore)؛ لا يُكتب في قاعدة الإنتاج أبداً. */
+const SAMPLE_REQUEST: ObituaryRequestRow = {
+  id: 1,
+  requestNumber: "261001",
+  deceasedName: "عبدالله بن ناصر",
+  status: "new",
+  payload: {
+    deceasedPeople: [
+      {
+        fullName: "عبدالله بن ناصر",
+        gender: "man",
+        age: 78,
+        nationality: "قطري",
+        deathPlace: "الدوحة",
+        title: "الوالد",
+        occupation: "",
+        note: "",
       },
-      burial: {
-        status: "upcoming",
-        day: "الأحد 28 سبتمبر 2026",
-        time: "بعد صلاة الجنازة مباشرة",
-        cemetery: "مقبرة مسيمير",
-        mapLink: "https://maps.google.com/?q=Mesaimeer+Cemetery+Doha",
-        outsideQatar: false,
-        outsideLocation: "",
+    ],
+    relatives: [
+      {
+        relation: "الأبناء",
+        familyReference: "",
+        people: [
+          { name: "ناصر", occupation: "", deceased: false },
+          { name: "محمد", occupation: "", deceased: false },
+          { name: "سلطان", occupation: "", deceased: false },
+        ],
       },
-      condolences: [
-        {
-          audience: "men",
-          location: "مجلس العائلة في منطقة الدفنة",
-          mapLink: "https://maps.google.com/?q=Al+Dafna+Zone+66+Doha",
-          start: "الأحد 28 سبتمبر 2026",
-          durationDays: 3,
-          time: "من بعد صلاة العصر حتى صلاة العشاء",
-          area: "الدفنة",
-          street: "شارع 850",
-          houseNumber: "14",
-        },
-        {
-          audience: "women",
-          location: "منزل الفقيد في منطقة الدفنة",
-          mapLink: "https://maps.google.com/?q=Dafna+Park+Doha",
-          start: "الأحد 28 سبتمبر 2026",
-          durationDays: 3,
-          time: "من الساعة 4:00 عصرًا حتى 8:30 مساءً",
-          area: "الدفنة",
-          street: "شارع 852",
-          houseNumber: "18",
-        },
-      ],
-      condolenceOptions: ["men", "women", "phone"],
-      condolencePhoneContacts: [
-        { name: "محمد (ابنه)", phone: "+974 5512 3456" },
-        { name: "خليفة (شقيقه)", phone: "+974 6623 4567" },
-      ],
-      notes: "تقبل التعازي مع مراعاة أوقات الصلاة، نسأل الله له المغفرة والرضوان.",
+      {
+        relation: "الإخوة",
+        familyReference: "",
+        people: [
+          { name: "خليفة", occupation: "", deceased: false },
+          { name: "أحمد", occupation: "", deceased: true },
+          { name: "سالم", occupation: "", deceased: false },
+        ],
+      },
+    ],
+    prayer: {
+      enabled: true,
+      day: "الأحد 28 سبتمبر 2026",
+      time: "بعد صلاة العصر",
+      place: "جامع الإمام محمد بن عبدالوهاب",
+      mapLink: "https://maps.google.com/?q=Imam+Muhammad+ibn+Abd+al-Wahhab+Mosque+Doha",
     },
-    createdAt: new Date(),
-    updatedAt: new Date(),
+    burial: {
+      status: "upcoming",
+      day: "الأحد 28 سبتمبر 2026",
+      time: "بعد صلاة الجنازة مباشرة",
+      cemetery: "مقبرة مسيمير",
+      mapLink: "https://maps.google.com/?q=Mesaimeer+Cemetery+Doha",
+      outsideQatar: false,
+      outsideLocation: "",
+    },
+    condolences: [
+      {
+        audience: "men",
+        location: "مجلس العائلة في منطقة الدفنة",
+        mapLink: "https://maps.google.com/?q=Al+Dafna+Zone+66+Doha",
+        start: "الأحد 28 سبتمبر 2026",
+        durationDays: 3,
+        time: "من بعد صلاة العصر حتى صلاة العشاء",
+        area: "الدفنة",
+        street: "شارع 850",
+        houseNumber: "14",
+      },
+      {
+        audience: "women",
+        location: "منزل الفقيد في منطقة الدفنة",
+        mapLink: "https://maps.google.com/?q=Dafna+Park+Doha",
+        start: "الأحد 28 سبتمبر 2026",
+        durationDays: 3,
+        time: "من الساعة 4:00 عصرًا حتى 8:30 مساءً",
+        area: "الدفنة",
+        street: "شارع 852",
+        houseNumber: "18",
+      },
+    ],
+    condolenceOptions: ["men", "women", "phone"],
+    condolencePhoneContacts: [
+      { name: "محمد (ابنه)", phone: "+974 5512 3456" },
+      { name: "خليفة (شقيقه)", phone: "+974 6623 4567" },
+    ],
+    notes: "تقبل التعازي مع مراعاة أوقات الصلاة، نسأل الله له المغفرة والرضوان.",
   },
-];
+  createdAt: new Date(),
+  updatedAt: new Date(),
+};
 
 let nextNumericId = 2;
 
@@ -135,220 +134,293 @@ function isSoftDeleted(data: any): boolean {
   return !!data && typeof data === "object" && !!data.deletedAt;
 }
 
-let seedInitialized = false;
-async function ensureSeedData() {
-  if (!firestoreDb || seedInitialized) return;
-  seedInitialized = true;
+const errorCode = (err: unknown): string => String((err as { code?: string })?.code ?? "");
+
+/** حالة مجموعة في Firestore: تعمل، أو قواعدها غير منشورة (permission-denied)، أو لا اتصال. */
+export type StoreProbe = "ok" | "rules-missing" | "offline";
+
+export type RequestsStore = ReturnType<typeof makeRequestsStore>;
+
+/** يفحص إمكانية القراءة من مجموعة بالاسم دون كتابة شيء (لعرض حالة القواعد في مركز التجارب). */
+export async function probeCollection(name: string): Promise<StoreProbe> {
+  if (!firestoreDb) return "offline";
   try {
-    // نسخ ما في Firestore إلى ذاكرة الخدمة (احتياطاً عند انقطاع الاتصال). لا يُكتب سجل تجريبي في قاعدة الإنتاج،
-    // وإلا عاد بعد حذفه كلما بدأت نسخة جديدة من الخدمة والقاعدة فارغة.
-    const snap = await getDocs(collection(firestoreDb, "obituary_requests"));
-    snap.forEach((d) => {
-      if (isSoftDeleted(d.data())) return;
-      const row = docDataToRow(d.data(), nextNumericId++);
-      const idx = inMemoryRequests.findIndex((r) => r.requestNumber === row.requestNumber);
-      if (idx >= 0) {
-        inMemoryRequests[idx] = row;
-      } else {
-        inMemoryRequests.push(row);
-      }
-    });
+    await getDocs(query(collection(firestoreDb, name), limit(1)));
+    return "ok";
   } catch (err) {
-    console.warn("[AI Studio] Error syncing with Firestore collection:", err);
+    return errorCode(err) === "permission-denied" ? "rules-missing" : "offline";
   }
 }
 
-function forgetInMemory(requestNumber: string) {
-  const idx = inMemoryRequests.findIndex((r) => r.requestNumber === requestNumber);
-  if (idx >= 0) inMemoryRequests.splice(idx, 1);
-}
+/**
+ * مخزن طلبات على مجموعة بعينها. الحي (`obituary_requests`) يسقط إلى ذاكرة الخدمة إن تعذر الاتصال
+ * حتى لا يتوقف الموقع؛ أما الصارم (`strict`، لطلبات التجارب) فيرمي الخطأ بدل أن يوهم بحفظ يضيع عند
+ * إعادة التشغيل — وبه يكتشف المسؤول أن قواعد المجموعة لم تُنشر بعد.
+ */
+function makeRequestsStore(options: { collection: string; seed?: ObituaryRequestRow[]; strict: boolean }) {
+  const collectionName = options.collection;
+  const inMemoryRequests: ObituaryRequestRow[] = [...(options.seed ?? [])];
+  const useMemory = !firestoreDb || !options.strict;
 
-// Start initial sync in background
-ensureSeedData().catch(() => {});
+  function forgetInMemory(requestNumber: string) {
+    const idx = inMemoryRequests.findIndex((r) => r.requestNumber === requestNumber);
+    if (idx >= 0) inMemoryRequests.splice(idx, 1);
+  }
 
-export const obituaryRequestsDb = {
-  async list(): Promise<ObituaryRequestRow[]> {
-    if (firestoreDb) {
-      try {
-        const colRef = collection(firestoreDb, "obituary_requests");
-        const snap = await getDocs(colRef);
-        // Firestore هو المرجع عند نجاح القراءة، حتى لو كان فارغاً (بعد حذف كل الطلبات مثلاً)
-        const list: ObituaryRequestRow[] = [];
-        snap.forEach((d) => {
-          if (!isSoftDeleted(d.data())) list.push(docDataToRow(d.data(), nextNumericId++));
-        });
-        list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        return list;
-      } catch (err) {
-        console.warn("[AI Studio] Firestore list error, using cached records:", err);
-      }
+  function remember(row: ObituaryRequestRow) {
+    const idx = inMemoryRequests.findIndex((r) => r.requestNumber === row.requestNumber);
+    if (idx >= 0) inMemoryRequests[idx] = row;
+    else inMemoryRequests.push(row);
+  }
+
+  /** في الوضع الصارم يُرمى الخطأ؛ وإلا يُسجَّل ويُستكمل من الذاكرة. */
+  function fail(action: string, err: unknown): void {
+    if (options.strict) throw err;
+    console.warn(`[AI Studio] Firestore ${action} error on ${collectionName}, using cached records:`, err);
+  }
+
+  const toDoc = (row: ObituaryRequestRow) => ({
+    id: row.id,
+    requestNumber: row.requestNumber,
+    deceasedName: row.deceasedName,
+    status: row.status,
+    payload: row.payload,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+  });
+
+  let seedInitialized = false;
+  async function ensureSeedData() {
+    if (!firestoreDb || seedInitialized || options.strict) return;
+    seedInitialized = true;
+    try {
+      // نسخ ما في Firestore إلى ذاكرة الخدمة (احتياطاً عند انقطاع الاتصال). لا يُكتب سجل تجريبي في قاعدة الإنتاج،
+      // وإلا عاد بعد حذفه كلما بدأت نسخة جديدة من الخدمة والقاعدة فارغة.
+      const snap = await getDocs(collection(firestoreDb, collectionName));
+      snap.forEach((d) => {
+        if (!isSoftDeleted(d.data())) remember(docDataToRow(d.data(), nextNumericId++));
+      });
+    } catch (err) {
+      console.warn("[AI Studio] Error syncing with Firestore collection:", err);
     }
-    return [...inMemoryRequests].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-  },
+  }
+  ensureSeedData().catch(() => {});
 
-  async getByRequestNumber(requestNumber: string): Promise<ObituaryRequestRow | null> {
-    if (firestoreDb) {
-      try {
-        const docRef = doc(firestoreDb, "obituary_requests", requestNumber);
-        const snap = await getDoc(docRef);
-        if (snap.exists() && !isSoftDeleted(snap.data())) {
-          return docDataToRow(snap.data(), nextNumericId++);
+  return {
+    collectionName,
+
+    /** يفحص إمكانية القراءة من المجموعة دون كتابة شيء. */
+    probe(): Promise<StoreProbe> {
+      return probeCollection(collectionName);
+    },
+
+    async list(): Promise<ObituaryRequestRow[]> {
+      if (firestoreDb) {
+        try {
+          const snap = await getDocs(collection(firestoreDb, collectionName));
+          // Firestore هو المرجع عند نجاح القراءة، حتى لو كان فارغاً (بعد حذف كل الطلبات مثلاً)
+          const list: ObituaryRequestRow[] = [];
+          snap.forEach((d) => {
+            if (!isSoftDeleted(d.data())) list.push(docDataToRow(d.data(), nextNumericId++));
+          });
+          list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+          return list;
+        } catch (err) {
+          fail("list", err);
         }
-        // غير موجود (أو محذوف) في Firestore: لا نعيده من ذاكرة نسخة أخرى قديمة من الخدمة
-        forgetInMemory(requestNumber);
-        return null;
-      } catch (err) {
-        console.warn("[AI Studio] Firestore get error, checking memory cache:", err);
       }
-    }
-    const found = inMemoryRequests.find((r) => r.requestNumber === requestNumber);
-    return found ? { ...found } : null;
-  },
+      return [...inMemoryRequests].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    },
 
-  async create(data: {
-    requestNumber: string;
-    deceasedName: string;
-    payload: Record<string, unknown>;
-    status?: string;
-  }): Promise<ObituaryRequestRow> {
-    const newRow: ObituaryRequestRow = {
-      id: nextNumericId++,
-      requestNumber: data.requestNumber,
-      deceasedName: data.deceasedName,
-      status: data.status || "new",
-      payload: data.payload,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    inMemoryRequests.unshift(newRow);
-
-    if (firestoreDb) {
-      try {
-        await setDoc(doc(firestoreDb, "obituary_requests", newRow.requestNumber), {
-          id: newRow.id,
-          requestNumber: newRow.requestNumber,
-          deceasedName: newRow.deceasedName,
-          status: newRow.status,
-          payload: newRow.payload,
-          createdAt: newRow.createdAt.toISOString(),
-          updatedAt: newRow.updatedAt.toISOString(),
-        });
-        console.info(`[AI Studio] Obituary request saved to Firestore: ${newRow.requestNumber}`);
-      } catch (err) {
-        console.error("[AI Studio] Failed to save obituary request to Firestore:", err);
-      }
-    }
-
-    return newRow;
-  },
-
-  async update(
-    requestNumber: string,
-    data: {
-      deceasedName?: string;
-      status?: string;
-      payload?: Record<string, unknown>;
-    }
-  ): Promise<ObituaryRequestRow | null> {
-    let existing = inMemoryRequests.find((r) => r.requestNumber === requestNumber);
-    if (firestoreDb) {
-      try {
-        const snap = await getDoc(doc(firestoreDb, "obituary_requests", requestNumber));
-        if (snap.exists() && !isSoftDeleted(snap.data())) {
-          existing = docDataToRow(snap.data(), nextNumericId++);
-          const cached = inMemoryRequests.findIndex((r) => r.requestNumber === requestNumber);
-          if (cached >= 0) inMemoryRequests[cached] = existing;
-          else inMemoryRequests.push(existing);
-        } else {
-          // محذوف أو غير موجود: لا يُعاد إحياؤه بالتعديل من ذاكرة قديمة
+    async getByRequestNumber(requestNumber: string): Promise<ObituaryRequestRow | null> {
+      if (firestoreDb) {
+        try {
+          const snap = await getDoc(doc(firestoreDb, collectionName, requestNumber));
+          if (snap.exists() && !isSoftDeleted(snap.data())) {
+            return docDataToRow(snap.data(), nextNumericId++);
+          }
+          // غير موجود (أو محذوف) في Firestore: لا نعيده من ذاكرة نسخة أخرى قديمة من الخدمة
           forgetInMemory(requestNumber);
           return null;
+        } catch (err) {
+          fail("get", err);
         }
-      } catch (err) {
-        console.warn("[AI Studio] Firestore lookup for update failed:", err);
       }
-    }
+      const found = inMemoryRequests.find((r) => r.requestNumber === requestNumber);
+      return found ? { ...found } : null;
+    },
 
-    if (!existing) {
-      return null;
-    }
+    async create(data: {
+      requestNumber: string;
+      deceasedName: string;
+      payload: Record<string, unknown>;
+      status?: string;
+    }): Promise<ObituaryRequestRow> {
+      const newRow: ObituaryRequestRow = {
+        id: nextNumericId++,
+        requestNumber: data.requestNumber,
+        deceasedName: data.deceasedName,
+        status: data.status || "new",
+        payload: data.payload,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
 
-    const updatedRow: ObituaryRequestRow = {
-      ...existing,
-      deceasedName: data.deceasedName ?? existing.deceasedName,
-      status: data.status ?? existing.status,
-      payload: data.payload ?? existing.payload,
-      updatedAt: new Date(),
-    };
+      if (firestoreDb) {
+        try {
+          await setDoc(doc(firestoreDb, collectionName, newRow.requestNumber), toDoc(newRow));
+          console.info(`[AI Studio] Obituary request saved to Firestore (${collectionName}): ${newRow.requestNumber}`);
+        } catch (err) {
+          if (options.strict) throw err;
+          console.error("[AI Studio] Failed to save obituary request to Firestore:", err);
+        }
+      }
+      if (useMemory) inMemoryRequests.unshift(newRow);
+      return newRow;
+    },
 
-    const idx = inMemoryRequests.findIndex((r) => r.requestNumber === requestNumber);
-    if (idx >= 0) {
-      inMemoryRequests[idx] = updatedRow;
-    }
+    /** يحفظ صفاً كما هو (الرقم والحالة وتاريخ الإنشاء) — للنسخ من مجموعة إلى أخرى. */
+    async putRaw(row: ObituaryRequestRow): Promise<void> {
+      if (firestoreDb) {
+        try {
+          await setDoc(doc(firestoreDb, collectionName, row.requestNumber), toDoc(row));
+        } catch (err) {
+          fail("put", err);
+        }
+      }
+      if (useMemory) remember({ ...row });
+    },
 
-    if (firestoreDb) {
+    async update(
+      requestNumber: string,
+      data: {
+        deceasedName?: string;
+        status?: string;
+        payload?: Record<string, unknown>;
+      }
+    ): Promise<ObituaryRequestRow | null> {
+      let existing = inMemoryRequests.find((r) => r.requestNumber === requestNumber);
+      if (firestoreDb) {
+        try {
+          const snap = await getDoc(doc(firestoreDb, collectionName, requestNumber));
+          if (snap.exists() && !isSoftDeleted(snap.data())) {
+            existing = docDataToRow(snap.data(), nextNumericId++);
+            if (useMemory) remember(existing);
+          } else {
+            // محذوف أو غير موجود: لا يُعاد إحياؤه بالتعديل من ذاكرة قديمة
+            forgetInMemory(requestNumber);
+            return null;
+          }
+        } catch (err) {
+          fail("lookup for update", err);
+        }
+      }
+
+      if (!existing) {
+        return null;
+      }
+
+      const updatedRow: ObituaryRequestRow = {
+        ...existing,
+        deceasedName: data.deceasedName ?? existing.deceasedName,
+        status: data.status ?? existing.status,
+        payload: data.payload ?? existing.payload,
+        updatedAt: new Date(),
+      };
+
+      if (firestoreDb) {
+        try {
+          await setDoc(
+            doc(firestoreDb, collectionName, requestNumber),
+            {
+              id: updatedRow.id,
+              requestNumber: updatedRow.requestNumber,
+              deceasedName: updatedRow.deceasedName,
+              status: updatedRow.status,
+              payload: updatedRow.payload,
+              updatedAt: updatedRow.updatedAt.toISOString(),
+            },
+            { merge: true }
+          );
+          console.info(`[AI Studio] Obituary request updated in Firestore (${collectionName}): ${requestNumber}`);
+        } catch (err) {
+          if (options.strict) throw err;
+          console.error("[AI Studio] Failed to update obituary request in Firestore:", err);
+        }
+      }
+      if (useMemory) remember(updatedRow);
+      return updatedRow;
+    },
+
+    /**
+     * حذف طلب. يعيد "hard" إن حُذف نهائياً، و"soft" إن منعت قواعد قاعدة البيانات الحذف فأُخفي الطلب بعلامة
+     * (لا يظهر في أي قائمة أو بحث ولا يمكن تعديله)، و null إن لم يوجد الطلب. يرمي خطأ إن تعذر الحذف والإخفاء معاً.
+     */
+    async remove(requestNumber: string): Promise<"hard" | "soft" | null> {
+      if (!firestoreDb) {
+        const existed = inMemoryRequests.some((r) => r.requestNumber === requestNumber);
+        forgetInMemory(requestNumber);
+        return existed ? "hard" : null;
+      }
+
+      const ref = doc(firestoreDb, collectionName, requestNumber);
+      let existsRemotely = false;
       try {
-        await setDoc(
-          doc(firestoreDb, "obituary_requests", requestNumber),
-          {
-            id: updatedRow.id,
-            requestNumber: updatedRow.requestNumber,
-            deceasedName: updatedRow.deceasedName,
-            status: updatedRow.status,
-            payload: updatedRow.payload,
-            updatedAt: updatedRow.updatedAt.toISOString(),
-          },
-          { merge: true }
-        );
-        console.info(`[AI Studio] Obituary request updated in Firestore: ${requestNumber}`);
+        const snap = await getDoc(ref);
+        existsRemotely = snap.exists() && !isSoftDeleted(snap.data());
       } catch (err) {
-        console.error("[AI Studio] Failed to update obituary request in Firestore:", err);
+        if (options.strict) throw err;
+        console.warn("[AI Studio] Firestore lookup before delete failed:", err);
+        existsRemotely = true; // لا نعرف؛ نجرّب الحذف
       }
-    }
+      if (!existsRemotely) {
+        const existed = inMemoryRequests.some((r) => r.requestNumber === requestNumber);
+        forgetInMemory(requestNumber);
+        return existed ? "hard" : null;
+      }
 
-    return updatedRow;
-  },
-
-  /**
-   * حذف طلب. يعيد "hard" إن حُذف نهائياً، و"soft" إن منعت قواعد قاعدة البيانات الحذف فأُخفي الطلب بعلامة
-   * (لا يظهر في أي قائمة أو بحث ولا يمكن تعديله)، و null إن لم يوجد الطلب. يرمي خطأ إن تعذر الحذف والإخفاء معاً.
-   */
-  async remove(requestNumber: string): Promise<"hard" | "soft" | null> {
-    if (!firestoreDb) {
-      const existed = inMemoryRequests.some((r) => r.requestNumber === requestNumber);
+      try {
+        await deleteDoc(ref);
+        forgetInMemory(requestNumber);
+        return "hard";
+      } catch (err) {
+        console.warn("[AI Studio] Firestore refused to delete; hiding the request instead:", errorCode(err) || err);
+      }
+      // القواعد تمنع الحذف النهائي: نخفي الطلب بعلامة (التعديل مسموح بالقواعد نفسها)
+      await setDoc(ref, { deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });
       forgetInMemory(requestNumber);
-      return existed ? "hard" : null;
-    }
+      return "soft";
+    },
 
-    const ref = doc(firestoreDb, "obituary_requests", requestNumber);
-    let existsRemotely = false;
-    try {
-      const snap = await getDoc(ref);
-      existsRemotely = snap.exists() && !isSoftDeleted(snap.data());
-    } catch (err) {
-      console.warn("[AI Studio] Firestore lookup before delete failed:", err);
-      existsRemotely = true; // لا نعرف؛ نجرّب الحذف
-    }
-    if (!existsRemotely) {
-      const existed = inMemoryRequests.some((r) => r.requestNumber === requestNumber);
-      forgetInMemory(requestNumber);
-      return existed ? "hard" : null;
-    }
+    /** يحذف كل مستندات المجموعة (حتى المخفية) على دفعات؛ للتفريغ في التجارب. يعيد عدد المحذوف. */
+    async removeAll(): Promise<number> {
+      let removed = 0;
+      if (firestoreDb) {
+        try {
+          const snap = await getDocs(collection(firestoreDb, collectionName));
+          const refs = snap.docs.map((d) => d.ref);
+          for (let i = 0; i < refs.length; i += 400) {
+            const batch = writeBatch(firestoreDb);
+            refs.slice(i, i + 400).forEach((ref) => batch.delete(ref));
+            await batch.commit();
+          }
+          removed = refs.length;
+        } catch (err) {
+          fail("removeAll", err);
+        }
+      }
+      removed = Math.max(removed, inMemoryRequests.length);
+      inMemoryRequests.splice(0, inMemoryRequests.length);
+      return removed;
+    },
+  };
+}
 
-    try {
-      await deleteDoc(ref);
-      forgetInMemory(requestNumber);
-      return "hard";
-    } catch (err) {
-      console.warn("[AI Studio] Firestore refused to delete; hiding the request instead:", (err as { code?: string })?.code ?? err);
-    }
-    // القواعد تمنع الحذف النهائي: نخفي الطلب بعلامة (التعديل مسموح بالقواعد نفسها)
-    await setDoc(ref, { deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });
-    forgetInMemory(requestNumber);
-    return "soft";
-  },
-};
+/** الطلبات الحية: تُعرض للجمهور، وتسقط إلى ذاكرة الخدمة إن انقطع الاتصال. */
+export const obituaryRequestsDb = makeRequestsStore({ collection: "obituary_requests", seed: [SAMPLE_REQUEST], strict: false });
+
+/** طلبات التجارب (`/admin/lab/admin`): مجموعة مستقلة، وأي خطأ من Firestore يُرفع للمسؤول بدل أن يُخفى. */
+export const labRequestsDb = makeRequestsStore({ collection: "lab_requests", strict: true });
 
 /**
  * إعدادات هوية صورة التعزية (الشعار واسم الحساب…). تُحفظ في مجموعة «condolence_templates» لأن قواعد Firestore

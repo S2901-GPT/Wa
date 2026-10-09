@@ -9,6 +9,29 @@ export interface HealthStatus {
   status: string;
 }
 
+/**
+ * ok تعمل، rules-missing قواعد Firestore غير منشورة للمجموعة، offline لا اتصال بقاعدة البيانات
+ */
+export type LabStoreState = typeof LabStoreState[keyof typeof LabStoreState];
+
+
+export const LabStoreState = {
+  ok: 'ok',
+  'rules-missing': 'rules-missing',
+  offline: 'offline',
+} as const;
+
+export interface LabStatus {
+  /** عدد طلبات التجارب الحالية */
+  count: number;
+  labRequests: LabStoreState;
+  formVisits: LabStoreState;
+}
+
+export interface LabCount {
+  count: number;
+}
+
 export interface AdminSession {
   authenticated: boolean;
   /** كلمة مرور المسؤول مضبوطة في الخادم وقوية بما يكفي */

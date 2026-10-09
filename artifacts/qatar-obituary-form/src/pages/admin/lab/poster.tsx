@@ -1,5 +1,5 @@
 // صفحة تجربة مستقلة: مقاس الصورة حسب المنصة (إنستقرام ٤:٥، ستوري وسناب ٩:١٦) والتصدير JPEG.
-// تُفتح بالعنوان /admin/lab فقط، ولا تمسّ استوديو الصورة ولا أي صفحة أخرى؛ ما يثبت هنا يُنقل إليه لاحقاً.
+// تُفتح من مركز التجارب (/admin/lab/poster)، ولا تمسّ استوديو الصورة ولا أي صفحة أخرى؛ ما يثبت هنا يُنقل إليه لاحقاً.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
 import { getGetPosterSettingsQueryKey, useGetPosterSettings, useListObituaryRequests, type ObituaryRequest } from "@workspace/api-client-react";
@@ -54,7 +54,7 @@ function Chips<T extends string>({ label, options, value, columns, onChange }: {
   );
 }
 
-export default function AdminLabPage() {
+export default function AdminLabPosterPage() {
   const { data: requests, isLoading, error } = useListObituaryRequests();
   const [requestNumber, setRequestNumber] = useState("");
   const [layout, setLayout] = useState<NaskhLayoutId>(readStoredLayout);
@@ -176,9 +176,9 @@ export default function AdminLabPage() {
 
   return (
     <div className="container max-w-3xl mx-auto py-10 px-4" dir="rtl">
-      <Link href="/admin" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6">
+      <Link href="/admin/lab" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6">
         <ChevronRight className="h-4 w-4" />
-        عودة للطلبات
+        عودة إلى التجارب
       </Link>
 
       <h1 className="text-2xl font-bold text-primary mb-4">تجربة المقاس وJPEG</h1>

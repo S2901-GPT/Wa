@@ -19,7 +19,12 @@
         "status": {
           "type": "string",
           "description": "Workflow processing status",
-          "enum": ["new", "reviewing", "ready", "completed"]
+          "enum": [
+            "new",
+            "reviewing",
+            "ready",
+            "completed"
+          ]
         },
         "payload": {
           "type": "object",
@@ -36,13 +41,65 @@
           "description": "Last update ISO timestamp"
         }
       },
-      "required": ["requestNumber", "deceasedName", "status", "payload"]
+      "required": [
+        "requestNumber",
+        "deceasedName",
+        "status",
+        "payload"
+      ]
+    },
+    "formVisit": {
+      "title": "Form Visit",
+      "description": "One visit to the public obituary form: step timings, validation blocks and whether it was submitted. Field names only, never values or addresses.",
+      "type": "object",
+      "properties": {
+        "visitId": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "client": {
+          "type": "object",
+          "description": "User agent, viewport and language"
+        },
+        "startedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "lastStep": {
+          "type": "integer"
+        },
+        "submittedRequestNumber": {
+          "type": "string"
+        },
+        "events": {
+          "type": "array",
+          "description": "Ordered events: type, t, step, fields",
+          "maxItems": 200
+        }
+      },
+      "required": [
+        "visitId",
+        "events",
+        "lastAt"
+      ]
     }
   },
   "firestore": {
     "/obituary_requests/{requestId}": {
       "schema": "obituaryRequest",
       "description": "Collection of all submitted obituary announcements and requests"
+    },
+    "/lab_requests/{requestId}": {
+      "schema": "obituaryRequest",
+      "description": "Sandbox copy of requests used by the admin lab at /admin/lab/admin; never shown to the public"
+    },
+    "/form_visits/{visitId}": {
+      "schema": "formVisit",
+      "description": "Behaviour log of public form visits, read by the admin lab"
     }
   }
 }
