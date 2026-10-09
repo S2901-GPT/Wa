@@ -8,6 +8,9 @@
 
 export * from './adminLoginInput';
 export * from './adminSession';
+export * from './auditClient';
+export * from './auditInfo';
+export * from './auditInfoChannel';
 export * from './burialDetails';
 export * from './burialDetailsStatus';
 export * from './condolenceCancellation';
@@ -21,6 +24,8 @@ export * from './deceasedPersonAgeUnit';
 export * from './deceasedPersonGender';
 export * from './deceasedPersonIdentifyBy';
 export * from './healthStatus';
+export * from './historyEntry';
+export * from './historyEntryChannel';
 export * from './labCount';
 export * from './labStatus';
 export * from './labStoreState';

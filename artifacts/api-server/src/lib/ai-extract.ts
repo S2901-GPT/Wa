@@ -6,7 +6,8 @@
 import { CreateObituaryRequestBody } from "@workspace/api-zod";
 
 export type ObituaryRequestInput = ReturnType<typeof CreateObituaryRequestBody.parse>;
-export type ExtractResult = { request: ObituaryRequestInput; warnings: string[]; debug?: string };
+/** `raw` ردّ النموذج كما هو و`model` النموذج الذي أعطاه؛ يُحفظان في سجل الطلب. */
+export type ExtractResult = { request: ObituaryRequestInput; warnings: string[]; debug?: string; raw?: string; model?: string };
 
 /** الاسم المستعار لأحدث نموذج Flash؛ ويُجرَّب النموذج الثابت إن لم يكن متاحاً للمفتاح. */
 export const DEFAULT_MODEL = "gemini-flash-latest";
@@ -665,7 +666,7 @@ export async function extractRequest(
   }: { apiKey: string; model: string; endpoint?: string; fetchImpl?: FetchLike; timeoutMs?: number },
 ): Promise<ExtractResult> {
   const models = model === FALLBACK_MODEL ? [model] : [model, FALLBACK_MODEL];
-  let last: { result?: ExtractResult; failure?: AiError; reply: string } | undefined;
+  let last: { result?: ExtractResult; failure?: AiError; reply: string; model?: string } | undefined;
 
   nextModel: for (const [index, name] of models.entries()) {
     for (const strict of [true, false]) {
@@ -704,8 +705,8 @@ export async function extractRequest(
       }
       try {
         const result = toRequest(readJson(reply), input);
-        if (!isHollow(result, input.length)) return result;
-        last = { result, reply };
+        if (!isHollow(result, input.length)) return { ...result, raw: reply.slice(0, 8192), model: name };
+        last = { result, reply, model: name };
       } catch (error) {
         if (!(error instanceof AiError)) throw error;
         last = { failure: error, reply };
@@ -714,7 +715,7 @@ export async function extractRequest(
     }
   }
 
-  if (last?.result) return { ...last.result, warnings: [HOLLOW_WARNING, ...last.result.warnings], debug: snippet(last.reply) };
+  if (last?.result) return { ...last.result, warnings: [HOLLOW_WARNING, ...last.result.warnings], debug: snippet(last.reply), raw: last.reply.slice(0, 8192), ...(last.model ? { model: last.model } : {}) };
   if (last?.failure) {
     if (!last.failure.debug && last.reply) last.failure.debug = snippet(last.reply);
     throw last.failure;

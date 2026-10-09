@@ -343,6 +343,7 @@ export function CondolenceImageStudio({
         requestNumber: request.requestNumber,
         data: {
           ...request,
+          audit: { channel: "admin_edit" },
           deceasedPeople: updatedPeople,
           condolences: updatedCondolences,
           prayer: { ...request.prayer, mapLink: draft.prayerMapLink.trim() || undefined },

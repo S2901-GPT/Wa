@@ -5,6 +5,7 @@
  * واجهة طلبات بيانات إعلانات الوفاة
  * OpenAPI spec version: 0.3.0
  */
+import type { AuditInfo } from './auditInfo';
 import type { BurialDetails } from './burialDetails';
 import type { CondolenceCancellation } from './condolenceCancellation';
 import type { CondolenceCard } from './condolenceCard';
@@ -19,6 +20,7 @@ import type { PrayerDetails } from './prayerDetails';
 import type { RelativeGroup } from './relativeGroup';
 
 export interface ObituaryRequestInput {
+  audit?: AuditInfo;
   /** نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء) */
   messageType?: ObituaryRequestInputMessageType;
   relatedRequestNumber?: string;

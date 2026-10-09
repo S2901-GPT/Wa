@@ -183,10 +183,19 @@ export default function AdminFromTextPage() {
     );
   };
 
+  /** سجل المصدر: النص الملصوق وردّ الذكاء الاصطناعي وتحذيراته، يُحفظ مع الطلب ويظهر في «السلوك». */
+  const audit = () => ({
+    channel: "from_text" as const,
+    sourceText: source.trim().slice(0, 8000),
+    aiWarnings: (result?.warnings ?? []).slice(0, 20),
+    ...(result?.raw ? { aiReply: result.raw.slice(0, 8192) } : {}),
+    ...(result?.model ? { model: result.model } : {}),
+  });
+
   const save = () => {
     if (!draft) return;
     create.mutate(
-      { data: draft },
+      { data: { ...draft, audit: audit() } },
       {
         onSuccess: async (row) => {
           await queryClient.invalidateQueries({ queryKey: keys.list() });
@@ -203,7 +212,7 @@ export default function AdminFromTextPage() {
     if (!draft) return;
     const requestNumber = existing.requestNumber;
     update.mutate(
-      { requestNumber, data: { ...draft, status: existing.status } },
+      { requestNumber, data: { ...draft, status: existing.status, audit: audit() } },
       {
         onSuccess: async () => {
           await Promise.all([

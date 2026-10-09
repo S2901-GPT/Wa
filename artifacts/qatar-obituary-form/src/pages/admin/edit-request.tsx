@@ -73,7 +73,8 @@ export default function AdminEditRequestPage() {
         requestNumber, 
         data: { 
           ...requestData, 
-          status: req.status 
+          status: req.status,
+          audit: { channel: "admin_edit" },
         }
       },
       {

@@ -12,6 +12,7 @@ import {
 } from "@workspace/api-zod";
 import { labRequestsDb, obituaryRequestsDb, type ObituaryRequestRow, type RequestsStore } from "@workspace/db";
 import { clientKey, createRateLimiter, isAdminRequest, requireAdmin } from "../lib/admin-auth";
+import { appendHistory, diffRequests, sanitizeAudit, type HistoryEntry } from "../lib/request-audit";
 
 type RequestPayload = Record<string, unknown>;
 
@@ -206,7 +207,8 @@ function normalizePayload(payload: RequestPayload) {
   };
 }
 
-export function serialize(row: ObituaryRequestRow) {
+/** الطلب كما يُرسل للعميل. السجل (المصدر والتعديلات) للمسؤول فقط: الجلب العام برقم الطلب لا يكشف النص الأصلي. */
+export function serialize(row: ObituaryRequestRow, { admin = true }: { admin?: boolean } = {}) {
   return {
     ...normalizePayload(row.payload as RequestPayload),
     id: row.id,
@@ -214,6 +216,8 @@ export function serialize(row: ObituaryRequestRow) {
     status: ["new", "reviewing", "ready", "completed"].includes(row.status) ? row.status : "new",
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    ...(admin && row.audit ? { audit: row.audit } : {}),
+    ...(admin && row.history ? { history: row.history } : {}),
   };
 }
 
@@ -251,7 +255,7 @@ export function makeObituaryRequestsRouter(store: RequestsStore, { allPrivate }:
 
 router.get("/obituary-requests", requireAdmin, async (_req, res): Promise<void> => {
   const rows = await store.list();
-  res.json(ListObituaryRequestsResponse.parse(rows.map(serialize)));
+  res.json(ListObituaryRequestsResponse.parse(rows.map((row) => serialize(row))));
 });
 
 router.post("/obituary-requests", ...guard, async (req, res): Promise<void> => {
@@ -261,13 +265,19 @@ router.post("/obituary-requests", ...guard, async (req, res): Promise<void> => {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const admin = isAdminRequest(req);
+  const { audit: rawAudit, ...input } = parsed.data;
+  const audit = sanitizeAudit(rawAudit, { admin });
+  const created: HistoryEntry = { at: new Date().toISOString(), channel: audit?.channel ?? (admin ? "admin_edit" : "form"), changes: ["أُنشئ الطلب"] };
   const row = await store.create({
     requestNumber: await makeRequestNumber(store),
-    deceasedName: summarizeDeceased(parsed.data.deceasedPeople),
-    payload: normalizePayload(parsed.data as RequestPayload),
+    deceasedName: summarizeDeceased(input.deceasedPeople),
+    payload: normalizePayload(input as RequestPayload),
     status: "new",
+    ...(audit ? { audit } : {}),
+    history: [created],
   });
-  res.status(201).json(CreateObituaryRequestResponse.parse(serialize(row)));
+  res.status(201).json(CreateObituaryRequestResponse.parse(serialize(row, { admin })));
 });
 
 router.get("/obituary-requests/:requestNumber", ...guard, async (req, res): Promise<void> => {
@@ -289,7 +299,7 @@ router.get("/obituary-requests/:requestNumber", ...guard, async (req, res): Prom
     res.status(404).json({ error: "الطلب غير موجود" });
     return;
   }
-  res.json(GetObituaryRequestResponse.parse(serialize(row)));
+  res.json(GetObituaryRequestResponse.parse(serialize(row, { admin: isAdminRequest(req) })));
 });
 
 router.put("/obituary-requests/:requestNumber", requireAdmin, async (req, res): Promise<void> => {
@@ -303,12 +313,28 @@ router.put("/obituary-requests/:requestNumber", requireAdmin, async (req, res): 
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  const { status, ...inputPayload } = parsed.data;
+  const { status, audit: rawAudit, ...inputPayload } = parsed.data;
   const payload = normalizePayload(inputPayload as RequestPayload);
+  const existing = await store.getByRequestNumber(params.data.requestNumber);
+  if (!existing) {
+    res.status(404).json({ error: "الطلب غير موجود" });
+    return;
+  }
+  // سجل التعديل: ما تغيّر بالعربية، ومن أين (تعديل المسؤول، أو «طلب من نص» بنصه وتحذيراته)
+  const audit = sanitizeAudit(rawAudit, { admin: true });
+  const changes = diffRequests(normalizePayload(existing.payload as RequestPayload), payload, existing.status, status);
+  const entry: HistoryEntry = {
+    at: new Date().toISOString(),
+    channel: audit?.channel ?? "admin_edit",
+    changes: changes.length ? changes : ["حُفظ بلا تغيير"],
+    ...(audit?.sourceText ? { sourceText: audit.sourceText } : {}),
+    ...(audit?.aiWarnings ? { aiWarnings: audit.aiWarnings } : {}),
+  };
   const row = await store.update(params.data.requestNumber, {
     deceasedName: summarizeDeceased(payload.deceasedPeople),
     payload,
     status,
+    history: appendHistory(existing.history, entry),
   });
   if (!row) {
     res.status(404).json({ error: "الطلب غير موجود" });

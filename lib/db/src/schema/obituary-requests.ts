@@ -98,6 +98,10 @@ export interface ObituaryRequestRow {
   payload: ObituaryPayload | Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
+  /** من أين جاء الطلب (القناة، النص الأصلي، رد الذكاء الاصطناعي…)؛ للمسؤول فقط. */
+  audit?: Record<string, unknown>;
+  /** الإنشاء ثم كل تعديل: { at, channel, changes[] }. */
+  history?: Array<Record<string, unknown>>;
 }
 
 export type ObituaryRequestStatus = "new" | "reviewing" | "ready" | "completed";

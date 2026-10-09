@@ -126,6 +126,8 @@ function docDataToRow(data: any, fallbackId: number): ObituaryRequestRow {
     payload: (data.payload && typeof data.payload === "object") ? data.payload : {},
     createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
     updatedAt: data.updatedAt ? new Date(data.updatedAt) : new Date(),
+    ...(data.audit && typeof data.audit === "object" ? { audit: data.audit } : {}),
+    ...(Array.isArray(data.history) ? { history: data.history } : {}),
   };
 }
 
@@ -187,6 +189,8 @@ function makeRequestsStore(options: { collection: string; seed?: ObituaryRequest
     payload: row.payload,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    ...(row.audit ? { audit: row.audit } : {}),
+    ...(row.history ? { history: row.history } : {}),
   });
 
   let seedInitialized = false;
@@ -255,6 +259,8 @@ function makeRequestsStore(options: { collection: string; seed?: ObituaryRequest
       deceasedName: string;
       payload: Record<string, unknown>;
       status?: string;
+      audit?: Record<string, unknown>;
+      history?: Array<Record<string, unknown>>;
     }): Promise<ObituaryRequestRow> {
       const newRow: ObituaryRequestRow = {
         id: nextNumericId++,
@@ -264,6 +270,8 @@ function makeRequestsStore(options: { collection: string; seed?: ObituaryRequest
         payload: data.payload,
         createdAt: new Date(),
         updatedAt: new Date(),
+        ...(data.audit ? { audit: data.audit } : {}),
+        ...(data.history ? { history: data.history } : {}),
       };
 
       if (firestoreDb) {
@@ -297,6 +305,8 @@ function makeRequestsStore(options: { collection: string; seed?: ObituaryRequest
         deceasedName?: string;
         status?: string;
         payload?: Record<string, unknown>;
+        /** يُستبدل كاملاً؛ يبنيه المسار من القديم + سجل جديد. */
+        history?: Array<Record<string, unknown>>;
       }
     ): Promise<ObituaryRequestRow | null> {
       let existing = inMemoryRequests.find((r) => r.requestNumber === requestNumber);
@@ -326,6 +336,7 @@ function makeRequestsStore(options: { collection: string; seed?: ObituaryRequest
         status: data.status ?? existing.status,
         payload: data.payload ?? existing.payload,
         updatedAt: new Date(),
+        ...(data.history ? { history: data.history } : {}),
       };
 
       if (firestoreDb) {
@@ -339,6 +350,7 @@ function makeRequestsStore(options: { collection: string; seed?: ObituaryRequest
               status: updatedRow.status,
               payload: updatedRow.payload,
               updatedAt: updatedRow.updatedAt.toISOString(),
+              ...(data.history ? { history: data.history } : {}),
             },
             { merge: true }
           );
