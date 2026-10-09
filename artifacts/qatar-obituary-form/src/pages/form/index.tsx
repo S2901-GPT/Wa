@@ -68,8 +68,17 @@ export default function FormPage() {
     // النموذج له شكل بياناته الخاص؛ الخادم لا يقبل إلا عقد الـ API (deceasedPeople…).
     const requestData = mapFormToPayload(data);
 
+    // سجل المصدر: الجهاز فقط (الخادم يفرض القناة «form» للجمهور)
+    const audit = {
+      channel: "form" as const,
+      client: {
+        ua: navigator.userAgent.slice(0, 300),
+        viewport: `${window.innerWidth}x${window.innerHeight}`,
+        lang: (navigator.language || "").slice(0, 20),
+      },
+    };
     createRequest.mutate(
-      { data: requestData },
+      { data: { ...requestData, audit } },
       {
         onSuccess: (res: any) => {
           toast.success("تم إرسال الطلب بنجاح");

@@ -76,6 +76,45 @@ export interface ParseTextInput {
   text: string;
 }
 
+export type AuditInfoChannel = typeof AuditInfoChannel[keyof typeof AuditInfoChannel];
+
+
+export const AuditInfoChannel = {
+  form: 'form',
+  from_text: 'from_text',
+  admin_edit: 'admin_edit',
+} as const;
+
+export interface AuditClient {
+  /** @maxLength 300 */
+  ua?: string;
+  /** @maxLength 20 */
+  viewport?: string;
+  /** @maxLength 20 */
+  lang?: string;
+}
+
+/**
+ * من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.
+ */
+export interface AuditInfo {
+  channel: AuditInfoChannel;
+  /**
+     * النص الملصوق في «طلب من نص»
+     * @maxLength 8000
+     */
+  sourceText?: string;
+  /** @maxItems 20 */
+  aiWarnings?: string[];
+  /** @maxLength 8192 */
+  aiReply?: string;
+  /** @maxLength 60 */
+  model?: string;
+  /** @pattern ^[A-Za-z0-9_-]{8,64}$ */
+  visitId?: string;
+  client?: AuditClient;
+}
+
 /**
  * نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)
  */
@@ -339,6 +378,7 @@ export interface CondolencePhoneContact {
 }
 
 export interface ObituaryRequestInput {
+  audit?: AuditInfo;
   /** نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء) */
   messageType?: ObituaryRequestInputMessageType;
   relatedRequestNumber?: string;
@@ -367,11 +407,33 @@ export interface ParseTextResult {
   warnings: string[];
   /** ردّ النموذج مختصراً عندما يفشل في استخراج البيانات الأساسية، للتشخيص فقط */
   debug?: string;
+  /** ردّ النموذج كما هو (حتى 8192 حرفاً)، يُحفظ في سجل الطلب */
+  raw?: string;
+  /** النموذج الذي أعطى النتيجة */
+  model?: string;
 }
 
 export interface AdminLoginInput {
   /** @maxLength 200 */
   password: string;
+}
+
+export type HistoryEntryChannel = typeof HistoryEntryChannel[keyof typeof HistoryEntryChannel];
+
+
+export const HistoryEntryChannel = {
+  form: 'form',
+  from_text: 'from_text',
+  admin_edit: 'admin_edit',
+} as const;
+
+export interface HistoryEntry {
+  at: string;
+  channel: HistoryEntryChannel;
+  changes: string[];
+  /** نص «طلب من نص» حين جاء التعديل منه */
+  sourceText?: string;
+  aiWarnings?: string[];
 }
 
 export type ObituaryRequestUpdateStatus = typeof ObituaryRequestUpdateStatus[keyof typeof ObituaryRequestUpdateStatus];
@@ -404,5 +466,7 @@ export type ObituaryRequest = ObituaryRequestInput & {
   createdAt: string;
   updatedAt: string;
   status: ObituaryRequestStatus;
+  /** سجل الإنشاء والتعديلات (للمسؤول فقط) */
+  history?: HistoryEntry[];
 };
 

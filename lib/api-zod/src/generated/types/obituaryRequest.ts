@@ -5,6 +5,7 @@
  * واجهة طلبات بيانات إعلانات الوفاة
  * OpenAPI spec version: 0.3.0
  */
+import type { HistoryEntry } from './historyEntry';
 import type { ObituaryRequestInput } from './obituaryRequestInput';
 import type { ObituaryRequestStatus } from './obituaryRequestStatus';
 
@@ -14,4 +15,6 @@ export type ObituaryRequest = ObituaryRequestInput & {
   createdAt: Date;
   updatedAt: Date;
   status: ObituaryRequestStatus;
+  /** سجل الإنشاء والتعديلات (للمسؤول فقط) */
+  history?: HistoryEntry[];
 };

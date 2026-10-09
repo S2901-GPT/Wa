@@ -440,6 +440,12 @@ components:
         debug:
           type: string
           description: ردّ النموذج مختصراً عندما يفشل في استخراج البيانات الأساسية، للتشخيص فقط
+        raw:
+          type: string
+          description: ردّ النموذج كما هو (حتى 8192 حرفاً)، يُحفظ في سجل الطلب
+        model:
+          type: string
+          description: النموذج الذي أعطى النتيجة
     AdminLoginInput:
       type: object
       required: [password]
@@ -657,6 +663,67 @@ components:
           type: string
         phoneOnly:
           type: boolean
+    AuditClient:
+      type: object
+      properties:
+        ua:
+          type: string
+          maxLength: 300
+        viewport:
+          type: string
+          maxLength: 20
+        lang:
+          type: string
+          maxLength: 20
+    AuditInfo:
+      type: object
+      description: من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.
+      required: [channel]
+      properties:
+        channel:
+          type: string
+          enum: [form, from_text, admin_edit]
+        sourceText:
+          type: string
+          maxLength: 8000
+          description: النص الملصوق في «طلب من نص»
+        aiWarnings:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+        aiReply:
+          type: string
+          maxLength: 8192
+        model:
+          type: string
+          maxLength: 60
+        visitId:
+          type: string
+          pattern: "^[A-Za-z0-9_-]{8,64}$"
+        client:
+          $ref: "#/components/schemas/AuditClient"
+    HistoryEntry:
+      type: object
+      required: [at, channel, changes]
+      properties:
+        at:
+          type: string
+          format: date-time
+        channel:
+          type: string
+          enum: [form, from_text, admin_edit]
+        changes:
+          type: array
+          items:
+            type: string
+        sourceText:
+          type: string
+          description: نص «طلب من نص» حين جاء التعديل منه
+        aiWarnings:
+          type: array
+          items:
+            type: string
     ObituaryRequestInput:
       type: object
       required:
@@ -668,6 +735,8 @@ components:
         - condolences
         - condolencePhoneContacts
       properties:
+        audit:
+          $ref: "#/components/schemas/AuditInfo"
         messageType:
           type: string
           description: نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)
@@ -746,3 +815,8 @@ components:
             status:
               type: string
               enum: [new, reviewing, ready, completed]
+            history:
+              type: array
+              description: سجل الإنشاء والتعديلات (للمسؤول فقط)
+              items:
+                $ref: "#/components/schemas/HistoryEntry"

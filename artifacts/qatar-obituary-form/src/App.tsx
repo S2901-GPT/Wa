@@ -21,6 +21,7 @@ import AdminSettingsPage from '@/pages/admin/settings';
 import AdminFromTextPage from '@/pages/admin/from-text';
 import AdminLabHubPage from '@/pages/admin/lab';
 import AdminLabPosterPage from '@/pages/admin/lab/poster';
+import AdminLabBehaviourPage from '@/pages/admin/lab/behaviour';
 import { AdminGate } from '@/components/admin-gate';
 import { RequestsScopeProvider, type RequestsScope } from '@/lib/requests-api';
 
@@ -34,6 +35,7 @@ const guarded = (Page: () => ReactNode) => () => (
 );
 const GuardedAdminLabHubPage = guarded(AdminLabHubPage);
 const GuardedAdminLabPosterPage = guarded(AdminLabPosterPage);
+const GuardedAdminLabBehaviourPage = guarded(AdminLabBehaviourPage);
 
 /**
  * لوحة المسؤول كاملة بمسارات نسبية، فتُركَّب مرتين: على /admin (الطلبات الحية) وعلى /admin/lab/admin
@@ -80,6 +82,7 @@ function Router() {
           <AdminArea scope="lab" />
         </Route>
         <Route path="/admin/lab/poster" component={GuardedAdminLabPosterPage} />
+        <Route path="/admin/lab/behaviour" component={GuardedAdminLabBehaviourPage} />
         <Route path="/admin/lab" component={GuardedAdminLabHubPage} />
         <Route path="/admin" nest>
           <AdminArea scope="live" />

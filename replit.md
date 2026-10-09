@@ -26,6 +26,7 @@
 - واجهة API: `artifacts/api-server/src/routes/obituary-requests.ts`
 - طبقة قاعدة البيانات: `lib/db/src/index.ts`
 - قواعد أمان Firestore: `firestore.rules`. لا شيء في المستودع ينشرها؛ تُنشر يدوياً من Firebase Console (المشروع ← Firestore Database ← قاعدة البيانات المسماة في `firebase-applet-config.json` ← Rules ← لصق الملف ← Publish) أو بالأمر `npx firebase-tools deploy --only firestore:rules` مع `firebase.json`. مجموعتا `lab_requests` (طلبات التجارب) و`form_visits` (زيارات النموذج) تحتاجان ذلك مرة واحدة، و`GET /api/lab/status` يعرض هل نُشرت.
+- سجل سلوك الطلب: كل طلب يحمل `audit` (القناة `form` / `from_text` / `admin_edit`، والنص الملصوق في «طلب من نص» وردّ الذكاء الاصطناعي الخام وتحذيراته، وجهاز الجمهور) و`history` (الإنشاء ثم كل تعديل بأسطر عربية «قبل ← بعد» من `artifacts/api-server/src/lib/request-audit.ts`، آخر ٥٠). الجمهور لا يستطيع ادعاء قناة أخرى، والجلب العام برقم الطلب لا يعيد السجل. تُعرض في `/admin/lab/behaviour`.
 - التجارب: `/admin/lab` مركز (بالعنوان فقط) فيه تجربة الصورة `/admin/lab/poster`، ولوحة المسؤول كاملة على مجموعة `lab_requests` المستقلة في `/admin/lab/admin` (الصفحات نفسها تحت `RequestsScopeProvider scope="lab"` فتستدعي `/api/lab/obituary-requests`؛ `src/lib/requests-api.tsx`)، ونسخ الطلبات الحية إليها وتفريغها. مخزن التجارب صارم (`strict`): لا يسقط إلى الذاكرة، فإن لم تُنشر القواعد يظهر ذلك بدل حفظ وهمي.
 - مخطط البيانات: `firebase-blueprint.json`
 

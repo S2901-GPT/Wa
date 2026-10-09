@@ -116,7 +116,7 @@ export default function AdminRequestDetailsPage() {
     setStatusUpdating(true);
     updateMutation.mutate({
       requestNumber,
-      data: { ...req, status: newStatus }
+      data: { ...req, status: newStatus, audit: { channel: "admin_edit" } }
     }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: keys.get(requestNumber) });
