@@ -46,7 +46,8 @@ export const ListObituaryRequestsResponseItem = zod.object({
   "ua": zod.string().max(listObituaryRequestsResponseOneAuditClientUaMax).optional(),
   "viewport": zod.string().max(listObituaryRequestsResponseOneAuditClientViewportMax).optional(),
   "lang": zod.string().max(listObituaryRequestsResponseOneAuditClientLangMax).optional()
-}).optional()
+}).optional(),
+  "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
 }).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
@@ -200,7 +201,8 @@ export const CreateObituaryRequestBody = zod.object({
   "ua": zod.string().max(createObituaryRequestBodyAuditClientUaMax).optional(),
   "viewport": zod.string().max(createObituaryRequestBodyAuditClientViewportMax).optional(),
   "lang": zod.string().max(createObituaryRequestBodyAuditClientLangMax).optional()
-}).optional()
+}).optional(),
+  "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
 }).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
@@ -339,7 +341,8 @@ export const CreateObituaryRequestResponse = zod.object({
   "ua": zod.string().max(createObituaryRequestResponseOneAuditClientUaMax).optional(),
   "viewport": zod.string().max(createObituaryRequestResponseOneAuditClientViewportMax).optional(),
   "lang": zod.string().max(createObituaryRequestResponseOneAuditClientLangMax).optional()
-}).optional()
+}).optional(),
+  "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
 }).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
@@ -496,7 +499,8 @@ export const GetObituaryRequestResponse = zod.object({
   "ua": zod.string().max(getObituaryRequestResponseOneAuditClientUaMax).optional(),
   "viewport": zod.string().max(getObituaryRequestResponseOneAuditClientViewportMax).optional(),
   "lang": zod.string().max(getObituaryRequestResponseOneAuditClientLangMax).optional()
-}).optional()
+}).optional(),
+  "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
 }).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
@@ -656,7 +660,8 @@ export const UpdateObituaryRequestBody = zod.object({
   "ua": zod.string().max(updateObituaryRequestBodyOneAuditClientUaMax).optional(),
   "viewport": zod.string().max(updateObituaryRequestBodyOneAuditClientViewportMax).optional(),
   "lang": zod.string().max(updateObituaryRequestBodyOneAuditClientLangMax).optional()
-}).optional()
+}).optional(),
+  "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
 }).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
@@ -797,7 +802,8 @@ export const UpdateObituaryRequestResponse = zod.object({
   "ua": zod.string().max(updateObituaryRequestResponseOneAuditClientUaMax).optional(),
   "viewport": zod.string().max(updateObituaryRequestResponseOneAuditClientViewportMax).optional(),
   "lang": zod.string().max(updateObituaryRequestResponseOneAuditClientLangMax).optional()
-}).optional()
+}).optional(),
+  "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
 }).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
@@ -963,7 +969,8 @@ export const ListLabObituaryRequestsResponseItem = zod.object({
   "ua": zod.string().max(listLabObituaryRequestsResponseOneAuditClientUaMax).optional(),
   "viewport": zod.string().max(listLabObituaryRequestsResponseOneAuditClientViewportMax).optional(),
   "lang": zod.string().max(listLabObituaryRequestsResponseOneAuditClientLangMax).optional()
-}).optional()
+}).optional(),
+  "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
 }).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
@@ -1117,7 +1124,8 @@ export const CreateLabObituaryRequestBody = zod.object({
   "ua": zod.string().max(createLabObituaryRequestBodyAuditClientUaMax).optional(),
   "viewport": zod.string().max(createLabObituaryRequestBodyAuditClientViewportMax).optional(),
   "lang": zod.string().max(createLabObituaryRequestBodyAuditClientLangMax).optional()
-}).optional()
+}).optional(),
+  "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
 }).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
@@ -1256,7 +1264,8 @@ export const CreateLabObituaryRequestResponse = zod.object({
   "ua": zod.string().max(createLabObituaryRequestResponseOneAuditClientUaMax).optional(),
   "viewport": zod.string().max(createLabObituaryRequestResponseOneAuditClientViewportMax).optional(),
   "lang": zod.string().max(createLabObituaryRequestResponseOneAuditClientLangMax).optional()
-}).optional()
+}).optional(),
+  "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
 }).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
@@ -1413,7 +1422,8 @@ export const GetLabObituaryRequestResponse = zod.object({
   "ua": zod.string().max(getLabObituaryRequestResponseOneAuditClientUaMax).optional(),
   "viewport": zod.string().max(getLabObituaryRequestResponseOneAuditClientViewportMax).optional(),
   "lang": zod.string().max(getLabObituaryRequestResponseOneAuditClientLangMax).optional()
-}).optional()
+}).optional(),
+  "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
 }).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
@@ -1573,7 +1583,8 @@ export const UpdateLabObituaryRequestBody = zod.object({
   "ua": zod.string().max(updateLabObituaryRequestBodyOneAuditClientUaMax).optional(),
   "viewport": zod.string().max(updateLabObituaryRequestBodyOneAuditClientViewportMax).optional(),
   "lang": zod.string().max(updateLabObituaryRequestBodyOneAuditClientLangMax).optional()
-}).optional()
+}).optional(),
+  "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
 }).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
@@ -1714,7 +1725,8 @@ export const UpdateLabObituaryRequestResponse = zod.object({
   "ua": zod.string().max(updateLabObituaryRequestResponseOneAuditClientUaMax).optional(),
   "viewport": zod.string().max(updateLabObituaryRequestResponseOneAuditClientViewportMax).optional(),
   "lang": zod.string().max(updateLabObituaryRequestResponseOneAuditClientLangMax).optional()
-}).optional()
+}).optional(),
+  "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
 }).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
@@ -1983,7 +1995,8 @@ export const ParseObituaryTextResponse = zod.object({
   "ua": zod.string().max(parseObituaryTextResponseRequestAuditClientUaMax).optional(),
   "viewport": zod.string().max(parseObituaryTextResponseRequestAuditClientViewportMax).optional(),
   "lang": zod.string().max(parseObituaryTextResponseRequestAuditClientLangMax).optional()
-}).optional()
+}).optional(),
+  "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
 }).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),

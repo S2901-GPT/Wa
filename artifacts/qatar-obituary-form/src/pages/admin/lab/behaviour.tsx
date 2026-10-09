@@ -25,11 +25,11 @@ const when = (iso: string) => {
     : date.toLocaleString("ar-QA", { timeZone: "Asia/Qatar", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 };
 
-function ChannelBadge({ channel }: { channel?: string }) {
+function ChannelBadge({ channel, inferred = false }: { channel?: string; inferred?: boolean }) {
   const known = channel && CHANNEL_LABEL[channel];
   return (
-    <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] font-bold ${known ? CHANNEL_STYLE[channel!] : "border-border text-muted-foreground"}`}>
-      {known ?? "بلا سجل (قديم)"}
+    <span className={`inline-block rounded-full border px-2 py-0.5 text-[11px] font-bold ${known ? CHANNEL_STYLE[channel!] : "border-border text-muted-foreground"} ${inferred ? "border-dashed" : ""}`}>
+      {known ? `${known}${inferred ? " (مستنتج)" : ""}` : "بلا سجل (قديم)"}
     </span>
   );
 }
@@ -66,6 +66,11 @@ function Details({ request, all, base }: { request: ObituaryRequest; all: Obitua
           هذا الطلب أقدم من تسجيل السلوك، فليس له مصدر ولا سجل تعديلات.
         </p>
       )}
+      {audit?.inferred && (
+        <p className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-amber-800 dark:text-amber-300">
+          سُجّل هذا الطلب قبل تفعيل السجل. المصدر ومواعيد التعديلات مستنتجة من سجلات الخادم؛ النص الأصلي وتفاصيل التعديلات غير متوفرة.
+        </p>
+      )}
 
       <Section title="الجدول الزمني">
         <ol className="space-y-3 border-r-2 border-border pr-3">
@@ -79,7 +84,7 @@ function Details({ request, all, base }: { request: ObituaryRequest; all: Obitua
             <li key={`${entry.at}-${index}`}>
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <span className="font-bold">{when(entry.at)}</span>
-                <ChannelBadge channel={entry.channel} />
+                <ChannelBadge channel={entry.channel} inferred={!!audit?.inferred} />
               </div>
               <ul className="list-disc space-y-0.5 pr-5 text-foreground/90">
                 {entry.changes.map((change, i) => <li key={i}>{change}</li>)}
@@ -143,7 +148,7 @@ function Details({ request, all, base }: { request: ObituaryRequest; all: Obitua
               <li key={other.requestNumber} className="flex flex-wrap items-center gap-2">
                 <Link href={`${base}/${other.requestNumber}`} className="font-mono text-primary hover:underline">{other.requestNumber}</Link>
                 <span>{when(other.createdAt)}</span>
-                <ChannelBadge channel={other.audit?.channel ?? other.history?.[0]?.channel} />
+                <ChannelBadge channel={other.audit?.channel ?? other.history?.[0]?.channel} inferred={!!other.audit?.inferred} />
                 <span className="text-muted-foreground">{STATUS_LABEL[other.status] ?? other.status}</span>
               </li>
             ))}
@@ -199,7 +204,7 @@ function BehaviourList({ scope }: { scope: RequestsScope }) {
                     <span className="font-bold">{describeRequestDeceased(request) || "بلا اسم"}</span>
                   </span>
                   <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <ChannelBadge channel={channel} />
+                    <ChannelBadge channel={channel} inferred={!!request.audit?.inferred} />
                     <span>{when(request.createdAt)}</span>
                     {edits > 0 && <span>· {edits} تعديل</span>}
                     {dupes > 0 && <span className="font-bold text-amber-700 dark:text-amber-300">· مكرر ({dupes + 1} طلبات)</span>}

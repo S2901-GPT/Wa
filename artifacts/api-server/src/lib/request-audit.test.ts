@@ -21,6 +21,8 @@ const cases: Array<[string, () => void]> = [
     const audit = sanitizeAudit({ channel: "from_text", sourceText: "نص", aiReply: "{}", visitId: "abcDEF_123-x", client: { ua: "Safari", viewport: "414x896" } }, { admin: false });
     assert.deepEqual(audit, { channel: "form", visitId: "abcDEF_123-x", client: { ua: "Safari", viewport: "414x896" } });
     assert.deepEqual(sanitizeAudit(undefined, { admin: false }), { channel: "form" });
+    // «مستنتج» يكتبه سكربت الاسترجاع وحده، لا العميل
+    assert.equal((sanitizeAudit({ channel: "from_text", inferred: true }, { admin: true }) as Record<string, unknown>).inferred, undefined);
   }],
   ["المسؤول: القناة والنص والتحذيرات تُحفظ مقصوصة، ورقم زيارة غير صالح يُهمل", () => {
     const audit = sanitizeAudit({ channel: "from_text", sourceText: "x".repeat(9000), aiWarnings: ["تحذير", "", 5], model: "gemini-flash-latest", visitId: "bad id" }, { admin: true });
