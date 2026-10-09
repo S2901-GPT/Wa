@@ -137,7 +137,7 @@ const cases: Array<[string, () => void | Promise<void>]> = [
     assert.deepEqual(condolenceFromSource("وللحريم في بيت الفقيد بالوكرة", "women"), { location: "بيت الفقيد بالوكرة" });
     assert.equal(condolenceFromSource("توفي فلان والدفن اليوم", "women"), undefined);
   }],
-  ["toRequest: بطاقة أسقطها النموذج تُؤخذ من النص، ولا تُضاف إن كانت موجودة، والمقر بلا وصف يصير «منزل الفقيدة»", () => {
+  ["toRequest: بطاقة أسقطها النموذج تُؤخذ من النص، ولا تُضاف إن كانت موجودة، والمقر بلا وصف يبقى كما ورد", () => {
     const source = "توفيت أم محمد والدفن اليوم بعد صلاة العصر في مقبرة مسيمير والعزاء للرجال في مجلس البوحدود بالهلال والنساء في الهلال منزل رقم 9";
     const dropped = toRequest({ deceasedPeople: [{ fullName: "أم محمد", gender: "woman" }], burial: { status: "upcoming" }, condolences: [{ audience: "men", location: "مجلس البوحدود", area: "الهلال" }], condolenceOptions: ["men"] }, source);
     const women = dropped.request.condolences.find((card) => card.audience === "women");
@@ -148,11 +148,9 @@ const cases: Array<[string, () => void | Promise<void>]> = [
     // بطاقة موجودة لا تتكرر
     const present = toRequest({ deceasedPeople: [{ fullName: "أم محمد", gender: "woman" }], burial: { status: "upcoming" }, condolences: [{ audience: "men", location: "مجلس" }, { audience: "women", location: "منزل الفقيدة", area: "الهلال" }] }, source);
     assert.equal(present.request.condolences.filter((card) => card.audience === "women").length, 1);
-    // منطقة ورقم منزل بلا وصف
+    // مقر بلا وصف يبقى كما ورد: لا يُضاف نص من عندنا
     const bare = toRequest({ deceasedPeople: [{ fullName: "أم محمد", gender: "woman" }], burial: { status: "upcoming" }, condolences: [{ audience: "women", area: "الهلال", houseNumber: "9" }] }, source);
-    assert.equal(bare.request.condolences[0].location, "منزل الفقيدة");
-    const bareMan = toRequest({ deceasedPeople: [{ fullName: "محمد", gender: "man" }], burial: { status: "upcoming" }, condolences: [{ audience: "men", area: "الهلال", houseNumber: "9" }] }, "");
-    assert.equal(bareMan.request.condolences[0].location, "منزل الفقيد");
+    assert.equal(bare.request.condolences[0].location, undefined);
   }],
   ["toRequest: «حرم فلان» في خانة الاسم يُنقل إلى الزوج ولا يُكتب مرتين", () => {
     const both = toRequest({ deceasedPeople: [{ fullName: "حرم حسين هلال حسين البوحدود", gender: "woman", spouse: { kind: "harem", name: "حسين هلال حسين البوحدود" } }], burial: { status: "upcoming" } });

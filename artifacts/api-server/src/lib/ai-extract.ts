@@ -574,14 +574,6 @@ export function toRequest(raw: unknown, source = ""): ExtractResult {
         .map((entry) => ({ days: text(entry.days), time: text(entry.time) }))
         .filter((entry) => entry.days || entry.time),
     }));
-  // مقر بلا وصف (منطقة أو رقم منزل فقط): الرسالة ذكرت منزلاً برقمه، فيُكتب «منزل الفقيد/الفقيدة» لا «في الهلال، منزل رقم ٩»
-  const female = people.every((person) => person.gender === "woman" || person.gender === "girl");
-  for (const card of condolences) {
-    if (!text(card.location) && (text(card.houseNumber) || text(card.area))) {
-      card.location = female ? "منزل الفقيدة" : "منزل الفقيد";
-      warnings.push(`لم يُذكر وصف مقر عزاء ${card.audience === "women" ? "النساء" : "الرجال"} فكُتب «${card.location}»؛ راجعه.`);
-    }
-  }
   // بطاقة أسقطها النموذج رغم ورودها في الرسالة تُؤخذ من النص مباشرة
   for (const audience of ["men", "women"] as const) {
     if (condolences.some((card) => card.audience === audience)) continue;
