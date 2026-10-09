@@ -26,28 +26,30 @@ const posterFileName = (requestNumber: string, layout: NaskhLayoutId, size: Nask
 
 type Option = { id: string; name: string };
 
-/** صف شرائح بالأسماء فقط: عنوان قصير ثم الخيارات، والمختار بلون الخلفية. */
-function Chips<T extends string>({ label, options, value, onChange }: { label: string; options: readonly Option[]; value: T; onChange: (id: T) => void }) {
+/** شبكة شرائح بالأسماء فقط: العنوان فوقها، والخلايا متساوية العرض فتصطف في أعمدة، والمختار بلون الخلفية. */
+function Chips<T extends string>({ label, options, value, columns, onChange }: { label: string; options: readonly Option[]; value: T; columns: 3 | 4; onChange: (id: T) => void }) {
   return (
-    <div className="flex flex-wrap items-center gap-1.5 mb-2" role="radiogroup" aria-label={label}>
-      <span className="text-xs font-bold text-muted-foreground w-14 shrink-0">{label}</span>
-      {options.map((option) => {
-        const isSelected = value === option.id;
-        return (
-          <button
-            key={option.id}
-            type="button"
-            role="radio"
-            aria-checked={isSelected}
-            onClick={() => onChange(option.id as T)}
-            className={`rounded-full border px-3 py-1 text-xs font-semibold transition-colors ${
-              isSelected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-foreground hover:bg-muted"
-            }`}
-          >
-            {option.name}
-          </button>
-        );
-      })}
+    <div className="mb-3" role="radiogroup" aria-label={label}>
+      <span className="mb-1 block text-xs font-bold text-muted-foreground">{label}</span>
+      <div className={`grid gap-1.5 ${columns === 3 ? "grid-cols-3" : "grid-cols-4"}`}>
+        {options.map((option) => {
+          const isSelected = value === option.id;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              role="radio"
+              aria-checked={isSelected}
+              onClick={() => onChange(option.id as T)}
+              className={`rounded-lg border px-1.5 py-1.5 text-center text-[11px] font-semibold leading-4 transition-colors ${
+                isSelected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-foreground hover:bg-muted"
+              }`}
+            >
+              {option.name}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -216,9 +218,9 @@ export default function AdminLabPage() {
             </div>
           </div>
 
-          <Chips label="المقاس" options={NASKH_POSTER_SIZES} value={posterSize} onChange={(id) => { setPosterSize(id); storePosterSize(id); }} />
-          <Chips label="التخطيط" options={NASKH_LAYOUTS} value={layout} onChange={(id) => { setLayout(id); storeLayout(id); }} />
-          <Chips label="الخط" options={NASKH_TYPE_SCALES} value={typeScale} onChange={(id) => { setTypeScale(id); storeTypeScale(id); }} />
+          <Chips label="المقاس" options={NASKH_POSTER_SIZES} value={posterSize} columns={3} onChange={(id) => { setPosterSize(id); storePosterSize(id); }} />
+          <Chips label="التخطيط" options={NASKH_LAYOUTS} value={layout} columns={4} onChange={(id) => { setLayout(id); storeLayout(id); }} />
+          <Chips label="الخط" options={NASKH_TYPE_SCALES} value={typeScale} columns={4} onChange={(id) => { setTypeScale(id); storeTypeScale(id); }} />
 
           {errors.map((issue) => (
             <div key={issue.code} role="alert" className="my-3 flex w-full items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-xs font-semibold leading-5 text-destructive">
