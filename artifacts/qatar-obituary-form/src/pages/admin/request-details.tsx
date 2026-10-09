@@ -1,5 +1,5 @@
-import { useRoute, Link, useLocation } from "wouter";
-import { getGetObituaryRequestQueryKey, getListObituaryRequestsQueryKey, useGetObituaryRequest, useListObituaryRequests, useUpdateObituaryRequest } from "@workspace/api-client-react";
+import { useParams, Link, useLocation } from "wouter";
+import { useRequest, useRequestKeys, useRequestsList, useUpdateRequest } from "@/lib/requests-api";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Copy, ChevronRight, Loader2, Check, AlertCircle, AlertTriangle, Edit } from "lucide-react";
@@ -27,7 +27,7 @@ import {
  * بدونها لا يعرف المسؤول، وهو ينظر إلى الإعلان الأصلي، أنه أُجِّل أو عُدِّل أو أُلغي عزاؤه.
  */
 function FollowUps({ requestNumber }: { requestNumber: string }) {
-  const { data: requests } = useListObituaryRequests();
+  const { data: requests } = useRequestsList();
   const followUps = useMemo(
     () => (requests ?? [])
       .filter((item) => item.relatedRequestNumber === requestNumber && item.requestNumber !== requestNumber)
@@ -41,7 +41,7 @@ function FollowUps({ requestNumber }: { requestNumber: string }) {
       {followUps.map((item) => (
         <Link
           key={item.id}
-          href={`/admin/${item.requestNumber}`}
+          href={`/${item.requestNumber}`}
           className="rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-900 hover:bg-amber-100 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300"
         >
           {MESSAGE_TYPE_LABELS[item.messageType ?? "announcement"]}
@@ -84,18 +84,14 @@ const optionLabels = {
 
 export default function AdminRequestDetailsPage() {
   const [, setLocation] = useLocation();
-  const [, params] = useRoute("/admin/:requestNumber");
+  const params = useParams<{ requestNumber: string }>();
   const requestNumber = params?.requestNumber;
   const queryClient = useQueryClient();
-  
-  const { data: req, isLoading, error } = useGetObituaryRequest(requestNumber || "", {
-    query: {
-      enabled: !!requestNumber,
-      queryKey: getGetObituaryRequestQueryKey(requestNumber || ""),
-    }
-  });
+  const keys = useRequestKeys();
 
-  const updateMutation = useUpdateObituaryRequest();
+  const { data: req, isLoading, error } = useRequest(requestNumber || "", { query: { enabled: !!requestNumber } });
+
+  const updateMutation = useUpdateRequest();
   const [copied, setCopied] = useState(false);
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [imageStudioOpen, setImageStudioOpen] = useState(false);
@@ -123,8 +119,8 @@ export default function AdminRequestDetailsPage() {
       data: { ...req, status: newStatus }
     }, {
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getGetObituaryRequestQueryKey(requestNumber) });
-        queryClient.invalidateQueries({ queryKey: getListObituaryRequestsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: keys.get(requestNumber) });
+        queryClient.invalidateQueries({ queryKey: keys.list() });
         toast.success("تم تحديث الحالة بنجاح");
       },
       onError: () => {
@@ -145,13 +141,13 @@ export default function AdminRequestDetailsPage() {
   return (
     <div className="container max-w-4xl mx-auto py-10 px-4 pb-24">
       <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <Link href="/admin">
+        <Link href="/">
           <Button variant="ghost" className="gap-2 -ml-4 text-muted-foreground hover:text-foreground">
             <ChevronRight className="h-4 w-4 rtl:rotate-180" />عودة للطلبات
           </Button>
         </Link>
         <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-          <Button onClick={() => setLocation(`/admin/${requestNumber}/edit`)} variant="outline" className="gap-2 border-primary text-primary hover:bg-primary/5">
+          <Button onClick={() => setLocation(`/${requestNumber}/edit`)} variant="outline" className="gap-2 border-primary text-primary hover:bg-primary/5">
             <Edit className="h-4 w-4" /> تعديل الطلب
           </Button>
           <Button onClick={copyToClipboard} className="gap-2">
@@ -165,7 +161,7 @@ export default function AdminRequestDetailsPage() {
           <DeleteRequestButton
             requestNumber={req.requestNumber}
             label={describeRequestDeceased(req)}
-            onDeleted={() => setLocation("/admin")}
+            onDeleted={() => setLocation("/")}
             className="h-10 px-4 text-sm"
           />
         </div>
@@ -182,7 +178,7 @@ export default function AdminRequestDetailsPage() {
                   {req.relatedRequestNumber && (
                     <span className="text-muted-foreground">
                       {" — للطلب "}
-                      <Link href={`/admin/${req.relatedRequestNumber}`} className="font-mono text-primary hover:underline">{req.relatedRequestNumber}</Link>
+                      <Link href={`/${req.relatedRequestNumber}`} className="font-mono text-primary hover:underline">{req.relatedRequestNumber}</Link>
                     </span>
                   )}
                 </div>

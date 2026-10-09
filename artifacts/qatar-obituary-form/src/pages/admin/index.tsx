@@ -4,10 +4,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   getGetAdminSessionQueryKey,
   useAdminLogout,
-  useListObituaryRequests,
   type ObituaryRequest,
 } from "@workspace/api-client-react";
 import { DeleteRequestButton } from "@/components/delete-request-button";
+import { useRequestsList } from "@/lib/requests-api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -40,7 +40,7 @@ function QuickCopyButton({ request }: { request: ObituaryRequest }) {
 }
 
 export default function AdminPage() {
-  const { data: requests, isLoading, error } = useListObituaryRequests();
+  const { data: requests, isLoading, error } = useRequestsList();
   const queryClient = useQueryClient();
   const logout = useAdminLogout();
 
@@ -73,13 +73,13 @@ export default function AdminPage() {
           <p className="text-muted-foreground">عرض وإدارة طلبات إعلان الوفاة</p>
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
-          <Link href="/admin/from-text">
+          <Link href="/from-text">
             <Button type="button" size="sm" className="gap-1.5">
               <Sparkles className="h-4 w-4" />
               طلب من نص
             </Button>
           </Link>
-          <Link href="/admin/settings">
+          <Link href="/settings">
             <Button type="button" variant="outline" size="sm" className="gap-1.5 border-primary/40 text-primary hover:bg-primary/5">
               <Settings className="h-4 w-4" />
               الإعدادات
@@ -113,7 +113,7 @@ export default function AdminPage() {
       ) : (
         <div className="grid gap-4">
           {requests?.map((req) => (
-            <Link key={req.id} href={`/admin/${req.requestNumber}`}>
+            <Link key={req.id} href={`/${req.requestNumber}`}>
               <Card className="hover:border-primary/50 transition-all cursor-pointer group shadow-sm hover:shadow-md">
                 <CardContent className="p-5 flex items-center justify-between">
                   <div className="flex flex-col gap-3">

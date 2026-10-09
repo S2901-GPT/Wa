@@ -1,13 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useRoute, useLocation, Link } from "wouter";
-import { 
-  useGetObituaryRequest, 
-  useUpdateObituaryRequest, 
-  getGetObituaryRequestQueryKey,
-  getListObituaryRequestsQueryKey
-} from "@workspace/api-client-react";
+import { useParams, useLocation, Link } from "wouter";
+import { useRequest, useRequestKeys, useUpdateRequest } from "@/lib/requests-api";
 import { ObituaryFormSchema, emptyFormValues, type ObituaryFormValues } from "@/lib/schema";
 import { mapPayloadToForm, mapFormToPayload } from "@/lib/mapper";
 import { useQueryClient } from "@tanstack/react-query";
@@ -36,17 +31,13 @@ const STEPS = [
 
 export default function AdminEditRequestPage() {
   const [, setLocation] = useLocation();
-  const [, params] = useRoute("/admin/:requestNumber/edit");
+  const params = useParams<{ requestNumber: string }>();
   const requestNumber = params?.requestNumber;
   const queryClient = useQueryClient();
+  const keys = useRequestKeys();
   const [currentStep, setCurrentStep] = useState(1);
 
-  const { data: req, isLoading: isFetching, error } = useGetObituaryRequest(requestNumber || "", {
-    query: {
-      enabled: !!requestNumber,
-      queryKey: getGetObituaryRequestQueryKey(requestNumber || ""),
-    }
-  });
+  const { data: req, isLoading: isFetching, error } = useRequest(requestNumber || "", { query: { enabled: !!requestNumber } });
 
   const form = useForm<ObituaryFormValues>({
     resolver: zodResolver(ObituaryFormSchema),
@@ -59,7 +50,7 @@ export default function AdminEditRequestPage() {
     }
   }, [req, form]);
 
-  const updateMutation = useUpdateObituaryRequest();
+  const updateMutation = useUpdateRequest();
 
   const handleNext = async () => {
     // In edit mode, we can be more lenient or just force validation on the current step fields
@@ -87,10 +78,10 @@ export default function AdminEditRequestPage() {
       },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetObituaryRequestQueryKey(requestNumber) });
-          queryClient.invalidateQueries({ queryKey: getListObituaryRequestsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: keys.get(requestNumber) });
+          queryClient.invalidateQueries({ queryKey: keys.list() });
           toast.success("تم تحديث الطلب بنجاح");
-          setLocation(`/admin/${requestNumber}`);
+          setLocation(`/${requestNumber}`);
         },
         onError: () => {
           toast.error("حدث خطأ أثناء تحديث الطلب");
@@ -110,7 +101,7 @@ export default function AdminEditRequestPage() {
             <h1 className="text-3xl font-bold text-primary mb-2">تعديل الطلب</h1>
             <p className="text-muted-foreground font-mono">رقم: {requestNumber}</p>
           </div>
-          <Link href={`/admin/${requestNumber}`}>
+          <Link href={`/${requestNumber}`}>
             <Button variant="ghost" className="gap-2 text-muted-foreground hover:text-foreground">
               <ChevronRight className="h-4 w-4 rtl:rotate-180" /> إلغاء
             </Button>

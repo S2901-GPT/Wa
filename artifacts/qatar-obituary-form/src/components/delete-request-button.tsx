@@ -1,11 +1,7 @@
 // زر حذف طلب مع نافذة تأكيد. يُستعمل في قائمة الطلبات وصفحة تفاصيل الطلب.
 import { useState, type MouseEvent } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  getGetObituaryRequestQueryKey,
-  getListObituaryRequestsQueryKey,
-  useDeleteObituaryRequest,
-} from "@workspace/api-client-react";
+import { useDeleteRequest, useRequestKeys } from "@/lib/requests-api";
 import { Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -41,7 +37,8 @@ export function DeleteRequestButton({
 }) {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
-  const remove = useDeleteObituaryRequest();
+  const remove = useDeleteRequest();
+  const keys = useRequestKeys();
 
   const confirm = (event: MouseEvent) => {
     event.preventDefault();
@@ -50,8 +47,8 @@ export function DeleteRequestButton({
       { requestNumber },
       {
         onSuccess: () => {
-          queryClient.removeQueries({ queryKey: getGetObituaryRequestQueryKey(requestNumber) });
-          void queryClient.invalidateQueries({ queryKey: getListObituaryRequestsQueryKey() });
+          queryClient.removeQueries({ queryKey: keys.get(requestNumber) });
+          void queryClient.invalidateQueries({ queryKey: keys.list() });
           toast.success("تم حذف الطلب");
           setOpen(false);
           onDeleted?.();

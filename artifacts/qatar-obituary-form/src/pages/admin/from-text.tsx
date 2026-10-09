@@ -2,15 +2,11 @@
 // ثم يراجع المسؤول النتيجة — ويصحّح ما شاء من «تعديل سريع» — ويحفظها طلباً جديداً، أو يحدّث بها طلباً سابقاً للمتوفى نفسه.
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useCreateRequest, useRequestKeys, useRequestsList, useUpdateRequest } from "@/lib/requests-api";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   ApiError,
-  getGetObituaryRequestQueryKey,
-  getListObituaryRequestsQueryKey,
-  useCreateObituaryRequest,
-  useListObituaryRequests,
   useParseObituaryText,
-  useUpdateObituaryRequest,
   type ObituaryRequest,
   type ObituaryRequestInput,
   type ParseTextResult,
@@ -126,7 +122,7 @@ function DuplicateNotice({ matches }: { matches: ReturnType<typeof findRecentDup
               <span className="font-mono font-semibold">{request.requestNumber}</span>
             </span>
             <Link
-              href={`/admin/${request.requestNumber}`}
+              href={`/${request.requestNumber}`}
               className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
             >
               <ExternalLink className="h-3.5 w-3.5" />
@@ -150,10 +146,11 @@ export default function AdminFromTextPage() {
   const [copied, setCopied] = useState(false);
   const [failureDebug, setFailureDebug] = useState("");
   const parse = useParseObituaryText();
-  const create = useCreateObituaryRequest();
-  const update = useUpdateObituaryRequest();
-  const { data: requests } = useListObituaryRequests();
+  const create = useCreateRequest();
+  const update = useUpdateRequest();
+  const { data: requests } = useRequestsList();
   const queryClient = useQueryClient();
+  const keys = useRequestKeys();
   const [, navigate] = useLocation();
 
   // النتيجة تُنسخ إلى مسوّدة قابلة للتعديل، فيبقى ردّ النموذج كما هو للمقارنة في «تفاصيل تقنية».
@@ -192,9 +189,9 @@ export default function AdminFromTextPage() {
       { data: draft },
       {
         onSuccess: async (row) => {
-          await queryClient.invalidateQueries({ queryKey: getListObituaryRequestsQueryKey() });
+          await queryClient.invalidateQueries({ queryKey: keys.list() });
           toast.success(`تم حفظ الطلب ${row.requestNumber}`);
-          navigate(`/admin/${row.requestNumber}`);
+          navigate(`/${row.requestNumber}`);
         },
         onError: (error) => toast.error(errorMessage(error, "تعذّر حفظ الطلب، حاول مرة أخرى.")),
       },
@@ -210,11 +207,11 @@ export default function AdminFromTextPage() {
       {
         onSuccess: async () => {
           await Promise.all([
-            queryClient.invalidateQueries({ queryKey: getGetObituaryRequestQueryKey(requestNumber) }),
-            queryClient.invalidateQueries({ queryKey: getListObituaryRequestsQueryKey() }),
+            queryClient.invalidateQueries({ queryKey: keys.get(requestNumber) }),
+            queryClient.invalidateQueries({ queryKey: keys.list() }),
           ]);
           toast.success(`تم تحديث الطلب ${requestNumber}`);
-          navigate(`/admin/${requestNumber}`);
+          navigate(`/${requestNumber}`);
         },
         onError: (error) => toast.error(errorMessage(error, "تعذّر تحديث الطلب، حاول مرة أخرى.")),
       },
@@ -234,7 +231,7 @@ export default function AdminFromTextPage() {
 
   return (
     <div className="container max-w-3xl mx-auto py-10 px-4">
-      <Link href="/admin" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6">
+      <Link href="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6">
         <ChevronRight className="h-4 w-4" />
         عودة للطلبات
       </Link>

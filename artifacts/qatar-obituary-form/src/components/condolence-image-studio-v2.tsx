@@ -12,14 +12,12 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import {
-  getGetObituaryRequestQueryKey,
   getGetPosterSettingsQueryKey,
-  getListObituaryRequestsQueryKey,
   useGetPosterSettings,
-  useUpdateObituaryRequest,
   type ObituaryRequest,
 } from "@workspace/api-client-react";
 import { Link } from "wouter";
+import { useRequestKeys, useUpdateRequest } from "@/lib/requests-api";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -154,7 +152,8 @@ export function CondolenceImageStudio({
   const [validationReport, setValidationReport] = useState<RenderValidationReport | null>(null);
 
   const queryClient = useQueryClient();
-  const updateMutation = useUpdateObituaryRequest();
+  const updateMutation = useUpdateRequest();
+  const keys = useRequestKeys();
 
   // هوية الصورة (الشعار والطول الأقصى) من «الإعدادات»؛ ننتظر وصولها حتى لا يظهر رسم بلا شعار ثم يتبدل
   const posterSettings = useGetPosterSettings({ query: { queryKey: getGetPosterSettingsQueryKey(), retry: false } });
@@ -356,8 +355,8 @@ export function CondolenceImageStudio({
       },
       {
         onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetObituaryRequestQueryKey(request.requestNumber) });
-          queryClient.invalidateQueries({ queryKey: getListObituaryRequestsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: keys.get(request.requestNumber) });
+          queryClient.invalidateQueries({ queryKey: keys.list() });
           toast.success("تم حفظ بيانات الطلب المعدّلة");
         },
         onError: () => toast.error("تعذر حفظ التعديلات في الطلب"),
@@ -416,7 +415,7 @@ export function CondolenceImageStudio({
                   <Sparkles className="w-4 h-4 text-primary" />
                   تخطيط الصورة:
                 </span>
-                <Link href="/admin/settings" className="text-xs text-primary hover:underline">
+                <Link href="/settings" className="text-xs text-primary hover:underline">
                   الشعار من الإعدادات
                 </Link>
               </div>
