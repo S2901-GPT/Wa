@@ -16,6 +16,7 @@ import { normalizeObituaryPresentation } from "@/lib/presentation-normalizer";
 import { generateQrImages, type QrCodeMap } from "@/lib/qr-images";
 import { canShareImageFiles, canvasToPosterFile, downloadFile, posterFileName } from "@/lib/poster-export";
 import { PosterChips as Chips } from "@/components/poster-chips";
+import { SIZE_SHORT_NAME, SizeLogos } from "@/components/app-logos";
 
 export default function AdminLabPosterPage() {
   const { data: requests, isLoading, error } = useListObituaryRequests();
@@ -161,7 +162,13 @@ export default function AdminLabPosterPage() {
             </div>
           </div>
 
-          <Chips label="المقاس" options={NASKH_POSTER_SIZES} value={posterSize} columns={2} onChange={(id) => { setPosterSize(id); storePosterSize(id); }} />
+          <Chips label="المقاس" options={NASKH_POSTER_SIZES} value={posterSize} columns={2} onChange={(id) => { setPosterSize(id); storePosterSize(id); }}
+            renderOption={(option) => (
+            <>
+              <span className="text-sm">{SIZE_SHORT_NAME[option.id as NaskhPosterSizeId]}</span>
+              <SizeLogos size={option.id as NaskhPosterSizeId} />
+            </>
+            )} />
           <Chips label="التخطيط" options={NASKH_LAYOUTS} value={layout} columns={4} onChange={(id) => { setLayout(id); storeLayout(id); }} />
           <Chips label="الخط" options={NASKH_TYPE_SCALES} value={typeScale} columns={4} onChange={(id) => { setTypeScale(id); storeTypeScale(id); }} />
 
