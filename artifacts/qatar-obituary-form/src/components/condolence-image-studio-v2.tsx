@@ -24,6 +24,7 @@ import { NASKH_LAYOUTS, NASKH_POSTER_SIZES, NASKH_TYPE_SCALES, posterQrUrls, typ
 import { readStoredLayout, readStoredPosterSize, readStoredTypeScale, storeLayout, storePosterSize, storeTypeScale } from "@/lib/poster-preferences";
 import { canShareImageFiles, canvasToPosterFile, downloadFile, posterFileName } from "@/lib/poster-export";
 import { PosterChips } from "@/components/poster-chips";
+import { SIZE_SHORT_NAME, SizeLogos } from "@/components/app-logos";
 import { normalizeObituaryPresentation } from "@/lib/presentation-normalizer";
 import { buildAnnouncement } from "@/lib/announcement";
 import { generateQrImages, type QrCodeMap } from "@/lib/qr-images";
@@ -369,7 +370,13 @@ export function CondolenceImageStudio({
               </div>
             </div>
 
-            <PosterChips label="المقاس" options={NASKH_POSTER_SIZES} value={posterSize} columns={2} onChange={(id) => { setPosterSize(id); storePosterSize(id); }} />
+            <PosterChips label="المقاس" options={NASKH_POSTER_SIZES} value={posterSize} columns={2} onChange={(id) => { setPosterSize(id); storePosterSize(id); }}
+              renderOption={(option) => (
+              <>
+                <span className="text-sm">{SIZE_SHORT_NAME[option.id as NaskhPosterSizeId]}</span>
+                <SizeLogos size={option.id as NaskhPosterSizeId} />
+              </>
+            )} />
             <PosterChips label="التخطيط" options={NASKH_LAYOUTS} value={layout} columns={4} onChange={(id) => { setLayout(id); storeLayout(id); }} />
             <PosterChips label="الخط" options={NASKH_TYPE_SCALES} value={typeScale} columns={4} onChange={(id) => { setTypeScale(id); storeTypeScale(id); }} />
 
