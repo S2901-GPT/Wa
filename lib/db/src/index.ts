@@ -105,10 +105,6 @@ const SAMPLE_REQUEST: ObituaryRequestRow = {
       },
     ],
     condolenceOptions: ["men", "women", "phone"],
-    condolencePhoneContacts: [
-      { name: "محمد (ابنه)", phone: "+974 5512 3456" },
-      { name: "خليفة (شقيقه)", phone: "+974 6623 4567" },
-    ],
     notes: "تقبل التعازي مع مراعاة أوقات الصلاة، نسأل الله له المغفرة والرضوان.",
   },
   createdAt: new Date(),

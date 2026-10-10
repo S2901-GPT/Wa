@@ -11,5 +11,4 @@ export interface LabStatus {
   /** عدد طلبات التجارب الحالية */
   count: number;
   labRequests: LabStoreState;
-  formVisits: LabStoreState;
 }

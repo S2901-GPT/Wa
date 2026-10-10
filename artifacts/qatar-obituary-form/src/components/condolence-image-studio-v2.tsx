@@ -348,8 +348,6 @@ export function CondolenceImageStudio({
           condolences: updatedCondolences,
           prayer: { ...request.prayer, mapLink: draft.prayerMapLink.trim() || undefined },
           burial: { ...request.burial, mapLink: draft.burialMapLink.trim() || undefined },
-          // لا تُنشر أرقام الهواتف (قرار جديد): الحفظ يحذف أرقام طلب قديم
-          condolencePhoneContacts: [],
           notes: draft.notes.trim() || undefined,
           status: request.status,
         },

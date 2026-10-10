@@ -8,7 +8,6 @@
 
 export * from './adminLoginInput';
 export * from './adminSession';
-export * from './auditClient';
 export * from './auditInfo';
 export * from './auditInfoChannel';
 export * from './burialDetails';
@@ -17,7 +16,6 @@ export * from './condolenceCancellation';
 export * from './condolenceCancellationAudience';
 export * from './condolenceCard';
 export * from './condolenceCardAudience';
-export * from './condolencePhoneContact';
 export * from './condolenceScheduleEntry';
 export * from './deceasedPerson';
 export * from './deceasedPersonAgeUnit';

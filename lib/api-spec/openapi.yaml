@@ -371,14 +371,12 @@ components:
       enum: [ok, rules-missing, offline]
     LabStatus:
       type: object
-      required: [count, labRequests, formVisits]
+      required: [count, labRequests]
       properties:
         count:
           type: integer
           description: عدد طلبات التجارب الحالية
         labRequests:
-          $ref: "#/components/schemas/LabStoreState"
-        formVisits:
           $ref: "#/components/schemas/LabStoreState"
     LabCount:
       type: object
@@ -644,13 +642,6 @@ components:
             $ref: "#/components/schemas/CondolenceScheduleEntry"
         deceasedIndex:
           type: ["integer", "null"]
-    CondolencePhoneContact:
-      type: object
-      properties:
-        name:
-          type: string
-        phone:
-          type: string
     CondolenceCancellation:
       type: object
       properties:
@@ -663,21 +654,9 @@ components:
           type: string
         phoneOnly:
           type: boolean
-    AuditClient:
-      type: object
-      properties:
-        ua:
-          type: string
-          maxLength: 300
-        viewport:
-          type: string
-          maxLength: 20
-        lang:
-          type: string
-          maxLength: 20
     AuditInfo:
       type: object
-      description: من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.
+      description: من أين جاء الطلب أو التعديل. للجمهور تُفرض القناة form ولا يُقبل شيء آخر.
       required: [channel]
       properties:
         channel:
@@ -698,11 +677,6 @@ components:
         model:
           type: string
           maxLength: 60
-        visitId:
-          type: string
-          pattern: "^[A-Za-z0-9_-]{8,64}$"
-        client:
-          $ref: "#/components/schemas/AuditClient"
         inferred:
           type: boolean
           description: استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)
@@ -736,7 +710,6 @@ components:
         - burial
         - condolenceOptions
         - condolences
-        - condolencePhoneContacts
       properties:
         audit:
           $ref: "#/components/schemas/AuditInfo"
@@ -784,10 +757,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CondolenceCard"
-        condolencePhoneContacts:
-          type: array
-          items:
-            $ref: "#/components/schemas/CondolencePhoneContact"
         notes:
           type: string
     ObituaryRequestUpdate:

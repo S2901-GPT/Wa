@@ -131,14 +131,6 @@ function Details({ request, all, base }: { request: ObituaryRequest; all: Obitua
         </Section>
       )}
 
-      {audit?.client && (
-        <Section title="الجهاز">
-          <p dir="ltr" className="text-left text-xs text-muted-foreground">
-            {[audit.client.viewport, audit.client.lang, audit.client.ua].filter(Boolean).join(" · ")}
-          </p>
-        </Section>
-      )}
-
       <Section title={`طلبات للمتوفى نفسه خلال ${DUPLICATE_WINDOW_HOURS} ساعة`}>
         {duplicates.length === 0 ? (
           <p className="text-muted-foreground">لا يوجد.</p>

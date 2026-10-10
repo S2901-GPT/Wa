@@ -194,15 +194,7 @@ function normalizePayload(payload: RequestPayload) {
       phoneAudience: payload.phoneAudience === "men" || payload.phoneAudience === "women" ? payload.phoneAudience : "all",
     } : {}),
     ...(optionalString(payload.condolenceNote) ? { condolenceNote: String(payload.condolenceNote) } : {}),
-    condolencePhoneContacts: condolenceOptions.includes("phone") && Array.isArray(payload.condolencePhoneContacts)
-      ? payload.condolencePhoneContacts.map((contact) => {
-          const value = objectValue(contact);
-          return {
-            ...(value.name ? { name: String(value.name) } : {}),
-            ...(value.phone ? { phone: String(value.phone) } : {}),
-          };
-        })
-      : [],
+    // لا تُحفظ أرقام هواتف مع الطلب أبداً؛ خيار «العزاء عبر الهاتف» وحده يبقى
     notes: String(payload.notes ?? ""),
   };
 }

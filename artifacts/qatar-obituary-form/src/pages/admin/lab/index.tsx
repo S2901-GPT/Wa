@@ -118,7 +118,6 @@ export default function AdminLabHubPage() {
         {status.data && (
           <>
             <StoreState label="طلبات التجارب" state={status.data.labRequests} />
-            <StoreState label="زيارات النموذج" state={status.data.formVisits} />
             <p className="text-sm text-muted-foreground">
               طلبات التجارب الحالية: <span className="font-mono font-bold text-foreground">{status.data.count}</span>
             </p>

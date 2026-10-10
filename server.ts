@@ -14,8 +14,21 @@ const port = Number(process.env.PORT) || 3000;
 // الشعار صورة داخل الجسم: مسار الإعدادات وحده يقبل جسماً أكبر من الافتراضي (100KB)، ويجب أن يسبق المحلل العام.
 app.use("/api/admin/settings", express.json({ limit: "1mb" }));
 app.use(express.json());
+// أخطاء المتصفح: حقول محددة ومقصوصة فقط (لا جسم حر في السجل)، وبحدّ للمعدل لأن المسار مفتوح
+const clientLogWindow = new Map<string, { count: number; until: number }>();
 app.post("/api/client-log", (req, res) => {
-  console.error("BROWSER_CLIENT_ERROR:", JSON.stringify(req.body, null, 2));
+  const key = req.ip ?? "?";
+  const now = Date.now();
+  const slot = clientLogWindow.get(key);
+  if (slot && slot.until > now && slot.count >= 20) {
+    res.status(429).end();
+    return;
+  }
+  clientLogWindow.set(key, slot && slot.until > now ? { count: slot.count + 1, until: slot.until } : { count: 1, until: now + 10 * 60 * 1000 });
+  if (clientLogWindow.size > 5000) clientLogWindow.clear();
+  const body = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const field = (name: string, max: number) => (typeof body[name] === "string" ? (body[name] as string).slice(0, max) : undefined);
+  console.error("BROWSER_CLIENT_ERROR:", JSON.stringify({ message: field("message", 500), stack: field("stack", 2000), componentStack: field("componentStack", 2000) }));
   res.json({ ok: true });
 });
 

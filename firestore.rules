@@ -50,17 +50,6 @@ service cloud.firestore {
       allow delete: if isValidId(requestId);
     }
 
-    // زيارات نموذج الجمهور (أسماء الحقول ومواقيت الخطوات فقط، لا قيم ولا عناوين).
-    match /form_visits/{visitId} {
-      allow get, list: if true;
-      allow create, update: if isValidId(visitId) &&
-                               incoming().visitId == visitId &&
-                               incoming().events is list &&
-                               incoming().events.size() <= 200 &&
-                               incoming().lastAt is string;
-      allow delete: if false;
-    }
-
     match /condolence_templates/{templateId} {
       allow get, list: if true;
       allow create, update: if isValidId(templateId);

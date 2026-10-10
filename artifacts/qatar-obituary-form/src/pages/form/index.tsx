@@ -10,6 +10,7 @@ import { Form } from "@/components/ui/form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Loader2, ChevronRight, ChevronLeft } from "lucide-react";
+import { PrivacyNotice } from "@/components/privacy-notice";
 import { toast } from "sonner";
 import { 
   DeceasedStep, 
@@ -68,17 +69,9 @@ export default function FormPage() {
     // النموذج له شكل بياناته الخاص؛ الخادم لا يقبل إلا عقد الـ API (deceasedPeople…).
     const requestData = mapFormToPayload(data);
 
-    // سجل المصدر: الجهاز فقط (الخادم يفرض القناة «form» للجمهور)
-    const audit = {
-      channel: "form" as const,
-      client: {
-        ua: navigator.userAgent.slice(0, 300),
-        viewport: `${window.innerWidth}x${window.innerHeight}`,
-        lang: (navigator.language || "").slice(0, 20),
-      },
-    };
+    // لا يُرسل شيء عن المرسل: الخادم يسجّل القناة «form» وحدها
     createRequest.mutate(
-      { data: { ...requestData, audit } },
+      { data: requestData },
       {
         onSuccess: (res: any) => {
           toast.success("تم إرسال الطلب بنجاح");
@@ -172,6 +165,7 @@ export default function FormPage() {
             </form>
           </Form>
         </Card>
+        <PrivacyNotice />
       </div>
     </div>
   );

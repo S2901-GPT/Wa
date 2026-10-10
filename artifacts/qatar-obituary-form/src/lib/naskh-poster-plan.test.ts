@@ -41,7 +41,6 @@ function makeRequest(overrides: Partial<ObituaryRequest> = {}): ObituaryRequest 
       { audience: "men", location: "مجلس العائلة", area: "الدفنة", mapLink: "https://maps.google.com/?q=men" },
       { audience: "women", location: "منزل العائلة", area: "الدفنة", mapLink: "https://maps.google.com/?q=women", schedule: [{ days: "الفترة الصباحية", time: "من 9:00 صباحاً إلى 12:00 ظهراً" }, { days: "الفترة المسائية", time: "من 4:00 مساءً إلى 9:00 مساءً" }] },
     ],
-    condolencePhoneContacts: [],
     ...overrides,
   } as ObituaryRequest;
 }
@@ -167,7 +166,6 @@ const cases: Array<[string, () => void]> = [
       prayer: { enabled: true, day: "اليوم", time: "بعد صلاة العصر", place: "مسجد حمد بن علي", mapLink: "https://example.com/prayer" },
       condolenceOptions: ["phone"],
       condolences: [],
-      condolencePhoneContacts: [{ name: "ابنه أحمد", phone: "55555555" }],
       notes: "يرجى عدم الحضور بالأطفال",
     })));
     assert.deepEqual(sections.map((section) => section.id), ["head", "relatives", "prayer", "burial", "phone", "notes", "closing"]);

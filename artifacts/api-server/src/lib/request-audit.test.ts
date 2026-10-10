@@ -1,6 +1,6 @@
 /** سجل سلوك الطلب: تنقية ما يرسله العميل، والفروق بالعربية، وحد طول السجل. */
 import assert from "node:assert/strict";
-import { appendHistory, diffRequests, sanitizeAudit } from "./request-audit";
+import { appendHistory, diffRequests, maskPhones, sanitizeAudit } from "./request-audit";
 
 const base = {
   messageType: "announcement",
@@ -17,19 +17,20 @@ const base = {
 const clone = () => JSON.parse(JSON.stringify(base));
 
 const cases: Array<[string, () => void]> = [
-  ["الجمهور لا يدّعي قناة غير form، ولا يُقبل منه نص أو رد", () => {
+  ["الجمهور: القناة form فقط، ولا يُحفظ عنه شيء (لا جهاز ولا تعريف ولا نص)", () => {
     const audit = sanitizeAudit({ channel: "from_text", sourceText: "نص", aiReply: "{}", visitId: "abcDEF_123-x", client: { ua: "Safari", viewport: "414x896" } }, { admin: false });
-    assert.deepEqual(audit, { channel: "form", visitId: "abcDEF_123-x", client: { ua: "Safari", viewport: "414x896" } });
+    assert.deepEqual(audit, { channel: "form" });
     assert.deepEqual(sanitizeAudit(undefined, { admin: false }), { channel: "form" });
     // «مستنتج» يكتبه سكربت الاسترجاع وحده، لا العميل
     assert.equal((sanitizeAudit({ channel: "from_text", inferred: true }, { admin: true }) as Record<string, unknown>).inferred, undefined);
   }],
-  ["المسؤول: القناة والنص والتحذيرات تُحفظ مقصوصة، ورقم زيارة غير صالح يُهمل", () => {
-    const audit = sanitizeAudit({ channel: "from_text", sourceText: "x".repeat(9000), aiWarnings: ["تحذير", "", 5], model: "gemini-flash-latest", visitId: "bad id" }, { admin: true });
+  ["المسؤول: القناة والنص والتحذيرات تُحفظ مقصوصة، والجهاز والتعريف لا يُقبلان منه أيضاً", () => {
+    const audit = sanitizeAudit({ channel: "from_text", sourceText: "x".repeat(9000), aiWarnings: ["تحذير", "", 5], model: "gemini-flash-latest", visitId: "abcDEF_123-x", client: { ua: "Safari" } }, { admin: true });
     assert.equal(audit?.channel, "from_text");
     assert.equal(audit?.sourceText?.length, 8000);
     assert.deepEqual(audit?.aiWarnings, ["تحذير"]);
-    assert.equal(audit?.visitId, undefined);
+    assert.equal((audit as Record<string, unknown>).visitId, undefined);
+    assert.equal((audit as Record<string, unknown>).client, undefined);
     assert.equal(sanitizeAudit({ channel: "hacker" }, { admin: true })?.channel, "admin_edit");
   }],
   ["تغيير مقر عزاء النساء ومجلس الرجال يُكتب بالعربية قبل ← بعد", () => {
@@ -65,6 +66,14 @@ const cases: Array<[string, () => void]> = [
     const after = clone();
     after.phoneAudience = "men";
     assert.deepEqual(diffRequests(base, after), ["تعديلات أخرى في البيانات"]);
+  }],
+  ["أرقام الهواتف تُطمس في النص والرد قبل الحفظ، ولا تُمسّ أرقام المنازل والأعوام", () => {
+    assert.equal(maskPhones("للتعزية 55123456 أو +974 6612 3456 أو 00974-33123456"), "للتعزية [رقم محذوف] أو [رقم محذوف] أو 00[رقم محذوف]");
+    assert.equal(maskPhones("منزل رقم 9 شارع 850 منطقة 66 عام 2026 الساعة 9:30"), "منزل رقم 9 شارع 850 منطقة 66 عام 2026 الساعة 9:30");
+    assert.equal(maskPhones("+44 20 7946 0958"), "[رقم محذوف]");
+    const audit = sanitizeAudit({ channel: "from_text", sourceText: "عزاء الرجال 55123456", aiReply: "{\"phone\":\"66123456\"}" }, { admin: true });
+    assert.equal(audit?.sourceText, "عزاء الرجال [رقم محذوف]");
+    assert.ok(!audit?.aiReply?.includes("66123456"));
   }],
   ["السجل يحتفظ بآخر 50", () => {
     let history: unknown = undefined;

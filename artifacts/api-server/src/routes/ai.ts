@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { ParseObituaryTextBody, ParseObituaryTextResponse } from "@workspace/api-zod";
 import { clientKey, createRateLimiter, requireAdmin } from "../lib/admin-auth";
 import { AI_STUDIO_PROXY_PATH, AiError, aiConfig, aiEnvHints, extractRequest } from "../lib/ai-extract";
+import { maskPhones } from "../lib/request-audit";
 
 const router: IRouter = Router();
 
@@ -38,8 +39,10 @@ router.post("/admin/parse-text", requireAdmin, async (req, res): Promise<void> =
   try {
     // بلا مفتاح في خدمة من AI Studio: جرّب وسيطها على عنوان الخدمة نفسه، فهو يضيف المفتاح.
     const endpoint = viaAiStudio ? `${req.protocol}://${host}${AI_STUDIO_PROXY_PATH}` : undefined;
-    const result = await extractRequest(parsed.data.text.trim(), { apiKey, model, endpoint });
-    if (result.debug) req.log?.warn({ debug: result.debug, model }, "AI extraction came back hollow");
+    // أرقام الهواتف لا تغادر الخادم: تُطمس قبل الإرسال إلى النموذج
+    const result = await extractRequest(maskPhones(parsed.data.text.trim()), { apiKey, model, endpoint });
+    // لا يُكتب مقتطف الرد في سجل الخادم (قد يحمل أسماء)؛ المسؤول يراه في الشاشة
+    if (result.debug) req.log?.warn({ model }, "AI extraction came back hollow");
     res.json(ParseObituaryTextResponse.parse(result));
   } catch (error) {
     // وصل الوسيط إلى Gemini (نص بلا متوفى، أو الخدمة مشغولة): رسالته هي الصحيحة. غير ذلك: الوسيط غير موجود.
@@ -49,7 +52,7 @@ router.post("/admin/parse-text", requireAdmin, async (req, res): Promise<void> =
       return;
     }
     if (error instanceof AiError) {
-      if (error.debug) req.log?.warn({ debug: error.debug, status: error.status }, "AI extraction failed");
+      if (error.debug) req.log?.warn({ status: error.status }, "AI extraction failed");
       res.status(error.status).json({ error: error.message, ...(error.debug ? { debug: error.debug } : {}) });
       return;
     }

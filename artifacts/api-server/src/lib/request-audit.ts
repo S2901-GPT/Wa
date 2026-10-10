@@ -9,30 +9,31 @@ export type Audit = {
   aiWarnings?: string[];
   aiReply?: string;
   model?: string;
-  visitId?: string;
-  client?: { ua?: string; viewport?: string; lang?: string };
 };
+
+/** رقم هاتف قطري (٨ أرقام تبدأ بـ٣ أو ٥ أو ٦ أو ٧، مع أو بلا +974) أو دولي؛ يُستبدل حتى لا يُحفظ رقم مع الطلب. */
+const PHONE_RE = /(?:\+?\s?974[\s-]?)?(?<![\d٠-٩])[3567]\d{3}[\s-]?\d{4}(?![\d٠-٩])|\+\d{1,3}[\s-]?\d{2,4}[\s-]?\d{3,4}[\s-]?\d{3,4}/gu;
+export const PHONE_MASK = "[رقم محذوف]";
+export function maskPhones(value: string): string {
+  return value.replace(PHONE_RE, PHONE_MASK);
+}
 export type HistoryEntry = { at: string; channel: AuditChannel; changes: string[]; sourceText?: string; aiWarnings?: string[] };
 
 const isObject = (value: unknown): value is Loose => typeof value === "object" && value !== null && !Array.isArray(value);
 const text = (value: unknown, max = 8000): string => (typeof value === "string" ? value.trim().slice(0, max) : "");
 const CHANNELS: readonly AuditChannel[] = ["form", "from_text", "admin_edit"];
 
-/** ينظّف ما أرسله العميل. غير المسؤول قناته «form» دائماً ولا يُقبل منه إلا رقم الزيارة والجهاز. */
+/**
+ * ينظّف ما أرسله العميل. غير المسؤول قناته «form» دائماً ولا يُقبل منه أي شيء آخر (لا جهاز ولا تعريف).
+ * نص المسؤول وردّ النموذج يُحفظان بعد طمس أرقام الهواتف.
+ */
 export function sanitizeAudit(input: unknown, { admin }: { admin: boolean }): Audit | undefined {
-  if (!isObject(input)) return admin ? undefined : { channel: "form" };
-  const out: Audit = { channel: "form" };
-  const visitId = text(input.visitId, 64);
-  if (/^[A-Za-z0-9_-]{8,64}$/u.test(visitId)) out.visitId = visitId;
-  if (isObject(input.client)) {
-    const client = { ua: text(input.client.ua, 300), viewport: text(input.client.viewport, 20), lang: text(input.client.lang, 20) };
-    out.client = Object.fromEntries(Object.entries(client).filter(([, value]) => value));
-  }
-  if (!admin) return out;
-  out.channel = CHANNELS.includes(input.channel as AuditChannel) ? (input.channel as AuditChannel) : "admin_edit";
-  const sourceText = text(input.sourceText, 8000);
+  if (!admin) return { channel: "form" };
+  if (!isObject(input)) return undefined;
+  const out: Audit = { channel: CHANNELS.includes(input.channel as AuditChannel) ? (input.channel as AuditChannel) : "admin_edit" };
+  const sourceText = maskPhones(text(input.sourceText, 8000));
   if (sourceText) out.sourceText = sourceText;
-  const aiReply = text(input.aiReply, 8192);
+  const aiReply = maskPhones(text(input.aiReply, 8192));
   if (aiReply) out.aiReply = aiReply;
   const model = text(input.model, 60);
   if (model) out.model = model;
