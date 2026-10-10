@@ -39,6 +39,15 @@
           "type": "string",
           "format": "date-time",
           "description": "Last update ISO timestamp"
+        },
+        "expiredAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Set when the 48-hour retention period ended: the document then holds only the anonymised `stat` (no names, no texts) and is hidden from lists, lookups and edits"
+        },
+        "stat": {
+          "type": "object",
+          "description": "Anonymised behaviour statistics kept after expiry: channel, number of edits, names of changed fields, AI warnings"
         }
       },
       "required": [

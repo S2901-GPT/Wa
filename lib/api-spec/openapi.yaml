@@ -54,6 +54,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ObituaryRequest"
+  /obituary-requests/expired:
+    get:
+      operationId: listExpiredObituaryRequests
+      tags: [requests]
+      description: الإحصاءات المجهَّلة للطلبات التي انتهت مدة الاحتفاظ بها (48 ساعة)؛ بلا أسماء ولا نصوص. للمسؤول فقط
+      responses:
+        "200":
+          description: من الأحدث إنشاءً
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExpiredRequestStat"
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
   /obituary-requests/{requestNumber}:
     get:
       operationId: getObituaryRequest
@@ -139,6 +155,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ObituaryRequest"
+  /lab/obituary-requests/expired:
+    get:
+      operationId: listExpiredLabObituaryRequests
+      tags: [lab]
+      description: الإحصاءات المجهَّلة لطلبات التجارب التي انتهت مدة الاحتفاظ بها، للمسؤول فقط
+      responses:
+        "200":
+          description: من الأحدث إنشاءً
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExpiredRequestStat"
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
   /lab/obituary-requests/{requestNumber}:
     get:
       operationId: getLabObituaryRequest
@@ -680,6 +712,48 @@ components:
         inferred:
           type: boolean
           description: استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)
+    ExpiredHistoryEntry:
+      type: object
+      required: [at, channel, fields]
+      properties:
+        at:
+          type: string
+        channel:
+          type: string
+        fields:
+          type: array
+          description: أسماء الحقول التي تغيّرت فقط («مقر عزاء النساء»)، بلا قيم
+          items:
+            type: string
+    ExpiredRequestStat:
+      type: object
+      description: ما يبقى من الطلب بعد انتهاء مدة الاحتفاظ (48 ساعة)؛ إحصاء تقني بلا أي اسم أو نص
+      required: [requestNumber, status, createdAt, expiredAt, edits, history]
+      properties:
+        requestNumber:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+        expiredAt:
+          type: string
+        channel:
+          type: string
+        inferred:
+          type: boolean
+        model:
+          type: string
+        aiWarnings:
+          type: array
+          items:
+            type: string
+        edits:
+          type: integer
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpiredHistoryEntry"
     HistoryEntry:
       type: object
       required: [at, channel, changes]

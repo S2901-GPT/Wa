@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import apiApp from "./artifacts/api-server/src/app";
 import { logger } from "./artifacts/api-server/src/lib/logger";
+import { startRetentionTimer } from "./artifacts/api-server/src/lib/retention";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -69,6 +70,8 @@ async function startServer() {
 
   app.listen(port, "0.0.0.0", () => {
     logger.info({ port }, `Server running at http://0.0.0.0:${port}`);
+    // انتهاء مدة الاحتفاظ (48 ساعة): عند البدء ثم دورياً
+    startRetentionTimer();
   });
 }
 

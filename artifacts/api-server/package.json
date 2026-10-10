@@ -8,7 +8,7 @@
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx src/lib/admin-auth.test.ts && tsx src/lib/poster-settings.test.ts && tsx src/lib/ai-extract.test.ts && tsx src/lib/request-audit.test.ts"
+    "test": "tsx src/lib/admin-auth.test.ts && tsx src/lib/poster-settings.test.ts && tsx src/lib/ai-extract.test.ts && tsx src/lib/request-audit.test.ts && tsx src/lib/retention.test.ts"
   },
   "dependencies": {
     "@workspace/api-zod": "*",

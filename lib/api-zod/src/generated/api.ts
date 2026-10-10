@@ -414,6 +414,28 @@ export const CreateObituaryRequestResponse = zod.object({
 }))
 
 
+/**
+ * الإحصاءات المجهَّلة للطلبات التي انتهت مدة الاحتفاظ بها (48 ساعة)؛ بلا أسماء ولا نصوص. للمسؤول فقط
+ */
+export const ListExpiredObituaryRequestsResponseItem = zod.object({
+  "requestNumber": zod.string(),
+  "status": zod.string(),
+  "createdAt": zod.string(),
+  "expiredAt": zod.string(),
+  "channel": zod.string().optional(),
+  "inferred": zod.boolean().optional(),
+  "model": zod.string().optional(),
+  "aiWarnings": zod.array(zod.string()).optional(),
+  "edits": zod.number().int(),
+  "history": zod.array(zod.object({
+  "at": zod.string(),
+  "channel": zod.string(),
+  "fields": zod.array(zod.string()).describe('أسماء الحقول التي تغيّرت فقط («مقر عزاء النساء»)، بلا قيم')
+}))
+}).describe('ما يبقى من الطلب بعد انتهاء مدة الاحتفاظ (48 ساعة)؛ إحصاء تقني بلا أي اسم أو نص')
+export const ListExpiredObituaryRequestsResponse = zod.array(ListExpiredObituaryRequestsResponseItem)
+
+
 export const GetObituaryRequestParams = zod.object({
   "requestNumber": zod.coerce.string()
 })
@@ -1233,6 +1255,28 @@ export const CreateLabObituaryRequestResponse = zod.object({
   "aiWarnings": zod.array(zod.string()).optional()
 })).optional().describe('سجل الإنشاء والتعديلات (للمسؤول فقط)')
 }))
+
+
+/**
+ * الإحصاءات المجهَّلة لطلبات التجارب التي انتهت مدة الاحتفاظ بها، للمسؤول فقط
+ */
+export const ListExpiredLabObituaryRequestsResponseItem = zod.object({
+  "requestNumber": zod.string(),
+  "status": zod.string(),
+  "createdAt": zod.string(),
+  "expiredAt": zod.string(),
+  "channel": zod.string().optional(),
+  "inferred": zod.boolean().optional(),
+  "model": zod.string().optional(),
+  "aiWarnings": zod.array(zod.string()).optional(),
+  "edits": zod.number().int(),
+  "history": zod.array(zod.object({
+  "at": zod.string(),
+  "channel": zod.string(),
+  "fields": zod.array(zod.string()).describe('أسماء الحقول التي تغيّرت فقط («مقر عزاء النساء»)، بلا قيم')
+}))
+}).describe('ما يبقى من الطلب بعد انتهاء مدة الاحتفاظ (48 ساعة)؛ إحصاء تقني بلا أي اسم أو نص')
+export const ListExpiredLabObituaryRequestsResponse = zod.array(ListExpiredLabObituaryRequestsResponseItem)
 
 
 export const GetLabObituaryRequestParams = zod.object({

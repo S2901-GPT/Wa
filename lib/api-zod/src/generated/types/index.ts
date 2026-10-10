@@ -21,6 +21,8 @@ export * from './deceasedPerson';
 export * from './deceasedPersonAgeUnit';
 export * from './deceasedPersonGender';
 export * from './deceasedPersonIdentifyBy';
+export * from './expiredHistoryEntry';
+export * from './expiredRequestStat';
 export * from './healthStatus';
 export * from './historyEntry';
 export * from './historyEntryChannel';

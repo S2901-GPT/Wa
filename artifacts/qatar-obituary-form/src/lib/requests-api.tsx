@@ -12,12 +12,15 @@ import {
   getGetLabObituaryRequestQueryOptions,
   getGetObituaryRequestQueryKey,
   getGetObituaryRequestQueryOptions,
+  getListExpiredLabObituaryRequestsQueryOptions,
+  getListExpiredObituaryRequestsQueryOptions,
   getListLabObituaryRequestsQueryKey,
   getListLabObituaryRequestsQueryOptions,
   getListObituaryRequestsQueryKey,
   getListObituaryRequestsQueryOptions,
   getUpdateLabObituaryRequestMutationOptions,
   getUpdateObituaryRequestMutationOptions,
+  type ExpiredRequestStat,
   type ObituaryRequest,
   type ObituaryRequestInput,
   type ObituaryRequestUpdate,
@@ -50,6 +53,13 @@ type QueryExtras<T> = { query?: Partial<Omit<UseQueryOptions<T, Error, T>, "quer
 export function useRequestsList(options?: QueryExtras<ObituaryRequest[]>): UseQueryResult<ObituaryRequest[], Error> {
   const scope = useRequestsScope();
   const base = (scope === "lab" ? getListLabObituaryRequestsQueryOptions() : getListObituaryRequestsQueryOptions()) as UseQueryOptions<ObituaryRequest[], Error, ObituaryRequest[]>;
+  return useQuery({ ...base, ...options?.query, queryKey: base.queryKey });
+}
+
+/** الإحصاءات المجهَّلة للطلبات التي انتهت مدة الاحتفاظ بها (48 ساعة). */
+export function useExpiredRequests(options?: QueryExtras<ExpiredRequestStat[]>): UseQueryResult<ExpiredRequestStat[], Error> {
+  const scope = useRequestsScope();
+  const base = (scope === "lab" ? getListExpiredLabObituaryRequestsQueryOptions() : getListExpiredObituaryRequestsQueryOptions()) as UseQueryOptions<ExpiredRequestStat[], Error, ExpiredRequestStat[]>;
   return useQuery({ ...base, ...options?.query, queryKey: base.queryKey });
 }
 

@@ -14,6 +14,9 @@ import {
 } from "@firebase/firestore";
 import firebaseConfig from "../../../firebase-applet-config.json";
 import { type ObituaryRequestRow } from "./schema/obituary-requests";
+import { anonymizeRequest, expiredDoc, isExpired, readExpired, type ExpiredRequestStat } from "./retention";
+
+export { DEFAULT_RETENTION_HOURS, retentionHours, anonymizeRequest, changeField, isExpired, type ExpiredRequestStat, type ExpiredHistoryEntry } from "./retention";
 
 // Initialize Firebase App & Firestore using the provisioned Firestore Database ID
 let firestoreDb: Firestore | null = null;
@@ -127,9 +130,26 @@ function docDataToRow(data: any, fallbackId: number): ObituaryRequestRow {
   };
 }
 
-/** الحذف الاحتياطي يضع هذه العلامة على المستند بدل حذفه (حين تمنع قواعد قاعدة البيانات الحذف النهائي). */
+/**
+ * مستند لا يُعدّ طلباً حياً: حُذف احتياطياً (`deletedAt`، حين تمنع القواعد الحذف النهائي) أو انتهت مدة الاحتفاظ به
+ * (`expiredAt`) فلم يبقَ منه إلا الإحصاء المجهَّل.
+ */
 function isSoftDeleted(data: any): boolean {
-  return !!data && typeof data === "object" && !!data.deletedAt;
+  return !!data && typeof data === "object" && (!!data.deletedAt || !!data.expiredAt);
+}
+
+/** المستند المكتوب بدل الطلب عند حذفه احتياطياً: يحقق القواعد ولا يحمل أي بيانات. */
+function wipedDoc(data: any, deletedAt: Date) {
+  return {
+    id: typeof data?.id === "number" ? data.id : 0,
+    requestNumber: String(data?.requestNumber ?? ""),
+    deceasedName: "",
+    status: String(data?.status ?? "new"),
+    payload: {},
+    createdAt: String(data?.createdAt ?? deletedAt.toISOString()),
+    updatedAt: deletedAt.toISOString(),
+    deletedAt: deletedAt.toISOString(),
+  };
 }
 
 const errorCode = (err: unknown): string => String((err as { code?: string })?.code ?? "");
@@ -138,6 +158,8 @@ const errorCode = (err: unknown): string => String((err as { code?: string })?.c
 export type StoreProbe = "ok" | "rules-missing" | "offline";
 
 export type RequestsStore = ReturnType<typeof makeRequestsStore>;
+
+const sortExpired = (list: ExpiredRequestStat[]) => [...list].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 
 /** يفحص إمكانية القراءة من مجموعة بالاسم دون كتابة شيء (لعرض حالة القواعد في مركز التجارب). */
 export async function probeCollection(name: string): Promise<StoreProbe> {
@@ -158,6 +180,7 @@ export async function probeCollection(name: string): Promise<StoreProbe> {
 function makeRequestsStore(options: { collection: string; seed?: ObituaryRequestRow[]; strict: boolean }) {
   const collectionName = options.collection;
   const inMemoryRequests: ObituaryRequestRow[] = [...(options.seed ?? [])];
+  const inMemoryExpired: ExpiredRequestStat[] = [];
   const useMemory = !firestoreDb || !options.strict;
 
   function forgetInMemory(requestNumber: string) {
@@ -394,10 +417,69 @@ function makeRequestsStore(options: { collection: string; seed?: ObituaryRequest
       } catch (err) {
         console.warn("[AI Studio] Firestore refused to delete; hiding the request instead:", errorCode(err) || err);
       }
-      // القواعد تمنع الحذف النهائي: نخفي الطلب بعلامة (التعديل مسموح بالقواعد نفسها)
-      await setDoc(ref, { deletedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, { merge: true });
+      // القواعد تمنع الحذف النهائي: يُستبدل المستند كاملاً بعلامة الحذف بلا أي بيانات (التعديل مسموح بالقواعد نفسها)
+      let current: any = { requestNumber };
+      try {
+        const snap = await getDoc(ref);
+        if (snap.exists()) current = snap.data();
+      } catch {
+        // يكفي الرقم
+      }
+      await setDoc(ref, wipedDoc(current, new Date()));
       forgetInMemory(requestNumber);
       return "soft";
+    },
+
+    /**
+     * انتهاء مدة الاحتفاظ: كل طلب أُنشئ قبل `hours` ساعة يُستبدل بإحصاء مجهَّل (بلا أسماء ولا نصوص) فيختفي من
+     * القوائم والبحث والتعديل. يعيد عدد الطلبات المجهَّلة.
+     */
+    async expireOlderThan(hours: number, now = new Date()): Promise<number> {
+      let count = 0;
+      if (firestoreDb) {
+        try {
+          const snap = await getDocs(collection(firestoreDb, collectionName));
+          for (const d of snap.docs) {
+            const data = d.data();
+            if (isSoftDeleted(data)) continue;
+            const createdAt = data.createdAt ? new Date(data.createdAt) : new Date(NaN);
+            if (Number.isNaN(createdAt.getTime()) || !isExpired(createdAt, now, hours)) continue;
+            const stat = anonymizeRequest(data, now);
+            await setDoc(d.ref, expiredDoc(stat, typeof data.id === "number" ? data.id : 0));
+            forgetInMemory(String(data.requestNumber ?? ""));
+            count += 1;
+          }
+          if (!useMemory) return count;
+        } catch (err) {
+          fail("expire", err);
+        }
+      }
+      for (const row of [...inMemoryRequests]) {
+        if (!isExpired(row.createdAt, now, hours)) continue;
+        inMemoryExpired.push(anonymizeRequest(toDoc(row), now));
+        forgetInMemory(row.requestNumber);
+        count += 1;
+      }
+      return count;
+    },
+
+    /** الإحصاءات المجهَّلة للطلبات التي انتهت مدة الاحتفاظ بها، من الأحدث إنشاءً. */
+    async listExpired(): Promise<ExpiredRequestStat[]> {
+      let list: ExpiredRequestStat[] = [];
+      if (firestoreDb) {
+        try {
+          const snap = await getDocs(collection(firestoreDb, collectionName));
+          snap.forEach((d) => {
+            const stat = readExpired(d.data());
+            if (stat) list.push(stat);
+          });
+          if (!useMemory) return sortExpired(list);
+        } catch (err) {
+          fail("listExpired", err);
+        }
+      }
+      list = list.concat(inMemoryExpired.filter((stat) => !list.some((other) => other.requestNumber === stat.requestNumber)));
+      return sortExpired(list);
     },
 
     /** يحذف كل مستندات المجموعة (حتى المخفية) على دفعات؛ للتفريغ في التجارب. يعيد عدد المحذوف. */

@@ -401,6 +401,29 @@ export interface AdminLoginInput {
   password: string;
 }
 
+export interface ExpiredHistoryEntry {
+  at: string;
+  channel: string;
+  /** أسماء الحقول التي تغيّرت فقط («مقر عزاء النساء»)، بلا قيم */
+  fields: string[];
+}
+
+/**
+ * ما يبقى من الطلب بعد انتهاء مدة الاحتفاظ (48 ساعة)؛ إحصاء تقني بلا أي اسم أو نص
+ */
+export interface ExpiredRequestStat {
+  requestNumber: string;
+  status: string;
+  createdAt: string;
+  expiredAt: string;
+  channel?: string;
+  inferred?: boolean;
+  model?: string;
+  aiWarnings?: string[];
+  edits: number;
+  history: ExpiredHistoryEntry[];
+}
+
 export type HistoryEntryChannel = typeof HistoryEntryChannel[keyof typeof HistoryEntryChannel];
 
 
