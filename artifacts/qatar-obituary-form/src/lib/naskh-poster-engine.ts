@@ -90,7 +90,11 @@ export function loadImageOnce(src: string): Promise<HTMLImageElement | null> {
   const promise = new Promise<HTMLImageElement | null>((resolve) => {
     const image = new Image();
     image.onload = () => resolve(image);
-    image.onerror = () => resolve(null);
+    image.onerror = () => {
+      // فشل لحظي (شبكة الجوال مثلاً) لا يُخزَّن: وإلا بقيت كل الصور بلا نقش حتى تُعاد الصفحة
+      imageCache.delete(src);
+      resolve(null);
+    };
     image.src = src;
     if (typeof image.decode === "function") {
       image.decode().then(() => resolve(image)).catch(() => {
@@ -134,12 +138,21 @@ function fontString(weight: 400 | 700, px: number): string {
   return `${weight} ${px}px ${NASKH_FONT_FAMILY}`;
 }
 
-function drawImageCover(ctx: CanvasRenderingContext2D, image: HTMLImageElement, width: number, height: number) {
-  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
-  const drawW = image.naturalWidth * scale;
-  const drawH = image.naturalHeight * scale;
-  ctx.drawImage(image, (width - drawW) / 2, (height - drawH) / 2, drawW, drawH);
+/**
+ * يملأ المساحة بالصورة (cover). `inset` يتجاوز هذا العدد من البكسلات عند كل حافة من المصدر:
+ * صورة النقش فيها شريط داكن عند الحافة العليا (حتى 6 بكسل) وبقع عند اليمنى، تظهر في الصورة كأنها اتساخ.
+ */
+function drawImageCover(ctx: CanvasRenderingContext2D, image: HTMLImageElement, width: number, height: number, inset = 0) {
+  const sw = image.naturalWidth - inset * 2;
+  const sh = image.naturalHeight - inset * 2;
+  const scale = Math.max(width / sw, height / sh);
+  const drawW = sw * scale;
+  const drawH = sh * scale;
+  ctx.drawImage(image, inset, inset, sw, sh, (width - drawW) / 2, (height - drawH) / 2, drawW, drawH);
 }
+
+/** حافة صورة النقش المتجاوزة عند الرسم (بكسل من المصدر). */
+const BACKGROUND_EDGE_INSET = 16;
 
 function drawImageContain(ctx: CanvasRenderingContext2D, image: HTMLImageElement | HTMLCanvasElement, x: number, y: number, w: number, h: number) {
   const naturalW = image instanceof HTMLImageElement ? image.naturalWidth : image.width;
@@ -240,7 +253,7 @@ function drawBand(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind:
 export function drawNaskhPlan(ctx: CanvasRenderingContext2D, plan: NaskhPlan, assets: NaskhAssets, qrImages: QrCodeMap) {
   ctx.fillStyle = NASKH_COLORS.background;
   ctx.fillRect(0, 0, plan.width, plan.height);
-  if (assets.background) drawImageCover(ctx, assets.background, plan.width, plan.height);
+  if (assets.background) drawImageCover(ctx, assets.background, plan.width, plan.height, BACKGROUND_EDGE_INSET);
 
   for (const item of plan.items) {
     switch (item.kind) {
@@ -350,11 +363,12 @@ export function renderNaskhPoster(options: PosterOptions, content: NormalizedCon
       code: "naskh-overflow",
       // المقاس الثابت لا يطول، فالمخرج هو مقاس آخر؛ والتلقائي بلغ حده فالمخرج هو اختصار النص
       message: fixedHeight
-        ? `هذا الإعلان أطول من مقاس «${size.name}»؛ اختر «تلقائي» أو «ستوري سناب وإنستغرام» له، أو اختصر النص.`
+        ? `هذا الإعلان أطول من مقاس «${size.name}»؛ جرّب «ستوري سناب وإنستغرام» (الأطول) أو اختصر النص.`
         : "المحتوى أطول من الحد الأقصى لطول الصورة؛ اختصر النص أو جرّب تخطيطاً آخر.",
     });
   }
-  if (!assets.background) issues.push({ severity: "warning", code: "naskh-background-missing", message: "تعذر تحميل صورة الخلفية، فاستُخدم لون سادة." });
+  // صورة بلا نقش تبدو مختلفة عن بقية الصور، فيُنبَّه المسؤول بوضوح قبل أن يصدّرها
+  if (!assets.background) issues.push({ severity: "error", code: "naskh-background-missing", message: "تعذر تحميل نقش الخلفية، فستخرج الصورة بلا نقش. أعد فتح الاستوديو أو حدّث الصفحة قبل التصدير." });
   if (!assets.opening) issues.push({ severity: "warning", code: "naskh-opening-missing", message: "تعذر تحميل مخطوطة «إنا لله»، فكُتبت نصاً." });
   const report: RenderValidationReport = {
     isValid: !plan.overflow,
