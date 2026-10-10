@@ -395,6 +395,26 @@ export function CondolenceImageStudio({
             <p className="mt-2 text-center text-xs text-muted-foreground">
               <Link href="/settings" className="text-primary hover:underline">الشعار من الإعدادات</Link>
             </p>
+
+            {/* حالة رموز QR: أي موقع له رمز يعمل في الصورة وأيها بلا رابط */}
+            <div className="mt-4 w-full rounded-lg border bg-card/60 p-3 text-xs space-y-1.5">
+              <p className="font-semibold text-foreground">حالة رموز الـQR Codes:</p>
+              <div className="grid grid-cols-2 gap-2 text-muted-foreground">
+                {[
+                  normalizedContent.hasCombinedPrayerBurial
+                    ? { label: "صلاة ودَفن", active: !!normalizedContent.prayerBurialCombined?.qrUrl, off: "معالم معروفة (بدون QR)" }
+                    : { label: "صلاة الجنازة", active: !!normalizedContent.prayer?.qrUrl, off: "بدون QR" },
+                  { label: "الدفن", active: !!normalizedContent.burial?.qrUrl, off: "بدون QR" },
+                  { label: "عزاء الرجال", active: !!normalizedContent.men?.qrUrl, off: "بدون QR" },
+                  { label: "عزاء النساء", active: !!normalizedContent.women?.qrUrl, off: "بدون QR" },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${item.active ? "bg-green-500" : "bg-muted"}`} />
+                    {item.label}: {item.active ? "QR نشط" : item.off}
+                  </div>
+                ))}
+              </div>
+            </div>
           </section>
 
           {/* RIGHT SIDEBAR: EDIT DRAFT & CONTENT */}
