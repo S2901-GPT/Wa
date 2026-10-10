@@ -11,6 +11,7 @@ import {
   NASKH_METRICS,
   NASKH_POSTER_SIZES,
   NASKH_TYPE_SCALES,
+  isNaskhPosterSizeId,
   naskhPosterSize,
   naskhTypeScale,
   buildNaskhSections,
@@ -454,10 +455,12 @@ const cases: Array<[string, () => void]> = [
       const band = p.items.find((item) => item.kind === "band")!;
       assert.ok(band.y + band.h <= size.minHeight, `${size.id} band bottom ${band.y + band.h}`);
     }
-    // المقاس التلقائي وحده يطول بالمحتوى
+    // المقاس التلقائي يطول بالمحتوى لكنه لم يعد في قائمة الاختيار؛ الافتراضي منشور إنستقرام
     const dynamic = naskhPosterSize("dynamic");
     assert.notEqual(dynamic.minHeight, dynamic.maxHeight);
-    assert.equal(naskhPosterSize(undefined).id, "dynamic");
+    assert.equal(naskhPosterSize(undefined).id, "instagram");
+    assert.deepEqual(NASKH_POSTER_SIZES.map((size) => size.id), ["instagram", "story"]);
+    assert.equal(isNaskhPosterSizeId("dynamic"), false);
     assert.equal(naskhPosterSize("story").minHeight, 1920);
     assert.equal(naskhPosterSize("instagram").minHeight, 1350);
   }],

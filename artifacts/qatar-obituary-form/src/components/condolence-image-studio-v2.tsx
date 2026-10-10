@@ -176,7 +176,7 @@ export function CondolenceImageStudio({
     };
   }, [normalizedContent]);
 
-  // رسم الصورة بالتخطيط والمقاس المختارين: تلقائي (1080 × 1350 وتطول عند كثرة الأسماء) أو مقاس المنصة الثابت
+  // رسم الصورة بالتخطيط ومقاس المنصة المختارين (منشور 1080 × 1350 أو ستوري 1080 × 1920)
   useEffect(() => {
     let cancelled = false;
     if (!settingsReady) return;
@@ -369,7 +369,7 @@ export function CondolenceImageStudio({
               </div>
             </div>
 
-            <PosterChips label="المقاس" options={NASKH_POSTER_SIZES} value={posterSize} columns={3} onChange={(id) => { setPosterSize(id); storePosterSize(id); }} />
+            <PosterChips label="المقاس" options={NASKH_POSTER_SIZES} value={posterSize} columns={2} onChange={(id) => { setPosterSize(id); storePosterSize(id); }} />
             <PosterChips label="التخطيط" options={NASKH_LAYOUTS} value={layout} columns={4} onChange={(id) => { setLayout(id); storeLayout(id); }} />
             <PosterChips label="الخط" options={NASKH_TYPE_SCALES} value={typeScale} columns={4} onChange={(id) => { setTypeScale(id); storeTypeScale(id); }} />
 

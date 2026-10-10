@@ -161,7 +161,7 @@ export default function AdminLabPosterPage() {
             </div>
           </div>
 
-          <Chips label="المقاس" options={NASKH_POSTER_SIZES} value={posterSize} columns={3} onChange={(id) => { setPosterSize(id); storePosterSize(id); }} />
+          <Chips label="المقاس" options={NASKH_POSTER_SIZES} value={posterSize} columns={2} onChange={(id) => { setPosterSize(id); storePosterSize(id); }} />
           <Chips label="التخطيط" options={NASKH_LAYOUTS} value={layout} columns={4} onChange={(id) => { setLayout(id); storeLayout(id); }} />
           <Chips label="الخط" options={NASKH_TYPE_SCALES} value={typeScale} columns={4} onChange={(id) => { setTypeScale(id); storeTypeScale(id); }} />
 

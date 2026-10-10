@@ -2,11 +2,11 @@
 // تُستخدم في استوديو الصورة وصفحة التجربة للمقاس والتخطيط والخط.
 type Option = { id: string; name: string };
 
-export function PosterChips<T extends string>({ label, options, value, columns, onChange }: { label: string; options: readonly Option[]; value: T; columns: 3 | 4; onChange: (id: T) => void }) {
+export function PosterChips<T extends string>({ label, options, value, columns, onChange }: { label: string; options: readonly Option[]; value: T; columns: 2 | 3 | 4; onChange: (id: T) => void }) {
   return (
     <div className="mb-3" role="radiogroup" aria-label={label}>
       <span className="mb-1 block text-xs font-bold text-muted-foreground">{label}</span>
-      <div className={`grid gap-1.5 ${columns === 3 ? "grid-cols-3" : "grid-cols-4"}`}>
+      <div className={`grid gap-1.5 ${columns === 2 ? "grid-cols-2" : columns === 3 ? "grid-cols-3" : "grid-cols-4"}`}>
         {options.map((option) => {
           const isSelected = value === option.id;
           return (

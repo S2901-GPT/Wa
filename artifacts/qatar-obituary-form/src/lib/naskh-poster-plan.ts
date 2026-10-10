@@ -155,19 +155,24 @@ export type NaskhPosterSize = {
   maxHeight: number;
 };
 
+/** المقاسات المعروضة للاختيار: مقاسا المنصتين فقط. */
 export const NASKH_POSTER_SIZES: readonly NaskhPosterSize[] = [
-  { id: "dynamic", name: "تلقائي", description: "يطول حسب المحتوى: ١٠٨٠ × ١٣٥٠ حتى ١٨٠٠", minHeight: NASKH_METRICS.minHeight, maxHeight: NASKH_METRICS.maxHeight },
   { id: "instagram", name: "منشور إنستقرام", description: "١٠٨٠ × ١٣٥٠ بالضبط، مقاس المنشور فلا يُقصّ ولا يُصغَّر", minHeight: 1350, maxHeight: 1350 },
   { id: "story", name: "ستوري سناب وإنستغرام", description: "١٠٨٠ × ١٩٢٠ بالضبط، ملء الشاشة في القصة والسناب", minHeight: 1920, maxHeight: 1920 },
 ];
 
-export const DEFAULT_NASKH_POSTER_SIZE: NaskhPosterSizeId = "dynamic";
+/** الطول المتغير بالمحتوى: لم يعد يُعرض للاختيار، ويبقى للاختبارات ولمن يطلبه بالمعرّف صراحةً. */
+export const DYNAMIC_NASKH_POSTER_SIZE: NaskhPosterSize = { id: "dynamic", name: "تلقائي", description: "يطول حسب المحتوى: ١٠٨٠ × ١٣٥٠ حتى ١٨٠٠", minHeight: NASKH_METRICS.minHeight, maxHeight: NASKH_METRICS.maxHeight };
 
+export const DEFAULT_NASKH_POSTER_SIZE: NaskhPosterSizeId = "instagram";
+
+/** معرّف من المقاسات المعروضة فقط؛ «تلقائي» المحفوظ سابقاً يسقط إلى الافتراضي. */
 export function isNaskhPosterSizeId(value: unknown): value is NaskhPosterSizeId {
   return typeof value === "string" && NASKH_POSTER_SIZES.some((size) => size.id === value);
 }
 
 export function naskhPosterSize(id: NaskhPosterSizeId | undefined): NaskhPosterSize {
+  if (id === "dynamic") return DYNAMIC_NASKH_POSTER_SIZE;
   return NASKH_POSTER_SIZES.find((size) => size.id === (id ?? DEFAULT_NASKH_POSTER_SIZE)) ?? NASKH_POSTER_SIZES[0];
 }
 
