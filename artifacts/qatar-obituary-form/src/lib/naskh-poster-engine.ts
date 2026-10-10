@@ -93,18 +93,18 @@ export function loadImageOnce(src: string): Promise<HTMLImageElement | null> {
   if (cached) return cached;
   const promise = new Promise<HTMLImageElement | null>((resolve) => {
     const image = new Image();
-    image.onload = () => resolve(image);
+    // لا تُسلَّم الصورة إلا بعد فك ترميزها: Safari على iOS يرسم الصورة التي وصلت ولم تُفكّ بعد فارغة،
+    // فكان النقش ومخطوطة «إنا لله» يختفيان في أول رسم ويظهران بعد تغيير التخطيط.
+    image.onload = () => {
+      if (typeof image.decode === "function") image.decode().then(() => resolve(image), () => resolve(image));
+      else resolve(image);
+    };
     image.onerror = () => {
       // فشل لحظي (شبكة الجوال مثلاً) لا يُخزَّن: وإلا بقيت كل الصور بلا نقش حتى تُعاد الصفحة
       imageCache.delete(src);
       resolve(null);
     };
     image.src = src;
-    if (typeof image.decode === "function") {
-      image.decode().then(() => resolve(image)).catch(() => {
-        /* onload/onerror يحسمان النتيجة */
-      });
-    }
   });
   imageCache.set(src, promise);
   return promise;
