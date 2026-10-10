@@ -1,6 +1,7 @@
 // محرك رسم صورة التعزية على Canvas بخط النسخ: يحمّل الأصول (الخلفية، مخطوطة «إنا لله»، الشعار)،
 // ويقيس النص، ويستدعي المخطّط النقي (naskh-poster-plan.ts) بالتخطيط المختار، ثم يرسم العناصر.
-import bgPatternUrl from "../assets/poster/bg-pattern.jpg";
+import bgPostUrl from "../assets/poster/bg-1350.jpg";
+import bgStoryUrl from "../assets/poster/bg-1920.jpg";
 import openingCalligraphyUrl from "../assets/poster/opening-calligraphy.png";
 import defaultLogoUrl from "../assets/poster/logo-default.png";
 import type { NormalizedContent } from "./presentation-normalizer";
@@ -63,7 +64,10 @@ export function resolveNaskhBranding(branding: PosterBranding | null | undefined
 }
 
 export type NaskhAssets = {
+  /** نقش الخلفية بمقاس المنشور 1080 × 1350 بالضبط. */
   background: HTMLImageElement | null;
+  /** النقش نفسه بمقاس الستوري 1080 × 1920 بالضبط (يُقصّ من أسفله لأي طول أقل). */
+  backgroundTall: HTMLImageElement | null;
   opening: HTMLImageElement | null;
   /** الشعار بعد قصّ الفراغ الشفاف حوله. */
   logo: HTMLImageElement | HTMLCanvasElement | null;
@@ -109,14 +113,15 @@ export function loadImageOnce(src: string): Promise<HTMLImageElement | null> {
 export async function loadNaskhAssets(branding: PosterBranding | null | undefined): Promise<NaskhAssets> {
   const resolved = resolveNaskhBranding(branding);
   const customLogo = resolved.logoDataUrl && resolved.logoDataUrl.startsWith("data:image/") ? resolved.logoDataUrl : "";
-  const [background, opening, uploaded] = await Promise.all([
-    loadImageOnce(bgPatternUrl),
+  const [background, backgroundTall, opening, uploaded] = await Promise.all([
+    loadImageOnce(bgPostUrl),
+    loadImageOnce(bgStoryUrl),
     loadImageOnce(openingCalligraphyUrl),
     customLogo ? loadImageOnce(customLogo) : Promise.resolve(null),
   ]);
   // الشعار المدمج عند عدم الرفع أو تعذّر قراءة المرفوع، فلا تخرج صورة بلا شعار
   const logo = uploaded ?? (await loadImageOnce(DEFAULT_LOGO_URL));
-  return { background, opening, logo: logo ? trimmedLogo(logo) : null };
+  return { background, backgroundTall, opening, logo: logo ? trimmedLogo(logo) : null };
 }
 
 function roundedRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -138,21 +143,13 @@ function fontString(weight: 400 | 700, px: number): string {
   return `${weight} ${px}px ${NASKH_FONT_FAMILY}`;
 }
 
-/**
- * يملأ المساحة بالصورة (cover). `inset` يتجاوز هذا العدد من البكسلات عند كل حافة من المصدر:
- * صورة النقش فيها شريط داكن عند الحافة العليا (حتى 6 بكسل) وبقع عند اليمنى، تظهر في الصورة كأنها اتساخ.
- */
-function drawImageCover(ctx: CanvasRenderingContext2D, image: HTMLImageElement, width: number, height: number, inset = 0) {
-  const sw = image.naturalWidth - inset * 2;
-  const sh = image.naturalHeight - inset * 2;
-  const scale = Math.max(width / sw, height / sh);
-  const drawW = sw * scale;
-  const drawH = sh * scale;
-  ctx.drawImage(image, inset, inset, sw, sh, (width - drawW) / 2, (height - drawH) / 2, drawW, drawH);
+/** النقش بمقاس الصورة بالضبط بلا تكبير ولا قصّ للحواف: منشور 1350 له صورته، وما سواه يُرسم من أعلى صورة الستوري. */
+function drawBackground(ctx: CanvasRenderingContext2D, assets: NaskhAssets, width: number, height: number) {
+  const exact = height === assets.background?.naturalHeight && width === assets.background?.naturalWidth ? assets.background : null;
+  const image = exact ?? assets.backgroundTall ?? assets.background;
+  if (!image) return;
+  ctx.drawImage(image, 0, 0, Math.min(width, image.naturalWidth), Math.min(height, image.naturalHeight), 0, 0, Math.min(width, image.naturalWidth), Math.min(height, image.naturalHeight));
 }
-
-/** حافة صورة النقش المتجاوزة عند الرسم (بكسل من المصدر). */
-const BACKGROUND_EDGE_INSET = 16;
 
 function drawImageContain(ctx: CanvasRenderingContext2D, image: HTMLImageElement | HTMLCanvasElement, x: number, y: number, w: number, h: number) {
   const naturalW = image instanceof HTMLImageElement ? image.naturalWidth : image.width;
@@ -253,7 +250,7 @@ function drawBand(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind:
 export function drawNaskhPlan(ctx: CanvasRenderingContext2D, plan: NaskhPlan, assets: NaskhAssets, qrImages: QrCodeMap) {
   ctx.fillStyle = NASKH_COLORS.background;
   ctx.fillRect(0, 0, plan.width, plan.height);
-  if (assets.background) drawImageCover(ctx, assets.background, plan.width, plan.height, BACKGROUND_EDGE_INSET);
+  drawBackground(ctx, assets, plan.width, plan.height);
 
   for (const item of plan.items) {
     switch (item.kind) {
@@ -368,7 +365,7 @@ export function renderNaskhPoster(options: PosterOptions, content: NormalizedCon
     });
   }
   // صورة بلا نقش تبدو مختلفة عن بقية الصور، فيُنبَّه المسؤول بوضوح قبل أن يصدّرها
-  if (!assets.background) issues.push({ severity: "error", code: "naskh-background-missing", message: "تعذر تحميل نقش الخلفية، فستخرج الصورة بلا نقش. أعد فتح الاستوديو أو حدّث الصفحة قبل التصدير." });
+  if (!assets.background && !assets.backgroundTall) issues.push({ severity: "error", code: "naskh-background-missing", message: "تعذر تحميل نقش الخلفية، فستخرج الصورة بلا نقش. أعد فتح الاستوديو أو حدّث الصفحة قبل التصدير." });
   if (!assets.opening) issues.push({ severity: "warning", code: "naskh-opening-missing", message: "تعذر تحميل مخطوطة «إنا لله»، فكُتبت نصاً." });
   const report: RenderValidationReport = {
     isValid: !plan.overflow,
