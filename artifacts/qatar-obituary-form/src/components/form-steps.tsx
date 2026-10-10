@@ -270,7 +270,7 @@ export function DeceasedStep() {
                   name={`deceasedList.${index}.title`}
                   render={({ field: titleField }) => (
                     <FormItem className="w-full min-w-0">
-                      <FormLabel className="text-xs sm:text-sm font-semibold">اللقب الشرفي / التصدير</FormLabel>
+                      <FormLabel className="text-xs sm:text-sm font-semibold">اللقب الشرفي</FormLabel>
                       <Select 
                         value={titleField.value || "none"} 
                         onValueChange={titleField.onChange}
