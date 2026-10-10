@@ -11,6 +11,7 @@ import {
   NASKH_METRICS,
   NASKH_POSTER_SIZES,
   NASKH_TYPE_SCALES,
+  isNaskhPosterSizeId,
   naskhPosterSize,
   naskhTypeScale,
   buildNaskhSections,
@@ -41,7 +42,6 @@ function makeRequest(overrides: Partial<ObituaryRequest> = {}): ObituaryRequest 
       { audience: "men", location: "مجلس العائلة", area: "الدفنة", mapLink: "https://maps.google.com/?q=men" },
       { audience: "women", location: "منزل العائلة", area: "الدفنة", mapLink: "https://maps.google.com/?q=women", schedule: [{ days: "الفترة الصباحية", time: "من 9:00 صباحاً إلى 12:00 ظهراً" }, { days: "الفترة المسائية", time: "من 4:00 مساءً إلى 9:00 مساءً" }] },
     ],
-    condolencePhoneContacts: [],
     ...overrides,
   } as ObituaryRequest;
 }
@@ -167,7 +167,6 @@ const cases: Array<[string, () => void]> = [
       prayer: { enabled: true, day: "اليوم", time: "بعد صلاة العصر", place: "مسجد حمد بن علي", mapLink: "https://example.com/prayer" },
       condolenceOptions: ["phone"],
       condolences: [],
-      condolencePhoneContacts: [{ name: "ابنه أحمد", phone: "55555555" }],
       notes: "يرجى عدم الحضور بالأطفال",
     })));
     assert.deepEqual(sections.map((section) => section.id), ["head", "relatives", "prayer", "burial", "phone", "notes", "closing"]);
@@ -456,10 +455,12 @@ const cases: Array<[string, () => void]> = [
       const band = p.items.find((item) => item.kind === "band")!;
       assert.ok(band.y + band.h <= size.minHeight, `${size.id} band bottom ${band.y + band.h}`);
     }
-    // المقاس التلقائي وحده يطول بالمحتوى
+    // المقاس التلقائي يطول بالمحتوى لكنه لم يعد في قائمة الاختيار؛ الافتراضي منشور إنستقرام
     const dynamic = naskhPosterSize("dynamic");
     assert.notEqual(dynamic.minHeight, dynamic.maxHeight);
-    assert.equal(naskhPosterSize(undefined).id, "dynamic");
+    assert.equal(naskhPosterSize(undefined).id, "instagram");
+    assert.deepEqual(NASKH_POSTER_SIZES.map((size) => size.id), ["instagram", "story"]);
+    assert.equal(isNaskhPosterSizeId("dynamic"), false);
     assert.equal(naskhPosterSize("story").minHeight, 1920);
     assert.equal(naskhPosterSize("instagram").minHeight, 1350);
   }],

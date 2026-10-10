@@ -5,6 +5,7 @@ import {
   DeleteObituaryRequestParams,
   GetObituaryRequestParams,
   GetObituaryRequestResponse,
+  ListExpiredObituaryRequestsResponse,
   ListObituaryRequestsResponse,
   UpdateObituaryRequestBody,
   UpdateObituaryRequestParams,
@@ -13,6 +14,7 @@ import {
 import { labRequestsDb, obituaryRequestsDb, type ObituaryRequestRow, type RequestsStore } from "@workspace/db";
 import { clientKey, createRateLimiter, isAdminRequest, requireAdmin } from "../lib/admin-auth";
 import { appendHistory, diffRequests, sanitizeAudit, type HistoryEntry } from "../lib/request-audit";
+import { sweepExpired } from "../lib/retention";
 
 type RequestPayload = Record<string, unknown>;
 
@@ -194,15 +196,7 @@ function normalizePayload(payload: RequestPayload) {
       phoneAudience: payload.phoneAudience === "men" || payload.phoneAudience === "women" ? payload.phoneAudience : "all",
     } : {}),
     ...(optionalString(payload.condolenceNote) ? { condolenceNote: String(payload.condolenceNote) } : {}),
-    condolencePhoneContacts: condolenceOptions.includes("phone") && Array.isArray(payload.condolencePhoneContacts)
-      ? payload.condolencePhoneContacts.map((contact) => {
-          const value = objectValue(contact);
-          return {
-            ...(value.name ? { name: String(value.name) } : {}),
-            ...(value.phone ? { phone: String(value.phone) } : {}),
-          };
-        })
-      : [],
+    // لا تُحفظ أرقام هواتف مع الطلب أبداً؛ خيار «العزاء عبر الهاتف» وحده يبقى
     notes: String(payload.notes ?? ""),
   };
 }
@@ -254,8 +248,15 @@ export function makeObituaryRequestsRouter(store: RequestsStore, { allPrivate }:
   const publicLookups = createRateLimiter({ windowMs: 10 * 60 * 1000, max: 30 });
 
 router.get("/obituary-requests", requireAdmin, async (_req, res): Promise<void> => {
+  await sweepExpired(store);
   const rows = await store.list();
   res.json(ListObituaryRequestsResponse.parse(rows.map((row) => serialize(row))));
+});
+
+/** الإحصاءات المجهَّلة للطلبات التي انتهت مدة الاحتفاظ بها (لصفحة السلوك). قبل مسار رقم الطلب حتى لا يلتقطه. */
+router.get("/obituary-requests/expired", requireAdmin, async (_req, res): Promise<void> => {
+  await sweepExpired(store);
+  res.json(ListExpiredObituaryRequestsResponse.parse(await store.listExpired()));
 });
 
 router.post("/obituary-requests", ...guard, async (req, res): Promise<void> => {
@@ -294,6 +295,7 @@ router.get("/obituary-requests/:requestNumber", ...guard, async (req, res): Prom
     res.status(400).json({ error: params.error.message });
     return;
   }
+  await sweepExpired(store);
   const row = await store.getByRequestNumber(params.data.requestNumber);
   if (!row) {
     res.status(404).json({ error: "الطلب غير موجود" });

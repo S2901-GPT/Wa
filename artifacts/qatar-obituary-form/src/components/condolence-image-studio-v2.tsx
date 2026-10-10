@@ -1,16 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Download,
-  Loader2,
-  Save,
-  X,
-  Check,
-  Copy,
-  ImageDown,
-  Sparkles,
-  Type,
-  AlertTriangle,
-} from "lucide-react";
+import { AlertTriangle, Download, ImageDown, Loader2, Save, X } from "lucide-react";
 import {
   getGetPosterSettingsQueryKey,
   useGetPosterSettings,
@@ -31,8 +20,10 @@ import {
   type ImageDraft,
 } from "@/lib/condolence-copy";
 import { IMAGE_HEIGHT, IMAGE_WIDTH, type PosterBranding, type RenderValidationReport } from "@/lib/naskh-poster-engine";
-import { NASKH_LAYOUTS, NASKH_TYPE_SCALES, posterQrUrls, type NaskhLayoutId, type NaskhTypeScaleId } from "@/lib/naskh-poster-plan";
-import { readStoredLayout, readStoredTypeScale, storeLayout, storeTypeScale } from "@/lib/poster-preferences";
+import { NASKH_LAYOUTS, NASKH_POSTER_SIZES, NASKH_TYPE_SCALES, posterQrUrls, type NaskhLayoutId, type NaskhPosterSizeId, type NaskhTypeScaleId } from "@/lib/naskh-poster-plan";
+import { readStoredLayout, readStoredPosterSize, readStoredTypeScale, storeLayout, storePosterSize, storeTypeScale } from "@/lib/poster-preferences";
+import { canShareImageFiles, canvasToPosterFile, downloadFile, posterFileName } from "@/lib/poster-export";
+import { PosterChips } from "@/components/poster-chips";
 import { normalizeObituaryPresentation } from "@/lib/presentation-normalizer";
 import { buildAnnouncement } from "@/lib/announcement";
 import { generateQrImages, type QrCodeMap } from "@/lib/qr-images";
@@ -134,21 +125,14 @@ export function CondolenceImageStudio({
   const previewRef = useRef<HTMLCanvasElement>(null);
   const [layout, setLayout] = useState<NaskhLayoutId>(readStoredLayout);
   const [typeScale, setTypeScale] = useState<NaskhTypeScaleId>(readStoredTypeScale);
+  const [posterSize, setPosterSize] = useState<NaskhPosterSizeId>(readStoredPosterSize);
   const [previewSize, setPreviewSize] = useState({ width: IMAGE_WIDTH, height: IMAGE_HEIGHT });
   const [draft, setDraft] = useState<ImageDraft>(() => createCondolenceImageDraft(request));
   const [qrImages, setQrImages] = useState<QrCodeMap>({});
   const [rendering, setRendering] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [copied, setCopied] = useState(false);
-  // مشاركة الملفات متاحة على الجوال غالباً؛ نفحصها بملف وهمي لأن canShare تتطلب ملفاً فعلياً
-  const canShareImage = useMemo(() => {
-    if (typeof navigator === "undefined" || !navigator.canShare || !navigator.share) return false;
-    try {
-      return navigator.canShare({ files: [new File([new Blob([""], { type: "image/png" })], "a.png", { type: "image/png" })] });
-    } catch {
-      return false;
-    }
-  }, []);
+  // مشاركة الملفات متاحة على الجوال غالباً («حفظ في الصور»)
+  const canShareImage = useMemo(canShareImageFiles, []);
   const [validationReport, setValidationReport] = useState<RenderValidationReport | null>(null);
 
   const queryClient = useQueryClient();
@@ -192,7 +176,7 @@ export function CondolenceImageStudio({
     };
   }, [normalizedContent]);
 
-  // رسم الصورة بالتخطيط المختار: 1080 × 1350 وتطول تلقائياً عند كثرة الأسماء
+  // رسم الصورة بالتخطيط ومقاس المنصة المختارين (منشور 1080 × 1350 أو ستوري 1080 × 1920)
   useEffect(() => {
     let cancelled = false;
     if (!settingsReady) return;
@@ -200,7 +184,7 @@ export function CondolenceImageStudio({
     setRendering(true);
     void (async () => {
       try {
-        const { canvas: compiled, report } = await renderPoster(layout, normalizedContent, qrImages, branding, typeScale);
+        const { canvas: compiled, report } = await renderPoster(layout, normalizedContent, qrImages, branding, typeScale, posterSize);
         if (cancelled) return;
 
         setValidationReport(report);
@@ -226,7 +210,7 @@ export function CondolenceImageStudio({
     return () => {
       cancelled = true;
     };
-  }, [layout, typeScale, normalizedContent, qrImages, branding, settingsReady]);
+  }, [layout, typeScale, posterSize, normalizedContent, qrImages, branding, settingsReady]);
 
   const updateCard = (audience: Audience, key: keyof EditableCard, value: string) => {
     setDraft((current) => ({
@@ -235,16 +219,9 @@ export function CondolenceImageStudio({
     }));
   };
 
-  /** ملف PNG من المعاينة، باسم الطلب وتخطيطه. */
+  /** ملف JPEG من المعاينة، باسم الطلب وتخطيطه ومقاسه. */
   const posterFile = (): Promise<File | null> =>
-    new Promise((resolve) => {
-      const canvas = previewRef.current;
-      if (!canvas || rendering) return resolve(null);
-      canvas.toBlob(
-        (blob) => resolve(blob ? new File([blob], `${request.requestNumber}-${layout}.png`, { type: "image/png" }) : null),
-        "image/png",
-      );
-    });
+    rendering ? Promise.resolve(null) : canvasToPosterFile(previewRef.current, posterFileName(request.requestNumber, layout, posterSize));
 
   /**
    * «حفظ في الصور»: على الجوال يفتح ورقة المشاركة، وفيها «حفظ الصورة» الذي يضعها في ألبوم الصور مباشرة،
@@ -253,7 +230,7 @@ export function CondolenceImageStudio({
   const shareImage = async () => {
     const file = await posterFile();
     if (!file) {
-      toast.error("تعذر إنشاء ملف PNG");
+      toast.error("تعذر إنشاء ملف JPEG");
       return;
     }
     try {
@@ -265,45 +242,17 @@ export function CondolenceImageStudio({
     }
   };
 
-  const downloadSinglePage = () => {
-    const canvas = previewRef.current;
-    if (!canvas || rendering) return;
-
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        toast.error("تعذر إنشاء ملف PNG");
-        return;
-      }
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `${request.requestNumber}-${layout}.png`;
-      link.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
-      toast.success(`تم تنزيل صورة التعزية بصيغة PNG عالية الدقة (${previewSize.width} × ${previewSize.height})`);
-    }, "image/png");
-  };
-
-  const copyImageToClipboard = async () => {
-    const canvas = previewRef.current;
-    if (!canvas || rendering) return;
-
-    try {
-      canvas.toBlob(async (blob) => {
-        if (!blob) return;
-        if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
-          await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-          setCopied(true);
-          toast.success("تم نسخ صورة التعزية للحافظة بنجاح للصق في واتساب");
-          setTimeout(() => setCopied(false), 2500);
-        } else {
-          downloadSinglePage();
-        }
-      }, "image/png");
-    } catch {
-      downloadSinglePage();
+  const download = async () => {
+    const file = await posterFile();
+    if (!file) {
+      toast.error("تعذر إنشاء ملف JPEG");
+      return;
     }
+    downloadFile(file);
+    toast.success(`تم تنزيل JPEG (${previewSize.width} × ${previewSize.height}، ${Math.round(file.size / 1024)} KB)`);
   };
+
+  const renderErrors = validationReport?.issues.filter((issue) => issue.severity === "error") ?? [];
 
   const saveToRequest = () => {
     const updatedPeople = request.deceasedPeople.map((person, index) => ({
@@ -348,8 +297,6 @@ export function CondolenceImageStudio({
           condolences: updatedCondolences,
           prayer: { ...request.prayer, mapLink: draft.prayerMapLink.trim() || undefined },
           burial: { ...request.burial, mapLink: draft.burialMapLink.trim() || undefined },
-          // لا تُنشر أرقام الهواتف (قرار جديد): الحفظ يحذف أرقام طلب قديم
-          condolencePhoneContacts: [],
           notes: draft.notes.trim() || undefined,
           status: request.status,
         },
@@ -377,8 +324,8 @@ export function CondolenceImageStudio({
                 {request.requestNumber}
               </span>
               <span className="text-xs text-muted-foreground">·</span>
-              <span className="text-xs text-green-700 dark:text-green-400 font-bold bg-green-500/10 px-2 py-0.5 rounded">
-                {previewSize.height > IMAGE_HEIGHT ? `طول ديناميكي (1080 × ${previewSize.height} px)` : "صفحة واحدة فقط (1080 × 1350 px)"}
+              <span className="text-xs text-green-700 dark:text-green-400 font-bold bg-green-500/10 px-2 py-0.5 rounded" dir="ltr">
+                {`${previewSize.width} × ${previewSize.height}`}
               </span>
             </div>
             <h2 className="text-lg font-bold text-foreground sm:text-xl mt-0.5">
@@ -408,203 +355,64 @@ export function CondolenceImageStudio({
         {/* MAIN STUDIO GRID */}
         <div className="grid gap-6 p-4 sm:p-6 lg:grid-cols-[minmax(0,1.2fr)_440px]">
           {/* PREVIEW & TEMPLATE SWITCHER COLUMN */}
-          <section className="order-1 flex flex-col items-center rounded-xl border bg-muted/20 p-4 sm:p-6 lg:order-1">
-            {/* LAYOUT SWITCHER */}
-            <div className="w-full max-w-[560px] mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-bold text-foreground flex items-center gap-1.5">
-                  <Sparkles className="w-4 h-4 text-primary" />
-                  تخطيط الصورة:
-                </span>
-                <Link href="/settings" className="text-xs text-primary hover:underline">
-                  الشعار من الإعدادات
-                </Link>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="تخطيط الصورة">
-                {NASKH_LAYOUTS.map((option) => {
-                  const isSelected = layout === option.id;
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={isSelected}
-                      onClick={() => {
-                        setLayout(option.id);
-                        storeLayout(option.id);
-                      }}
-                      className={`relative flex flex-col text-right p-3 rounded-xl border transition-all text-xs ${
-                        isSelected
-                          ? "border-primary bg-primary/10 text-primary ring-2 ring-primary/20 shadow-sm font-semibold"
-                          : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between w-full mb-1">
-                        <span className="font-bold text-sm text-foreground">{option.name}</span>
-                        {isSelected && <Check className="w-4 h-4 text-primary shrink-0" />}
-                      </div>
-                      <span className="text-[11px] leading-4 opacity-80 line-clamp-2">{option.description}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* TYPE SCALE SWITCHER: توزيع أحجام المخطوطة والاسم والنص */}
-            <div className="w-full max-w-[560px] mb-4">
-              <span className="mb-2 flex items-center gap-1.5 text-sm font-bold text-foreground">
-                <Type className="w-4 h-4 text-primary" />
-                حجم الخط:
-              </span>
-              <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="حجم الخط">
-                {NASKH_TYPE_SCALES.map((option) => {
-                  const isSelected = typeScale === option.id;
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      role="radio"
-                      aria-checked={isSelected}
-                      onClick={() => {
-                        setTypeScale(option.id);
-                        storeTypeScale(option.id);
-                      }}
-                      className={`relative flex flex-col text-right p-3 rounded-xl border transition-all text-xs ${
-                        isSelected
-                          ? "border-primary bg-primary/10 text-primary ring-2 ring-primary/20 shadow-sm font-semibold"
-                          : "border-border bg-card text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between w-full mb-1">
-                        <span className="font-bold text-sm text-foreground">{option.name}</span>
-                        {isSelected && <Check className="w-4 h-4 text-primary shrink-0" />}
-                      </div>
-                      <span className="text-[11px] leading-4 opacity-80 line-clamp-2">{option.description}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* PREVIEW STATUS BAR */}
-            <div className="mb-3 flex w-full max-w-[560px] items-center justify-between text-xs text-muted-foreground px-1">
-              <span className="font-medium text-foreground flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-green-500" />
-                معاينة الصورة النهائية (صفحة واحدة فقط)
-              </span>
-
-              {validationReport?.isCompactMode && (
-                <span className="text-[11px] text-amber-600 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded font-medium flex items-center gap-1">
-                  <Sparkles className="w-3 h-3" />
-                  وضع الضغط التلقائي نشط
-                </span>
-              )}
-            </div>
-
-            {/* HIGH-RES CANVAS PREVIEW */}
-            <div className="relative w-full max-w-[560px] overflow-hidden rounded-xl bg-white shadow-2xl border border-border/80">
-              <canvas
-                ref={previewRef}
-                className="block h-auto w-full transition-opacity duration-200"
-                style={{ aspectRatio: `${previewSize.width} / ${previewSize.height}` }}
-                aria-label="معاينة صورة التعزية"
-              />
-              {rendering && (
-                <div className="absolute inset-0 grid place-items-center bg-background/80 backdrop-blur-sm">
-                  <div className="flex flex-col items-center gap-2">
-                    <Loader2 className="h-9 w-9 animate-spin text-primary" />
-                    <p className="text-sm font-medium text-foreground">تجهيز الرسم الذكي والـQR Codes...</p>
+          <section className="order-1 lg:order-1">
+            {/* المعاينة ثابتة أعلى الشاشة تحت الترويسة، فتتغير أمام العين مع كل اختيار؛ الارتفاع يحكم والعرض يتبع نسبة الصورة */}
+            <div className="sticky top-[4.5rem] z-10 bg-background pb-2 mb-2">
+              <div className="relative mx-auto w-fit overflow-hidden rounded-xl bg-white shadow-lg border border-border/80">
+                <canvas ref={previewRef} aria-label="معاينة صورة التعزية" className="block h-auto max-h-[52vh] w-auto max-w-full" />
+                {rendering && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-background/40">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
                   </div>
-                </div>
-              )}
+                )}
+                <span className="absolute top-2 left-2 rounded bg-black/60 px-1.5 py-0.5 text-[11px] font-bold text-white" dir="ltr">{`${previewSize.width} × ${previewSize.height}`}</span>
+              </div>
             </div>
 
-            {/* DOWNLOAD ACTION BUTTONS */}
-            <div className="mt-5 flex w-full max-w-[560px] flex-col sm:flex-row items-center gap-2.5">
+            <PosterChips label="المقاس" options={NASKH_POSTER_SIZES} value={posterSize} columns={2} onChange={(id) => { setPosterSize(id); storePosterSize(id); }} />
+            <PosterChips label="التخطيط" options={NASKH_LAYOUTS} value={layout} columns={4} onChange={(id) => { setLayout(id); storeLayout(id); }} />
+            <PosterChips label="الخط" options={NASKH_TYPE_SCALES} value={typeScale} columns={4} onChange={(id) => { setTypeScale(id); storeTypeScale(id); }} />
+
+            {renderErrors.map((issue) => (
+              <div key={issue.code} role="alert" className="my-3 flex w-full items-start gap-2 rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-xs font-semibold leading-5 text-destructive">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{issue.message}</span>
+              </div>
+            ))}
+
+            <div className="mt-4 flex w-full flex-col gap-2 sm:flex-row">
               {canShareImage && (
-                <Button
-                  type="button"
-                  onClick={() => void shareImage()}
-                  disabled={rendering}
-                  className="w-full sm:flex-1 gap-2 h-11 bg-primary text-primary-foreground font-semibold shadow hover:bg-primary/90"
-                >
+                <Button type="button" onClick={() => void shareImage()} disabled={rendering} className="w-full gap-2 h-11 font-semibold sm:flex-1">
                   <ImageDown className="h-4 w-4" />
                   حفظ في الصور
                 </Button>
               )}
-
-              <Button
-                type="button"
-                onClick={downloadSinglePage}
-                disabled={rendering}
-                variant={canShareImage ? "outline" : "default"}
-                className={`w-full gap-2 h-11 font-semibold ${canShareImage ? "sm:w-auto border-border" : "sm:flex-1 bg-primary text-primary-foreground shadow hover:bg-primary/90"}`}
-              >
+              <Button type="button" variant={canShareImage ? "outline" : "default"} onClick={() => void download()} disabled={rendering} className="w-full gap-2 h-11 font-semibold sm:flex-1">
                 <Download className="h-4 w-4" />
-                {canShareImage ? "تنزيل" : "تنزيل صورة التعزية (PNG عالية الدقة)"}
-              </Button>
-
-              <Button
-                type="button"
-                variant="outline"
-                onClick={copyImageToClipboard}
-                disabled={rendering}
-                className="w-full sm:w-auto gap-2 h-11 border-border"
-              >
-                {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
-                {copied ? "تم النسخ" : "نسخ للحافظة"}
+                تنزيل JPEG
               </Button>
             </div>
+            <p className="mt-2 text-center text-xs text-muted-foreground">
+              <Link href="/settings" className="text-primary hover:underline">الشعار من الإعدادات</Link>
+            </p>
 
-            {/* QR Status & Known Landmarks suppression notice */}
-            <div className="mt-4 w-full max-w-[560px] rounded-lg border bg-card/60 p-3 text-xs space-y-1.5">
+            {/* حالة رموز QR: أي موقع له رمز يعمل في الصورة وأيها بلا رابط */}
+            <div className="mt-4 w-full rounded-lg border bg-card/60 p-3 text-xs space-y-1.5">
               <p className="font-semibold text-foreground">حالة رموز الـQR Codes:</p>
               <div className="grid grid-cols-2 gap-2 text-muted-foreground">
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      normalizedContent.hasCombinedPrayerBurial
-                        ? normalizedContent.prayerBurialCombined?.qrUrl
-                          ? "bg-green-500"
-                          : "bg-muted"
-                        : normalizedContent.prayer?.qrUrl
-                        ? "bg-green-500"
-                        : "bg-muted"
-                    }`}
-                  />
-                  {normalizedContent.hasCombinedPrayerBurial
-                    ? normalizedContent.prayerBurialCombined?.qrUrl
-                      ? "صلاة ودَفن: QR نشط"
-                      : "صلاة ودَفن: معالم معروفة (بدون QR)"
-                    : normalizedContent.prayer?.qrUrl
-                    ? "صلاة الجنازة: QR نشط"
-                    : "صلاة الجنازة: بدون QR"}
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      normalizedContent.burial?.qrUrl ? "bg-green-500" : "bg-muted"
-                    }`}
-                  />
-                  {normalizedContent.burial?.qrUrl ? "الدفن: QR نشط" : "الدفن: بدون QR"}
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      normalizedContent.men?.qrUrl ? "bg-green-500" : "bg-muted"
-                    }`}
-                  />
-                  عزاء الرجال: {normalizedContent.men?.qrUrl ? "QR نشط" : "بدون QR"}
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span
-                    className={`w-2 h-2 rounded-full ${
-                      normalizedContent.women?.qrUrl ? "bg-green-500" : "bg-muted"
-                    }`}
-                  />
-                  عزاء النساء: {normalizedContent.women?.qrUrl ? "QR نشط" : "بدون QR"}
-                </div>
+                {[
+                  normalizedContent.hasCombinedPrayerBurial
+                    ? { label: "صلاة ودَفن", active: !!normalizedContent.prayerBurialCombined?.qrUrl, off: "معالم معروفة (بدون QR)" }
+                    : { label: "صلاة الجنازة", active: !!normalizedContent.prayer?.qrUrl, off: "بدون QR" },
+                  { label: "الدفن", active: !!normalizedContent.burial?.qrUrl, off: "بدون QR" },
+                  { label: "عزاء الرجال", active: !!normalizedContent.men?.qrUrl, off: "بدون QR" },
+                  { label: "عزاء النساء", active: !!normalizedContent.women?.qrUrl, off: "بدون QR" },
+                ].map((item) => (
+                  <div key={item.label} className="flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${item.active ? "bg-green-500" : "bg-muted"}`} />
+                    {item.label}: {item.active ? "QR نشط" : item.off}
+                  </div>
+                ))}
               </div>
             </div>
           </section>

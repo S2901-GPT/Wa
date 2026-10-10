@@ -24,13 +24,6 @@ export const listObituaryRequestsResponseOneAuditAiReplyMax = 8192;
 
 export const listObituaryRequestsResponseOneAuditModelMax = 60;
 
-export const listObituaryRequestsResponseOneAuditVisitIdRegExp = new RegExp('^[A-Za-z0-9_-]{8,64}$');
-export const listObituaryRequestsResponseOneAuditClientUaMax = 300;
-
-export const listObituaryRequestsResponseOneAuditClientViewportMax = 20;
-
-export const listObituaryRequestsResponseOneAuditClientLangMax = 20;
-
 
 
 
@@ -41,14 +34,8 @@ export const ListObituaryRequestsResponseItem = zod.object({
   "aiWarnings": zod.array(zod.string()).max(listObituaryRequestsResponseOneAuditAiWarningsMax).optional(),
   "aiReply": zod.string().max(listObituaryRequestsResponseOneAuditAiReplyMax).optional(),
   "model": zod.string().max(listObituaryRequestsResponseOneAuditModelMax).optional(),
-  "visitId": zod.string().regex(listObituaryRequestsResponseOneAuditVisitIdRegExp).optional(),
-  "client": zod.object({
-  "ua": zod.string().max(listObituaryRequestsResponseOneAuditClientUaMax).optional(),
-  "viewport": zod.string().max(listObituaryRequestsResponseOneAuditClientViewportMax).optional(),
-  "lang": zod.string().max(listObituaryRequestsResponseOneAuditClientLangMax).optional()
-}).optional(),
   "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
-}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
+}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُفرض القناة form ولا يُقبل شيء آخر.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
   "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
@@ -148,10 +135,6 @@ export const ListObituaryRequestsResponseItem = zod.object({
   "time": zod.string().optional()
 })).optional(),
   "deceasedIndex": zod.number().int().nullish()
-})),
-  "condolencePhoneContacts": zod.array(zod.object({
-  "name": zod.string().optional(),
-  "phone": zod.string().optional()
 })),
   "notes": zod.string().optional()
 }).and(zod.object({
@@ -179,13 +162,6 @@ export const createObituaryRequestBodyAuditAiReplyMax = 8192;
 
 export const createObituaryRequestBodyAuditModelMax = 60;
 
-export const createObituaryRequestBodyAuditVisitIdRegExp = new RegExp('^[A-Za-z0-9_-]{8,64}$');
-export const createObituaryRequestBodyAuditClientUaMax = 300;
-
-export const createObituaryRequestBodyAuditClientViewportMax = 20;
-
-export const createObituaryRequestBodyAuditClientLangMax = 20;
-
 
 
 
@@ -196,14 +172,8 @@ export const CreateObituaryRequestBody = zod.object({
   "aiWarnings": zod.array(zod.string()).max(createObituaryRequestBodyAuditAiWarningsMax).optional(),
   "aiReply": zod.string().max(createObituaryRequestBodyAuditAiReplyMax).optional(),
   "model": zod.string().max(createObituaryRequestBodyAuditModelMax).optional(),
-  "visitId": zod.string().regex(createObituaryRequestBodyAuditVisitIdRegExp).optional(),
-  "client": zod.object({
-  "ua": zod.string().max(createObituaryRequestBodyAuditClientUaMax).optional(),
-  "viewport": zod.string().max(createObituaryRequestBodyAuditClientViewportMax).optional(),
-  "lang": zod.string().max(createObituaryRequestBodyAuditClientLangMax).optional()
-}).optional(),
   "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
-}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
+}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُفرض القناة form ولا يُقبل شيء آخر.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
   "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
@@ -303,10 +273,6 @@ export const CreateObituaryRequestBody = zod.object({
   "time": zod.string().optional()
 })).optional(),
   "deceasedIndex": zod.number().int().nullish()
-})),
-  "condolencePhoneContacts": zod.array(zod.object({
-  "name": zod.string().optional(),
-  "phone": zod.string().optional()
 })),
   "notes": zod.string().optional()
 })
@@ -319,13 +285,6 @@ export const createObituaryRequestResponseOneAuditAiReplyMax = 8192;
 
 export const createObituaryRequestResponseOneAuditModelMax = 60;
 
-export const createObituaryRequestResponseOneAuditVisitIdRegExp = new RegExp('^[A-Za-z0-9_-]{8,64}$');
-export const createObituaryRequestResponseOneAuditClientUaMax = 300;
-
-export const createObituaryRequestResponseOneAuditClientViewportMax = 20;
-
-export const createObituaryRequestResponseOneAuditClientLangMax = 20;
-
 
 
 
@@ -336,14 +295,8 @@ export const CreateObituaryRequestResponse = zod.object({
   "aiWarnings": zod.array(zod.string()).max(createObituaryRequestResponseOneAuditAiWarningsMax).optional(),
   "aiReply": zod.string().max(createObituaryRequestResponseOneAuditAiReplyMax).optional(),
   "model": zod.string().max(createObituaryRequestResponseOneAuditModelMax).optional(),
-  "visitId": zod.string().regex(createObituaryRequestResponseOneAuditVisitIdRegExp).optional(),
-  "client": zod.object({
-  "ua": zod.string().max(createObituaryRequestResponseOneAuditClientUaMax).optional(),
-  "viewport": zod.string().max(createObituaryRequestResponseOneAuditClientViewportMax).optional(),
-  "lang": zod.string().max(createObituaryRequestResponseOneAuditClientLangMax).optional()
-}).optional(),
   "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
-}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
+}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُفرض القناة form ولا يُقبل شيء آخر.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
   "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
@@ -443,10 +396,6 @@ export const CreateObituaryRequestResponse = zod.object({
   "time": zod.string().optional()
 })).optional(),
   "deceasedIndex": zod.number().int().nullish()
-})),
-  "condolencePhoneContacts": zod.array(zod.object({
-  "name": zod.string().optional(),
-  "phone": zod.string().optional()
 })),
   "notes": zod.string().optional()
 }).and(zod.object({
@@ -465,6 +414,28 @@ export const CreateObituaryRequestResponse = zod.object({
 }))
 
 
+/**
+ * الإحصاءات المجهَّلة للطلبات التي انتهت مدة الاحتفاظ بها (48 ساعة)؛ بلا أسماء ولا نصوص. للمسؤول فقط
+ */
+export const ListExpiredObituaryRequestsResponseItem = zod.object({
+  "requestNumber": zod.string(),
+  "status": zod.string(),
+  "createdAt": zod.string(),
+  "expiredAt": zod.string(),
+  "channel": zod.string().optional(),
+  "inferred": zod.boolean().optional(),
+  "model": zod.string().optional(),
+  "aiWarnings": zod.array(zod.string()).optional(),
+  "edits": zod.number().int(),
+  "history": zod.array(zod.object({
+  "at": zod.string(),
+  "channel": zod.string(),
+  "fields": zod.array(zod.string()).describe('أسماء الحقول التي تغيّرت فقط («مقر عزاء النساء»)، بلا قيم')
+}))
+}).describe('ما يبقى من الطلب بعد انتهاء مدة الاحتفاظ (48 ساعة)؛ إحصاء تقني بلا أي اسم أو نص')
+export const ListExpiredObituaryRequestsResponse = zod.array(ListExpiredObituaryRequestsResponseItem)
+
+
 export const GetObituaryRequestParams = zod.object({
   "requestNumber": zod.coerce.string()
 })
@@ -477,13 +448,6 @@ export const getObituaryRequestResponseOneAuditAiReplyMax = 8192;
 
 export const getObituaryRequestResponseOneAuditModelMax = 60;
 
-export const getObituaryRequestResponseOneAuditVisitIdRegExp = new RegExp('^[A-Za-z0-9_-]{8,64}$');
-export const getObituaryRequestResponseOneAuditClientUaMax = 300;
-
-export const getObituaryRequestResponseOneAuditClientViewportMax = 20;
-
-export const getObituaryRequestResponseOneAuditClientLangMax = 20;
-
 
 
 
@@ -494,14 +458,8 @@ export const GetObituaryRequestResponse = zod.object({
   "aiWarnings": zod.array(zod.string()).max(getObituaryRequestResponseOneAuditAiWarningsMax).optional(),
   "aiReply": zod.string().max(getObituaryRequestResponseOneAuditAiReplyMax).optional(),
   "model": zod.string().max(getObituaryRequestResponseOneAuditModelMax).optional(),
-  "visitId": zod.string().regex(getObituaryRequestResponseOneAuditVisitIdRegExp).optional(),
-  "client": zod.object({
-  "ua": zod.string().max(getObituaryRequestResponseOneAuditClientUaMax).optional(),
-  "viewport": zod.string().max(getObituaryRequestResponseOneAuditClientViewportMax).optional(),
-  "lang": zod.string().max(getObituaryRequestResponseOneAuditClientLangMax).optional()
-}).optional(),
   "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
-}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
+}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُفرض القناة form ولا يُقبل شيء آخر.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
   "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
@@ -601,10 +559,6 @@ export const GetObituaryRequestResponse = zod.object({
   "time": zod.string().optional()
 })).optional(),
   "deceasedIndex": zod.number().int().nullish()
-})),
-  "condolencePhoneContacts": zod.array(zod.object({
-  "name": zod.string().optional(),
-  "phone": zod.string().optional()
 })),
   "notes": zod.string().optional()
 }).and(zod.object({
@@ -638,13 +592,6 @@ export const updateObituaryRequestBodyOneAuditAiReplyMax = 8192;
 
 export const updateObituaryRequestBodyOneAuditModelMax = 60;
 
-export const updateObituaryRequestBodyOneAuditVisitIdRegExp = new RegExp('^[A-Za-z0-9_-]{8,64}$');
-export const updateObituaryRequestBodyOneAuditClientUaMax = 300;
-
-export const updateObituaryRequestBodyOneAuditClientViewportMax = 20;
-
-export const updateObituaryRequestBodyOneAuditClientLangMax = 20;
-
 
 
 
@@ -655,14 +602,8 @@ export const UpdateObituaryRequestBody = zod.object({
   "aiWarnings": zod.array(zod.string()).max(updateObituaryRequestBodyOneAuditAiWarningsMax).optional(),
   "aiReply": zod.string().max(updateObituaryRequestBodyOneAuditAiReplyMax).optional(),
   "model": zod.string().max(updateObituaryRequestBodyOneAuditModelMax).optional(),
-  "visitId": zod.string().regex(updateObituaryRequestBodyOneAuditVisitIdRegExp).optional(),
-  "client": zod.object({
-  "ua": zod.string().max(updateObituaryRequestBodyOneAuditClientUaMax).optional(),
-  "viewport": zod.string().max(updateObituaryRequestBodyOneAuditClientViewportMax).optional(),
-  "lang": zod.string().max(updateObituaryRequestBodyOneAuditClientLangMax).optional()
-}).optional(),
   "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
-}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
+}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُفرض القناة form ولا يُقبل شيء آخر.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
   "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
@@ -762,10 +703,6 @@ export const UpdateObituaryRequestBody = zod.object({
   "time": zod.string().optional()
 })).optional(),
   "deceasedIndex": zod.number().int().nullish()
-})),
-  "condolencePhoneContacts": zod.array(zod.object({
-  "name": zod.string().optional(),
-  "phone": zod.string().optional()
 })),
   "notes": zod.string().optional()
 }).and(zod.object({
@@ -780,13 +717,6 @@ export const updateObituaryRequestResponseOneAuditAiReplyMax = 8192;
 
 export const updateObituaryRequestResponseOneAuditModelMax = 60;
 
-export const updateObituaryRequestResponseOneAuditVisitIdRegExp = new RegExp('^[A-Za-z0-9_-]{8,64}$');
-export const updateObituaryRequestResponseOneAuditClientUaMax = 300;
-
-export const updateObituaryRequestResponseOneAuditClientViewportMax = 20;
-
-export const updateObituaryRequestResponseOneAuditClientLangMax = 20;
-
 
 
 
@@ -797,14 +727,8 @@ export const UpdateObituaryRequestResponse = zod.object({
   "aiWarnings": zod.array(zod.string()).max(updateObituaryRequestResponseOneAuditAiWarningsMax).optional(),
   "aiReply": zod.string().max(updateObituaryRequestResponseOneAuditAiReplyMax).optional(),
   "model": zod.string().max(updateObituaryRequestResponseOneAuditModelMax).optional(),
-  "visitId": zod.string().regex(updateObituaryRequestResponseOneAuditVisitIdRegExp).optional(),
-  "client": zod.object({
-  "ua": zod.string().max(updateObituaryRequestResponseOneAuditClientUaMax).optional(),
-  "viewport": zod.string().max(updateObituaryRequestResponseOneAuditClientViewportMax).optional(),
-  "lang": zod.string().max(updateObituaryRequestResponseOneAuditClientLangMax).optional()
-}).optional(),
   "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
-}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
+}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُفرض القناة form ولا يُقبل شيء آخر.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
   "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
@@ -904,10 +828,6 @@ export const UpdateObituaryRequestResponse = zod.object({
   "time": zod.string().optional()
 })).optional(),
   "deceasedIndex": zod.number().int().nullish()
-})),
-  "condolencePhoneContacts": zod.array(zod.object({
-  "name": zod.string().optional(),
-  "phone": zod.string().optional()
 })),
   "notes": zod.string().optional()
 }).and(zod.object({
@@ -947,13 +867,6 @@ export const listLabObituaryRequestsResponseOneAuditAiReplyMax = 8192;
 
 export const listLabObituaryRequestsResponseOneAuditModelMax = 60;
 
-export const listLabObituaryRequestsResponseOneAuditVisitIdRegExp = new RegExp('^[A-Za-z0-9_-]{8,64}$');
-export const listLabObituaryRequestsResponseOneAuditClientUaMax = 300;
-
-export const listLabObituaryRequestsResponseOneAuditClientViewportMax = 20;
-
-export const listLabObituaryRequestsResponseOneAuditClientLangMax = 20;
-
 
 
 
@@ -964,14 +877,8 @@ export const ListLabObituaryRequestsResponseItem = zod.object({
   "aiWarnings": zod.array(zod.string()).max(listLabObituaryRequestsResponseOneAuditAiWarningsMax).optional(),
   "aiReply": zod.string().max(listLabObituaryRequestsResponseOneAuditAiReplyMax).optional(),
   "model": zod.string().max(listLabObituaryRequestsResponseOneAuditModelMax).optional(),
-  "visitId": zod.string().regex(listLabObituaryRequestsResponseOneAuditVisitIdRegExp).optional(),
-  "client": zod.object({
-  "ua": zod.string().max(listLabObituaryRequestsResponseOneAuditClientUaMax).optional(),
-  "viewport": zod.string().max(listLabObituaryRequestsResponseOneAuditClientViewportMax).optional(),
-  "lang": zod.string().max(listLabObituaryRequestsResponseOneAuditClientLangMax).optional()
-}).optional(),
   "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
-}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
+}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُفرض القناة form ولا يُقبل شيء آخر.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
   "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
@@ -1071,10 +978,6 @@ export const ListLabObituaryRequestsResponseItem = zod.object({
   "time": zod.string().optional()
 })).optional(),
   "deceasedIndex": zod.number().int().nullish()
-})),
-  "condolencePhoneContacts": zod.array(zod.object({
-  "name": zod.string().optional(),
-  "phone": zod.string().optional()
 })),
   "notes": zod.string().optional()
 }).and(zod.object({
@@ -1102,13 +1005,6 @@ export const createLabObituaryRequestBodyAuditAiReplyMax = 8192;
 
 export const createLabObituaryRequestBodyAuditModelMax = 60;
 
-export const createLabObituaryRequestBodyAuditVisitIdRegExp = new RegExp('^[A-Za-z0-9_-]{8,64}$');
-export const createLabObituaryRequestBodyAuditClientUaMax = 300;
-
-export const createLabObituaryRequestBodyAuditClientViewportMax = 20;
-
-export const createLabObituaryRequestBodyAuditClientLangMax = 20;
-
 
 
 
@@ -1119,14 +1015,8 @@ export const CreateLabObituaryRequestBody = zod.object({
   "aiWarnings": zod.array(zod.string()).max(createLabObituaryRequestBodyAuditAiWarningsMax).optional(),
   "aiReply": zod.string().max(createLabObituaryRequestBodyAuditAiReplyMax).optional(),
   "model": zod.string().max(createLabObituaryRequestBodyAuditModelMax).optional(),
-  "visitId": zod.string().regex(createLabObituaryRequestBodyAuditVisitIdRegExp).optional(),
-  "client": zod.object({
-  "ua": zod.string().max(createLabObituaryRequestBodyAuditClientUaMax).optional(),
-  "viewport": zod.string().max(createLabObituaryRequestBodyAuditClientViewportMax).optional(),
-  "lang": zod.string().max(createLabObituaryRequestBodyAuditClientLangMax).optional()
-}).optional(),
   "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
-}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
+}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُفرض القناة form ولا يُقبل شيء آخر.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
   "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
@@ -1226,10 +1116,6 @@ export const CreateLabObituaryRequestBody = zod.object({
   "time": zod.string().optional()
 })).optional(),
   "deceasedIndex": zod.number().int().nullish()
-})),
-  "condolencePhoneContacts": zod.array(zod.object({
-  "name": zod.string().optional(),
-  "phone": zod.string().optional()
 })),
   "notes": zod.string().optional()
 })
@@ -1242,13 +1128,6 @@ export const createLabObituaryRequestResponseOneAuditAiReplyMax = 8192;
 
 export const createLabObituaryRequestResponseOneAuditModelMax = 60;
 
-export const createLabObituaryRequestResponseOneAuditVisitIdRegExp = new RegExp('^[A-Za-z0-9_-]{8,64}$');
-export const createLabObituaryRequestResponseOneAuditClientUaMax = 300;
-
-export const createLabObituaryRequestResponseOneAuditClientViewportMax = 20;
-
-export const createLabObituaryRequestResponseOneAuditClientLangMax = 20;
-
 
 
 
@@ -1259,14 +1138,8 @@ export const CreateLabObituaryRequestResponse = zod.object({
   "aiWarnings": zod.array(zod.string()).max(createLabObituaryRequestResponseOneAuditAiWarningsMax).optional(),
   "aiReply": zod.string().max(createLabObituaryRequestResponseOneAuditAiReplyMax).optional(),
   "model": zod.string().max(createLabObituaryRequestResponseOneAuditModelMax).optional(),
-  "visitId": zod.string().regex(createLabObituaryRequestResponseOneAuditVisitIdRegExp).optional(),
-  "client": zod.object({
-  "ua": zod.string().max(createLabObituaryRequestResponseOneAuditClientUaMax).optional(),
-  "viewport": zod.string().max(createLabObituaryRequestResponseOneAuditClientViewportMax).optional(),
-  "lang": zod.string().max(createLabObituaryRequestResponseOneAuditClientLangMax).optional()
-}).optional(),
   "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
-}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
+}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُفرض القناة form ولا يُقبل شيء آخر.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
   "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
@@ -1366,10 +1239,6 @@ export const CreateLabObituaryRequestResponse = zod.object({
   "time": zod.string().optional()
 })).optional(),
   "deceasedIndex": zod.number().int().nullish()
-})),
-  "condolencePhoneContacts": zod.array(zod.object({
-  "name": zod.string().optional(),
-  "phone": zod.string().optional()
 })),
   "notes": zod.string().optional()
 }).and(zod.object({
@@ -1388,6 +1257,28 @@ export const CreateLabObituaryRequestResponse = zod.object({
 }))
 
 
+/**
+ * الإحصاءات المجهَّلة لطلبات التجارب التي انتهت مدة الاحتفاظ بها، للمسؤول فقط
+ */
+export const ListExpiredLabObituaryRequestsResponseItem = zod.object({
+  "requestNumber": zod.string(),
+  "status": zod.string(),
+  "createdAt": zod.string(),
+  "expiredAt": zod.string(),
+  "channel": zod.string().optional(),
+  "inferred": zod.boolean().optional(),
+  "model": zod.string().optional(),
+  "aiWarnings": zod.array(zod.string()).optional(),
+  "edits": zod.number().int(),
+  "history": zod.array(zod.object({
+  "at": zod.string(),
+  "channel": zod.string(),
+  "fields": zod.array(zod.string()).describe('أسماء الحقول التي تغيّرت فقط («مقر عزاء النساء»)، بلا قيم')
+}))
+}).describe('ما يبقى من الطلب بعد انتهاء مدة الاحتفاظ (48 ساعة)؛ إحصاء تقني بلا أي اسم أو نص')
+export const ListExpiredLabObituaryRequestsResponse = zod.array(ListExpiredLabObituaryRequestsResponseItem)
+
+
 export const GetLabObituaryRequestParams = zod.object({
   "requestNumber": zod.coerce.string()
 })
@@ -1400,13 +1291,6 @@ export const getLabObituaryRequestResponseOneAuditAiReplyMax = 8192;
 
 export const getLabObituaryRequestResponseOneAuditModelMax = 60;
 
-export const getLabObituaryRequestResponseOneAuditVisitIdRegExp = new RegExp('^[A-Za-z0-9_-]{8,64}$');
-export const getLabObituaryRequestResponseOneAuditClientUaMax = 300;
-
-export const getLabObituaryRequestResponseOneAuditClientViewportMax = 20;
-
-export const getLabObituaryRequestResponseOneAuditClientLangMax = 20;
-
 
 
 
@@ -1417,14 +1301,8 @@ export const GetLabObituaryRequestResponse = zod.object({
   "aiWarnings": zod.array(zod.string()).max(getLabObituaryRequestResponseOneAuditAiWarningsMax).optional(),
   "aiReply": zod.string().max(getLabObituaryRequestResponseOneAuditAiReplyMax).optional(),
   "model": zod.string().max(getLabObituaryRequestResponseOneAuditModelMax).optional(),
-  "visitId": zod.string().regex(getLabObituaryRequestResponseOneAuditVisitIdRegExp).optional(),
-  "client": zod.object({
-  "ua": zod.string().max(getLabObituaryRequestResponseOneAuditClientUaMax).optional(),
-  "viewport": zod.string().max(getLabObituaryRequestResponseOneAuditClientViewportMax).optional(),
-  "lang": zod.string().max(getLabObituaryRequestResponseOneAuditClientLangMax).optional()
-}).optional(),
   "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
-}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
+}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُفرض القناة form ولا يُقبل شيء آخر.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
   "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
@@ -1524,10 +1402,6 @@ export const GetLabObituaryRequestResponse = zod.object({
   "time": zod.string().optional()
 })).optional(),
   "deceasedIndex": zod.number().int().nullish()
-})),
-  "condolencePhoneContacts": zod.array(zod.object({
-  "name": zod.string().optional(),
-  "phone": zod.string().optional()
 })),
   "notes": zod.string().optional()
 }).and(zod.object({
@@ -1561,13 +1435,6 @@ export const updateLabObituaryRequestBodyOneAuditAiReplyMax = 8192;
 
 export const updateLabObituaryRequestBodyOneAuditModelMax = 60;
 
-export const updateLabObituaryRequestBodyOneAuditVisitIdRegExp = new RegExp('^[A-Za-z0-9_-]{8,64}$');
-export const updateLabObituaryRequestBodyOneAuditClientUaMax = 300;
-
-export const updateLabObituaryRequestBodyOneAuditClientViewportMax = 20;
-
-export const updateLabObituaryRequestBodyOneAuditClientLangMax = 20;
-
 
 
 
@@ -1578,14 +1445,8 @@ export const UpdateLabObituaryRequestBody = zod.object({
   "aiWarnings": zod.array(zod.string()).max(updateLabObituaryRequestBodyOneAuditAiWarningsMax).optional(),
   "aiReply": zod.string().max(updateLabObituaryRequestBodyOneAuditAiReplyMax).optional(),
   "model": zod.string().max(updateLabObituaryRequestBodyOneAuditModelMax).optional(),
-  "visitId": zod.string().regex(updateLabObituaryRequestBodyOneAuditVisitIdRegExp).optional(),
-  "client": zod.object({
-  "ua": zod.string().max(updateLabObituaryRequestBodyOneAuditClientUaMax).optional(),
-  "viewport": zod.string().max(updateLabObituaryRequestBodyOneAuditClientViewportMax).optional(),
-  "lang": zod.string().max(updateLabObituaryRequestBodyOneAuditClientLangMax).optional()
-}).optional(),
   "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
-}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
+}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُفرض القناة form ولا يُقبل شيء آخر.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
   "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
@@ -1685,10 +1546,6 @@ export const UpdateLabObituaryRequestBody = zod.object({
   "time": zod.string().optional()
 })).optional(),
   "deceasedIndex": zod.number().int().nullish()
-})),
-  "condolencePhoneContacts": zod.array(zod.object({
-  "name": zod.string().optional(),
-  "phone": zod.string().optional()
 })),
   "notes": zod.string().optional()
 }).and(zod.object({
@@ -1703,13 +1560,6 @@ export const updateLabObituaryRequestResponseOneAuditAiReplyMax = 8192;
 
 export const updateLabObituaryRequestResponseOneAuditModelMax = 60;
 
-export const updateLabObituaryRequestResponseOneAuditVisitIdRegExp = new RegExp('^[A-Za-z0-9_-]{8,64}$');
-export const updateLabObituaryRequestResponseOneAuditClientUaMax = 300;
-
-export const updateLabObituaryRequestResponseOneAuditClientViewportMax = 20;
-
-export const updateLabObituaryRequestResponseOneAuditClientLangMax = 20;
-
 
 
 
@@ -1720,14 +1570,8 @@ export const UpdateLabObituaryRequestResponse = zod.object({
   "aiWarnings": zod.array(zod.string()).max(updateLabObituaryRequestResponseOneAuditAiWarningsMax).optional(),
   "aiReply": zod.string().max(updateLabObituaryRequestResponseOneAuditAiReplyMax).optional(),
   "model": zod.string().max(updateLabObituaryRequestResponseOneAuditModelMax).optional(),
-  "visitId": zod.string().regex(updateLabObituaryRequestResponseOneAuditVisitIdRegExp).optional(),
-  "client": zod.object({
-  "ua": zod.string().max(updateLabObituaryRequestResponseOneAuditClientUaMax).optional(),
-  "viewport": zod.string().max(updateLabObituaryRequestResponseOneAuditClientViewportMax).optional(),
-  "lang": zod.string().max(updateLabObituaryRequestResponseOneAuditClientLangMax).optional()
-}).optional(),
   "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
-}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
+}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُفرض القناة form ولا يُقبل شيء آخر.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
   "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
@@ -1827,10 +1671,6 @@ export const UpdateLabObituaryRequestResponse = zod.object({
   "time": zod.string().optional()
 })).optional(),
   "deceasedIndex": zod.number().int().nullish()
-})),
-  "condolencePhoneContacts": zod.array(zod.object({
-  "name": zod.string().optional(),
-  "phone": zod.string().optional()
 })),
   "notes": zod.string().optional()
 }).and(zod.object({
@@ -1864,8 +1704,7 @@ export const DeleteLabObituaryRequestResponse = zod.void()
  */
 export const GetLabStatusResponse = zod.object({
   "count": zod.number().int().describe('عدد طلبات التجارب الحالية'),
-  "labRequests": zod.enum(['ok', 'rules-missing', 'offline']).describe('ok تعمل، rules-missing قواعد Firestore غير منشورة للمجموعة، offline لا اتصال بقاعدة البيانات'),
-  "formVisits": zod.enum(['ok', 'rules-missing', 'offline']).describe('ok تعمل، rules-missing قواعد Firestore غير منشورة للمجموعة، offline لا اتصال بقاعدة البيانات')
+  "labRequests": zod.enum(['ok', 'rules-missing', 'offline']).describe('ok تعمل، rules-missing قواعد Firestore غير منشورة للمجموعة، offline لا اتصال بقاعدة البيانات')
 })
 
 
@@ -1972,13 +1811,6 @@ export const parseObituaryTextResponseRequestAuditAiReplyMax = 8192;
 
 export const parseObituaryTextResponseRequestAuditModelMax = 60;
 
-export const parseObituaryTextResponseRequestAuditVisitIdRegExp = new RegExp('^[A-Za-z0-9_-]{8,64}$');
-export const parseObituaryTextResponseRequestAuditClientUaMax = 300;
-
-export const parseObituaryTextResponseRequestAuditClientViewportMax = 20;
-
-export const parseObituaryTextResponseRequestAuditClientLangMax = 20;
-
 
 
 
@@ -1990,14 +1822,8 @@ export const ParseObituaryTextResponse = zod.object({
   "aiWarnings": zod.array(zod.string()).max(parseObituaryTextResponseRequestAuditAiWarningsMax).optional(),
   "aiReply": zod.string().max(parseObituaryTextResponseRequestAuditAiReplyMax).optional(),
   "model": zod.string().max(parseObituaryTextResponseRequestAuditModelMax).optional(),
-  "visitId": zod.string().regex(parseObituaryTextResponseRequestAuditVisitIdRegExp).optional(),
-  "client": zod.object({
-  "ua": zod.string().max(parseObituaryTextResponseRequestAuditClientUaMax).optional(),
-  "viewport": zod.string().max(parseObituaryTextResponseRequestAuditClientViewportMax).optional(),
-  "lang": zod.string().max(parseObituaryTextResponseRequestAuditClientLangMax).optional()
-}).optional(),
   "inferred": zod.boolean().optional().describe('استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)')
-}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.'),
+}).optional().describe('من أين جاء الطلب أو التعديل. للجمهور تُفرض القناة form ولا يُقبل شيء آخر.'),
   "messageType": zod.enum(['announcement', 'postponement', 'amendment', 'condolence_cancellation']).optional().describe('نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء)'),
   "relatedRequestNumber": zod.string().optional(),
   "announcementMode": zod.enum(['single', 'unrelated', 'siblings', 'father_first', 'mother_child']).optional().describe('صيغة الإعلان عند تعدد المتوفين'),
@@ -2097,10 +1923,6 @@ export const ParseObituaryTextResponse = zod.object({
   "time": zod.string().optional()
 })).optional(),
   "deceasedIndex": zod.number().int().nullish()
-})),
-  "condolencePhoneContacts": zod.array(zod.object({
-  "name": zod.string().optional(),
-  "phone": zod.string().optional()
 })),
   "notes": zod.string().optional()
 }),

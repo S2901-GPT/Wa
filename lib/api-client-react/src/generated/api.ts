@@ -22,6 +22,7 @@ import type {
 import type {
   AdminLoginInput,
   AdminSession,
+  ExpiredRequestStat,
   HealthStatus,
   LabCount,
   LabStatus,
@@ -286,6 +287,80 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getCreateObituaryRequestMutationOptions(options));
     }
+
+export const getListExpiredObituaryRequestsUrl = () => {
+
+
+
+
+  return `/api/obituary-requests/expired`
+}
+
+/**
+ * الإحصاءات المجهَّلة للطلبات التي انتهت مدة الاحتفاظ بها (48 ساعة)؛ بلا أسماء ولا نصوص. للمسؤول فقط
+ */
+export const listExpiredObituaryRequests = async ( options?: Parameters<typeof customFetch>[1]): Promise<ExpiredRequestStat[]> => {
+
+  return customFetch<ExpiredRequestStat[]>(getListExpiredObituaryRequestsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListExpiredObituaryRequestsQueryKey = () => {
+    return [
+    `/api/obituary-requests/expired`
+    ] as const;
+    }
+
+
+export const getListExpiredObituaryRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listExpiredObituaryRequests>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExpiredObituaryRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListExpiredObituaryRequestsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listExpiredObituaryRequests>>> = ({ signal }) => listExpiredObituaryRequests({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listExpiredObituaryRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListExpiredObituaryRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listExpiredObituaryRequests>>>
+export type ListExpiredObituaryRequestsQueryError = ErrorType<void>
+
+
+
+export function useListExpiredObituaryRequests<TData = Awaited<ReturnType<typeof listExpiredObituaryRequests>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExpiredObituaryRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListExpiredObituaryRequestsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetObituaryRequestUrl = (requestNumber: string,) => {
 
@@ -670,6 +745,80 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getCreateLabObituaryRequestMutationOptions(options));
     }
+
+export const getListExpiredLabObituaryRequestsUrl = () => {
+
+
+
+
+  return `/api/lab/obituary-requests/expired`
+}
+
+/**
+ * الإحصاءات المجهَّلة لطلبات التجارب التي انتهت مدة الاحتفاظ بها، للمسؤول فقط
+ */
+export const listExpiredLabObituaryRequests = async ( options?: Parameters<typeof customFetch>[1]): Promise<ExpiredRequestStat[]> => {
+
+  return customFetch<ExpiredRequestStat[]>(getListExpiredLabObituaryRequestsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListExpiredLabObituaryRequestsQueryKey = () => {
+    return [
+    `/api/lab/obituary-requests/expired`
+    ] as const;
+    }
+
+
+export const getListExpiredLabObituaryRequestsQueryOptions = <TData = Awaited<ReturnType<typeof listExpiredLabObituaryRequests>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExpiredLabObituaryRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListExpiredLabObituaryRequestsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listExpiredLabObituaryRequests>>> = ({ signal }) => listExpiredLabObituaryRequests({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listExpiredLabObituaryRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListExpiredLabObituaryRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof listExpiredLabObituaryRequests>>>
+export type ListExpiredLabObituaryRequestsQueryError = ErrorType<void>
+
+
+
+export function useListExpiredLabObituaryRequests<TData = Awaited<ReturnType<typeof listExpiredLabObituaryRequests>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listExpiredLabObituaryRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListExpiredLabObituaryRequestsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetLabObituaryRequestUrl = (requestNumber: string,) => {
 

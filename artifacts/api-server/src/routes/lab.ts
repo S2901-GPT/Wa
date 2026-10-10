@@ -1,13 +1,13 @@
 // مركز التجارب: حالة مجموعات التجارب، ونسخ الطلبات الحية إليها، وتفريغها. كلها للمسؤول فقط.
 import { Router, type IRouter, type NextFunction, type Request, type Response } from "express";
-import { labRequestsDb, obituaryRequestsDb, probeCollection } from "@workspace/db";
+import { labRequestsDb, obituaryRequestsDb } from "@workspace/db";
 import { requireAdmin } from "../lib/admin-auth";
 import { storeUnavailable } from "./obituary-requests";
 
 const router: IRouter = Router();
 
 router.get("/lab/status", requireAdmin, async (_req, res): Promise<void> => {
-  const [labRequests, formVisits] = await Promise.all([labRequestsDb.probe(), probeCollection("form_visits")]);
+  const labRequests = await labRequestsDb.probe();
   let count = 0;
   if (labRequests === "ok") {
     try {
@@ -16,7 +16,7 @@ router.get("/lab/status", requireAdmin, async (_req, res): Promise<void> => {
       count = 0;
     }
   }
-  res.json({ count, labRequests, formVisits });
+  res.json({ count, labRequests });
 });
 
 /** نسخ كل الطلبات الحية إلى التجارب بالرقم والحالة وتاريخ الإنشاء نفسها (استبدالاً). */

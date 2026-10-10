@@ -21,7 +21,6 @@ function saved(requestNumber: string, fullName: string, hours: number, overrides
     burial: { status: "upcoming", outsideQatar: false },
     condolenceOptions: [],
     condolences: [],
-    condolencePhoneContacts: [],
     ...overrides,
   } as ObituaryRequest;
 }

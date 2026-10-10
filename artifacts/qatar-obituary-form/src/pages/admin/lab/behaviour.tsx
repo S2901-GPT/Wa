@@ -1,14 +1,16 @@
 // سلوك الطلبات (/admin/lab/behaviour): لكل طلب من أين جاء (نموذج الجمهور، طلب من نص، المسؤول)، والنص الأصلي
 // مقابل الإعلان الناتج، وتحذيرات الذكاء الاصطناعي وردّه، وكل تعديل وما تغيّر فيه، والطلبات المكررة للمتوفى نفسه.
-// قراءة فقط. الطلبات الأقدم من هذه الميزة ليس لها سجل.
+// قراءة فقط. الطلبات الأقدم من هذه الميزة ليس لها سجل. وبعد 48 ساعة يُحذف محتوى الطلب ولا يبقى منه إلا إحصاء
+// مجهَّل (القناة، وعدد التعديلات، وأسماء الحقول التي تغيّرت) يُعرض في قسم مستقل أسفل القائمة.
 import { useMemo, useState } from "react";
 import { Link } from "wouter";
-import type { HistoryEntry, ObituaryRequest } from "@workspace/api-client-react";
+import type { ExpiredRequestStat, HistoryEntry, ObituaryRequest } from "@workspace/api-client-react";
 import { Activity, ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { buildAnnouncement, describeRequestDeceased } from "@/lib/announcement";
 import { DUPLICATE_WINDOW_HOURS, findRecentDuplicates } from "@/lib/duplicate-requests";
-import { RequestsScopeProvider, useRequestsList, type RequestsScope } from "@/lib/requests-api";
+import { RequestsScopeProvider, useExpiredRequests, useRequestsList, type RequestsScope } from "@/lib/requests-api";
+import { RETENTION_HOURS } from "@/components/privacy-notice";
 
 const CHANNEL_LABEL: Record<string, string> = { form: "نموذج الجمهور", from_text: "طلب من نص", admin_edit: "المسؤول" };
 const CHANNEL_STYLE: Record<string, string> = {
@@ -131,14 +133,6 @@ function Details({ request, all, base }: { request: ObituaryRequest; all: Obitua
         </Section>
       )}
 
-      {audit?.client && (
-        <Section title="الجهاز">
-          <p dir="ltr" className="text-left text-xs text-muted-foreground">
-            {[audit.client.viewport, audit.client.lang, audit.client.ua].filter(Boolean).join(" · ")}
-          </p>
-        </Section>
-      )}
-
       <Section title={`طلبات للمتوفى نفسه خلال ${DUPLICATE_WINDOW_HOURS} ساعة`}>
         {duplicates.length === 0 ? (
           <p className="text-muted-foreground">لا يوجد.</p>
@@ -158,6 +152,84 @@ function Details({ request, all, base }: { request: ObituaryRequest; all: Obitua
 
       <Link href={`${base}/${request.requestNumber}`} className="text-primary hover:underline">فتح الطلب ←</Link>
     </div>
+  );
+}
+
+/** الطلبات التي انتهت مدة الاحتفاظ بها: لا اسم ولا نص، فقط ما يفيد في تحسين النموذج. */
+function ExpiredList() {
+  const { data, isLoading, error } = useExpiredRequests();
+  const [open, setOpen] = useState<string | null>(null);
+  const stats = data ?? [];
+  if (isLoading) return null;
+  if (error) return <p className="mt-6 text-sm text-destructive">تعذّر تحميل الطلبات المجهَّلة.</p>;
+  return (
+    <section className="mt-8" aria-label="طلبات مجهَّلة">
+      <h2 className="mb-1 text-base font-bold">طلبات انتهت مدة الاحتفاظ بها ({stats.length})</h2>
+      <p className="mb-2 text-xs text-muted-foreground">
+        بعد {RETENTION_HOURS} ساعة من الإرسال يُحذف محتوى الطلب نهائياً، ولا يبقى إلا مصدره وعدد تعديلاته وأسماء الحقول التي تغيّرت وتحذيرات الذكاء الاصطناعي.
+      </p>
+      {stats.length === 0 ? (
+        <p className="text-sm text-muted-foreground">لا يوجد بعد.</p>
+      ) : (
+        <div className="overflow-hidden rounded-xl border bg-card">
+          {stats.map((stat) => {
+            const expanded = open === stat.requestNumber;
+            return (
+              <div key={stat.requestNumber} className="border-b last:border-b-0">
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  onClick={() => setOpen(expanded ? null : stat.requestNumber)}
+                  className="flex w-full items-start gap-2 px-3 py-2.5 text-right hover:bg-muted/50"
+                >
+                  {expanded ? <ChevronDown className="mt-0.5 h-4 w-4 shrink-0" /> : <ChevronRight className="mt-0.5 h-4 w-4 shrink-0" />}
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="font-mono text-xs text-muted-foreground">{stat.requestNumber}</span>
+                      <span className="font-bold text-muted-foreground">مجهَّل</span>
+                    </span>
+                    <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                      <ChannelBadge channel={stat.channel} inferred={!!stat.inferred} />
+                      <span>{when(stat.createdAt)}</span>
+                      {stat.edits > 0 && <span>· {stat.edits} تعديل</span>}
+                      <span>· {STATUS_LABEL[stat.status] ?? stat.status}</span>
+                    </span>
+                  </span>
+                </button>
+                {expanded && (
+                  <div className="border-t bg-muted/30 px-3 py-4 text-sm">
+                    <Section title="الحقول التي تغيّرت">
+                      <ol className="space-y-3 border-r-2 border-border pr-3">
+                        {stat.history.map((entry, index) => (
+                          <li key={`${entry.at}-${index}`}>
+                            <div className="mb-1 flex flex-wrap items-center gap-2">
+                              <span className="font-bold">{when(entry.at)}</span>
+                              <ChannelBadge channel={entry.channel} inferred={!!stat.inferred} />
+                            </div>
+                            <ul className="list-disc space-y-0.5 pr-5 text-foreground/90">
+                              {entry.fields.map((field, i) => <li key={i}>{field}</li>)}
+                            </ul>
+                          </li>
+                        ))}
+                        {stat.history.length === 0 && <li className="text-muted-foreground">بلا سجل (طلب قديم).</li>}
+                      </ol>
+                    </Section>
+                    {stat.aiWarnings && stat.aiWarnings.length > 0 && (
+                      <Section title="تحذيرات الذكاء الاصطناعي عند الإنشاء">
+                        <ul className="list-disc space-y-0.5 pr-5 text-amber-800 dark:text-amber-300">
+                          {stat.aiWarnings.map((warning, i) => <li key={i}>{warning}</li>)}
+                        </ul>
+                      </Section>
+                    )}
+                    <p className="text-xs text-muted-foreground">حُذف المحتوى في {when(stat.expiredAt)}{stat.model ? ` · ${stat.model}` : ""}</p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -232,7 +304,7 @@ export default function AdminLabBehaviourPage() {
         <Activity className="h-6 w-6" />
         سلوك الطلبات
       </h1>
-      <p className="mb-4 text-sm text-muted-foreground">لكل طلب: مصدره، والنص الأصلي، وتحذيرات الذكاء الاصطناعي، وكل تعديل وما تغيّر فيه. قراءة فقط.</p>
+      <p className="mb-4 text-sm text-muted-foreground">لكل طلب خلال {RETENTION_HOURS} ساعة من إرساله: مصدره، والنص الأصلي، وتحذيرات الذكاء الاصطناعي، وكل تعديل وما تغيّر فيه. قراءة فقط.</p>
       <div className="mb-4 grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="المصدر">
         {(["live", "lab"] as const).map((option) => (
           <button
@@ -249,6 +321,7 @@ export default function AdminLabBehaviourPage() {
       </div>
       <RequestsScopeProvider scope={scope}>
         <BehaviourList key={scope} scope={scope} />
+        <ExpiredList key={`expired-${scope}`} />
       </RequestsScopeProvider>
     </div>
   );

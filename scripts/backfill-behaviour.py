@@ -5,7 +5,6 @@
 الطلبات المحفوظة قبل ١٠ أكتوبر ٢٠٢٦ ليس فيها audit ولا history. سجلات الخادم (تبقى ٣٠ يوماً) فيها
 كل طلب HTTP بوقته وعنوانه وجهازه، فيُستنتج منها لكل طلب قديم:
 - المصدر: «طلب من نص» إن سبقه استدعاء /api/admin/parse-text من العنوان نفسه خلال ١٥ دقيقة، وإلا «نموذج الجمهور».
-- الجهاز (User-Agent) لطلب الجمهور.
 - مواعيد التعديلات (PUT) — دون تفاصيلها، فهي لم تكن تُسجَّل.
 النص الملصوق وردّ الذكاء الاصطناعي ليسا في سجلات الخادم، فلا يمكن استرجاعهما.
 
@@ -72,8 +71,6 @@ def infer(docs, logs):
         used.add(index)
         channel = "from_text" if came_from_text(create) else "form"
         audit = {"channel": channel, "inferred": True}
-        if channel == "form" and create["ua"]:
-            audit["client"] = {"ua": create["ua"][:300]}
         history = [{"at": iso(doc["createdAt"]), "channel": channel, "changes": ["أُنشئ الطلب"]}]
         edits = sorted((p for p in puts if p["path"].rstrip("/").split("/")[-1] == doc["number"]), key=lambda p: p["time"])
         for edit in edits:
@@ -210,7 +207,7 @@ def self_test():
     ]
     r = infer(docs, logs)
     assert r["266398"]["audit"] == {"channel": "from_text", "inferred": True}, r["266398"]
-    assert r["264670"]["audit"] == {"channel": "form", "inferred": True, "client": {"ua": "iPhone Safari"}}, r["264670"]
+    assert r["264670"]["audit"] == {"channel": "form", "inferred": True}, r["264670"]
     assert [h["channel"] for h in r["264670"]["history"]] == ["form", "admin_edit"]
     assert r["264670"]["history"][1]["changes"] == [EDIT_NOTE]
     assert "100000" not in r

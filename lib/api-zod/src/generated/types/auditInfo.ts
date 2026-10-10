@@ -5,11 +5,10 @@
  * واجهة طلبات بيانات إعلانات الوفاة
  * OpenAPI spec version: 0.3.0
  */
-import type { AuditClient } from './auditClient';
 import type { AuditInfoChannel } from './auditInfoChannel';
 
 /**
- * من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.
+ * من أين جاء الطلب أو التعديل. للجمهور تُفرض القناة form ولا يُقبل شيء آخر.
  */
 export interface AuditInfo {
   channel: AuditInfoChannel;
@@ -24,9 +23,6 @@ export interface AuditInfo {
   aiReply?: string;
   /** @maxLength 60 */
   model?: string;
-  /** @pattern ^[A-Za-z0-9_-]{8,64}$ */
-  visitId?: string;
-  client?: AuditClient;
   /** استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات) */
   inferred?: boolean;
 }

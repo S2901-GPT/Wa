@@ -9,7 +9,6 @@ import type { AuditInfo } from './auditInfo';
 import type { BurialDetails } from './burialDetails';
 import type { CondolenceCancellation } from './condolenceCancellation';
 import type { CondolenceCard } from './condolenceCard';
-import type { CondolencePhoneContact } from './condolencePhoneContact';
 import type { DeceasedPerson } from './deceasedPerson';
 import type { LinkedPerson } from './linkedPerson';
 import type { ObituaryRequestInputAnnouncementMode } from './obituaryRequestInputAnnouncementMode';
@@ -39,6 +38,5 @@ export interface ObituaryRequestInput {
   phoneAudience?: ObituaryRequestInputPhoneAudience;
   condolenceNote?: string;
   condolences: CondolenceCard[];
-  condolencePhoneContacts: CondolencePhoneContact[];
   notes?: string;
 }

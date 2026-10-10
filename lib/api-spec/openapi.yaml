@@ -54,6 +54,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ObituaryRequest"
+  /obituary-requests/expired:
+    get:
+      operationId: listExpiredObituaryRequests
+      tags: [requests]
+      description: الإحصاءات المجهَّلة للطلبات التي انتهت مدة الاحتفاظ بها (48 ساعة)؛ بلا أسماء ولا نصوص. للمسؤول فقط
+      responses:
+        "200":
+          description: من الأحدث إنشاءً
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExpiredRequestStat"
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
   /obituary-requests/{requestNumber}:
     get:
       operationId: getObituaryRequest
@@ -139,6 +155,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ObituaryRequest"
+  /lab/obituary-requests/expired:
+    get:
+      operationId: listExpiredLabObituaryRequests
+      tags: [lab]
+      description: الإحصاءات المجهَّلة لطلبات التجارب التي انتهت مدة الاحتفاظ بها، للمسؤول فقط
+      responses:
+        "200":
+          description: من الأحدث إنشاءً
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExpiredRequestStat"
+        "401":
+          description: يلزم تسجيل الدخول كمسؤول
   /lab/obituary-requests/{requestNumber}:
     get:
       operationId: getLabObituaryRequest
@@ -371,14 +403,12 @@ components:
       enum: [ok, rules-missing, offline]
     LabStatus:
       type: object
-      required: [count, labRequests, formVisits]
+      required: [count, labRequests]
       properties:
         count:
           type: integer
           description: عدد طلبات التجارب الحالية
         labRequests:
-          $ref: "#/components/schemas/LabStoreState"
-        formVisits:
           $ref: "#/components/schemas/LabStoreState"
     LabCount:
       type: object
@@ -644,13 +674,6 @@ components:
             $ref: "#/components/schemas/CondolenceScheduleEntry"
         deceasedIndex:
           type: ["integer", "null"]
-    CondolencePhoneContact:
-      type: object
-      properties:
-        name:
-          type: string
-        phone:
-          type: string
     CondolenceCancellation:
       type: object
       properties:
@@ -663,21 +686,9 @@ components:
           type: string
         phoneOnly:
           type: boolean
-    AuditClient:
-      type: object
-      properties:
-        ua:
-          type: string
-          maxLength: 300
-        viewport:
-          type: string
-          maxLength: 20
-        lang:
-          type: string
-          maxLength: 20
     AuditInfo:
       type: object
-      description: من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.
+      description: من أين جاء الطلب أو التعديل. للجمهور تُفرض القناة form ولا يُقبل شيء آخر.
       required: [channel]
       properties:
         channel:
@@ -698,14 +709,51 @@ components:
         model:
           type: string
           maxLength: 60
-        visitId:
-          type: string
-          pattern: "^[A-Za-z0-9_-]{8,64}$"
-        client:
-          $ref: "#/components/schemas/AuditClient"
         inferred:
           type: boolean
           description: استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات)
+    ExpiredHistoryEntry:
+      type: object
+      required: [at, channel, fields]
+      properties:
+        at:
+          type: string
+        channel:
+          type: string
+        fields:
+          type: array
+          description: أسماء الحقول التي تغيّرت فقط («مقر عزاء النساء»)، بلا قيم
+          items:
+            type: string
+    ExpiredRequestStat:
+      type: object
+      description: ما يبقى من الطلب بعد انتهاء مدة الاحتفاظ (48 ساعة)؛ إحصاء تقني بلا أي اسم أو نص
+      required: [requestNumber, status, createdAt, expiredAt, edits, history]
+      properties:
+        requestNumber:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+        expiredAt:
+          type: string
+        channel:
+          type: string
+        inferred:
+          type: boolean
+        model:
+          type: string
+        aiWarnings:
+          type: array
+          items:
+            type: string
+        edits:
+          type: integer
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpiredHistoryEntry"
     HistoryEntry:
       type: object
       required: [at, channel, changes]
@@ -736,7 +784,6 @@ components:
         - burial
         - condolenceOptions
         - condolences
-        - condolencePhoneContacts
       properties:
         audit:
           $ref: "#/components/schemas/AuditInfo"
@@ -784,10 +831,6 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/CondolenceCard"
-        condolencePhoneContacts:
-          type: array
-          items:
-            $ref: "#/components/schemas/CondolencePhoneContact"
         notes:
           type: string
     ObituaryRequestUpdate:

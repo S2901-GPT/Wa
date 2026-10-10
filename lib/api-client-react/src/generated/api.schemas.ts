@@ -25,7 +25,6 @@ export interface LabStatus {
   /** عدد طلبات التجارب الحالية */
   count: number;
   labRequests: LabStoreState;
-  formVisits: LabStoreState;
 }
 
 export interface LabCount {
@@ -85,17 +84,8 @@ export const AuditInfoChannel = {
   admin_edit: 'admin_edit',
 } as const;
 
-export interface AuditClient {
-  /** @maxLength 300 */
-  ua?: string;
-  /** @maxLength 20 */
-  viewport?: string;
-  /** @maxLength 20 */
-  lang?: string;
-}
-
 /**
- * من أين جاء الطلب أو التعديل. للجمهور تُقبل القناة form والجهاز فقط.
+ * من أين جاء الطلب أو التعديل. للجمهور تُفرض القناة form ولا يُقبل شيء آخر.
  */
 export interface AuditInfo {
   channel: AuditInfoChannel;
@@ -110,9 +100,6 @@ export interface AuditInfo {
   aiReply?: string;
   /** @maxLength 60 */
   model?: string;
-  /** @pattern ^[A-Za-z0-9_-]{8,64}$ */
-  visitId?: string;
-  client?: AuditClient;
   /** استُنتج لاحقاً من سجلات الخادم لطلب أقدم من تفعيل السجل (لا نص أصلي ولا تفاصيل تعديلات) */
   inferred?: boolean;
 }
@@ -374,11 +361,6 @@ export interface CondolenceCard {
   deceasedIndex?: number | null;
 }
 
-export interface CondolencePhoneContact {
-  name?: string;
-  phone?: string;
-}
-
 export interface ObituaryRequestInput {
   audit?: AuditInfo;
   /** نوع الرسالة (إعلان، تأجيل، تعديل، إلغاء عزاء) */
@@ -399,7 +381,6 @@ export interface ObituaryRequestInput {
   phoneAudience?: ObituaryRequestInputPhoneAudience;
   condolenceNote?: string;
   condolences: CondolenceCard[];
-  condolencePhoneContacts: CondolencePhoneContact[];
   notes?: string;
 }
 
@@ -418,6 +399,29 @@ export interface ParseTextResult {
 export interface AdminLoginInput {
   /** @maxLength 200 */
   password: string;
+}
+
+export interface ExpiredHistoryEntry {
+  at: string;
+  channel: string;
+  /** أسماء الحقول التي تغيّرت فقط («مقر عزاء النساء»)، بلا قيم */
+  fields: string[];
+}
+
+/**
+ * ما يبقى من الطلب بعد انتهاء مدة الاحتفاظ (48 ساعة)؛ إحصاء تقني بلا أي اسم أو نص
+ */
+export interface ExpiredRequestStat {
+  requestNumber: string;
+  status: string;
+  createdAt: string;
+  expiredAt: string;
+  channel?: string;
+  inferred?: boolean;
+  model?: string;
+  aiWarnings?: string[];
+  edits: number;
+  history: ExpiredHistoryEntry[];
 }
 
 export type HistoryEntryChannel = typeof HistoryEntryChannel[keyof typeof HistoryEntryChannel];

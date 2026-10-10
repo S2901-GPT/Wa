@@ -583,14 +583,10 @@ export function toRequest(raw: unknown, source = ""): ExtractResult {
     condolences.push({ audience, ...found, schedule: [] });
     warnings.push(`أُخذ عزاء ${audience === "women" ? "النساء" : "الرجال"} من نص الرسالة مباشرة لأن النموذج أغفله؛ راجعه قبل الحفظ.`);
   }
-  // أرقام الهواتف لا تُنشر (قرار جديد): لا تُنقل إلى الطلب، ووجودها في الرسالة يعني التعزية عبر الهاتف.
-  const phones = array(data.condolencePhoneContacts).filter(isObject).filter((contact) => text(contact.phone));
-  if (phones.length) warnings.push("لم تُنقل أرقام الهواتف الواردة في الرسالة: لا تُنشر أرقام في الإعلانات.");
   if (array(data.condolenceOptions).includes("tbd")) warnings.push("تذكر الرسالة أن مقر العزاء سيُحدَّد لاحقاً؛ أضفه عند وصوله.");
   let options = [...new Set(array(data.condolenceOptions).map((option) => pick(option, OPTIONS)).filter(Boolean))] as Array<(typeof OPTIONS)[number]>;
   if (!options.length) {
     options = [...new Set(condolences.map((card) => card.audience))];
-    if (phones.length) options.push("phone");
   }
   for (const card of condolences) if (!options.includes(card.audience)) options.push(card.audience);
 
@@ -630,7 +626,6 @@ export function toRequest(raw: unknown, source = ""): ExtractResult {
     burial: fixedBurial,
     condolenceOptions: options,
     condolences,
-    condolencePhoneContacts: [],
     condolenceNote: freeText(data.condolenceNote),
     notes: freeText(data.notes),
   };

@@ -137,7 +137,8 @@ const cases: Array<[string, () => void]> = [
     const phone = form((draft) => { draft.condolences = { ...draft.condolences!, type: "phone_only", phones: ["ناصر (الأبناء): 55551234"] }; });
     assert.match(text(phone), /العزاء عبر الهاتف/u);
     assert.doesNotMatch(text(phone), /55551234|ناصر/u);
-    assert.deepEqual(mapFormToPayload(phone).condolencePhoneContacts, []);
+    assert.ok(!("condolencePhoneContacts" in mapFormToPayload(phone)));
+    assert.doesNotMatch(JSON.stringify(mapFormToPayload(phone)), /55551234/u);
     serverAccepts(phone);
     const withVenue = form((draft) => { draft.condolences = { ...draft.condolences!, type: "men_only", men: { ...draft.condolences!.men!, locationName: "مجلس العائلة" }, withPhones: true, phones: ["55551234"] }; });
     assert.ok(!mapFormToPayload(withVenue).condolenceOptions.includes("phone"));
@@ -262,7 +263,7 @@ const cases: Array<[string, () => void]> = [
       relatives: [{ relation: "أخ", familyReference: "", people: [{ name: "علي", deceased: false }] }],
       prayer: { enabled: false },
       burial: { status: "upcoming", outsideQatar: false, day: "اليوم", time: "الساعة 9", cemetery: "مقبرة الدحيل" },
-      condolenceOptions: [], condolences: [], condolencePhoneContacts: [],
+      condolenceOptions: [], condolences: [],
     } as ObituaryRequest;
     const values = mapPayloadToForm(legacy);
     assert.equal(values.deceasedList[0].gender, undefined);

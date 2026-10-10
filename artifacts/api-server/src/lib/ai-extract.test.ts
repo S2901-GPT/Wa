@@ -26,7 +26,6 @@ const AI_OUTPUT = {
     { audience: "children", location: "?" },
   ],
   condolenceOptions: [],
-  condolencePhoneContacts: [],
   notes: "",
   warnings: ["لم يُذكر عمر المتوفى."],
 };
@@ -86,17 +85,17 @@ const cases: Array<[string, () => void | Promise<void>]> = [
       messageType: "weird",
       deceasedPeople: [{ fullName: "حمد", gender: "man" }],
       relatives: [], prayer: {}, burial: { status: "soon" }, condolences: [],
-      condolencePhoneContacts: [{ name: "فهد", phone: "55123456" }, { name: "بلا رقم" }],
+      condolencePhoneContacts: [{ name: "فهد", phone: "55123456" }],
       warnings: [],
     });
     assert.equal(request.messageType, "announcement");
     assert.equal(request.burial.status, "upcoming");
     assert.equal(request.burial.outsideQatar, false);
     assert.equal(request.prayer.enabled, false);
-    assert.deepEqual(request.condolenceOptions, ["phone"]);
-    assert.deepEqual(request.condolencePhoneContacts, [], "لا تُنشر أرقام الهواتف");
+    // لا يوجد حقل أرقام في الطلب أصلاً: ما يرجعه النموذج منها يُهمل
+    assert.ok(!("condolencePhoneContacts" in request));
     assert.ok(!JSON.stringify(request).includes("55123456"));
-    assert.ok(warnings.some((warning) => warning.includes("لم تُنقل أرقام الهواتف")));
+    assert.ok(!warnings.some((warning) => warning.includes("أرقام الهواتف")));
     const later = toRequest({ deceasedPeople: [{ fullName: "حمد", gender: "man" }], relatives: [], prayer: {}, burial: {}, condolences: [], condolenceOptions: ["tbd"], warnings: [] });
     assert.deepEqual(later.request.condolenceOptions, []);
     assert.ok(later.warnings.some((warning) => warning.includes("سيُحدَّد لاحقاً")));

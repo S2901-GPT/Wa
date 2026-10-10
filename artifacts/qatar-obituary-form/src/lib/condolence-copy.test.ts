@@ -20,7 +20,6 @@ function makeRequest(overrides: Partial<ObituaryRequest> = {}): ObituaryRequest 
     burial: { status: "upcoming", outsideQatar: false, day: "اليوم", time: "بعد صلاة العصر", cemetery: "مقبرة مسيمير" },
     condolenceOptions: [],
     condolences: [],
-    condolencePhoneContacts: [],
     ...overrides,
   } as ObituaryRequest;
 }

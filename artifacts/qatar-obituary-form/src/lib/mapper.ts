@@ -314,7 +314,6 @@ export function mapFormToPayload(data: ObituaryFormValues): ObituaryRequestInput
     ...(options.includes("phone") ? { phoneAudience: "all" as const } : {}),
     ...(optional(cond?.cancellationOrRestrictionReason) ? { condolenceNote: clean(cond?.cancellationOrRestrictionReason) } : {}),
     condolences: cards,
-    condolencePhoneContacts: [],
     ...(optional(data.notes) ? { notes: data.notes!.trim() } : {}),
   };
 }
