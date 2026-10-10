@@ -14,45 +14,8 @@ import { readStoredLayout, readStoredPosterSize, readStoredTypeScale, storeLayou
 import { renderPoster } from "@/lib/poster-render";
 import { normalizeObituaryPresentation } from "@/lib/presentation-normalizer";
 import { generateQrImages, type QrCodeMap } from "@/lib/qr-images";
-
-/**
- * إنستقرام وسناب يعيدان ترميز كل صورة إلى JPEG، ومن ملف PNG يكون تحويلهما أقسى.
- * جودة ٩٥ بلا فرق تراه العين (PSNR ≈ 50) وبربع حجم PNG.
- */
-const EXPORT_IMAGE = { type: "image/jpeg", quality: 0.95, ext: "jpg" } as const;
-
-const posterFileName = (requestNumber: string, layout: NaskhLayoutId, size: NaskhPosterSizeId) =>
-  `${requestNumber}-${layout}-${size}.${EXPORT_IMAGE.ext}`;
-
-type Option = { id: string; name: string };
-
-/** شبكة شرائح بالأسماء فقط: العنوان فوقها، والخلايا متساوية العرض فتصطف في أعمدة، والمختار بلون الخلفية. */
-function Chips<T extends string>({ label, options, value, columns, onChange }: { label: string; options: readonly Option[]; value: T; columns: 3 | 4; onChange: (id: T) => void }) {
-  return (
-    <div className="mb-3" role="radiogroup" aria-label={label}>
-      <span className="mb-1 block text-xs font-bold text-muted-foreground">{label}</span>
-      <div className={`grid gap-1.5 ${columns === 3 ? "grid-cols-3" : "grid-cols-4"}`}>
-        {options.map((option) => {
-          const isSelected = value === option.id;
-          return (
-            <button
-              key={option.id}
-              type="button"
-              role="radio"
-              aria-checked={isSelected}
-              onClick={() => onChange(option.id as T)}
-              className={`rounded-lg border px-1.5 py-1.5 text-center text-[11px] font-semibold leading-4 transition-colors ${
-                isSelected ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-foreground hover:bg-muted"
-              }`}
-            >
-              {option.name}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+import { canShareImageFiles, canvasToPosterFile, downloadFile, posterFileName } from "@/lib/poster-export";
+import { PosterChips as Chips } from "@/components/poster-chips";
 
 export default function AdminLabPosterPage() {
   const { data: requests, isLoading, error } = useListObituaryRequests();
@@ -122,26 +85,11 @@ export default function AdminLabPosterPage() {
     };
   }, [content, qrImages, branding, settingsReady, layout, typeScale, posterSize]);
 
-  const canShareImage = useMemo(() => {
-    if (typeof navigator === "undefined" || !navigator.canShare || !navigator.share) return false;
-    try {
-      return navigator.canShare({ files: [new File([new Blob([""], { type: EXPORT_IMAGE.type })], `a.${EXPORT_IMAGE.ext}`, { type: EXPORT_IMAGE.type })] });
-    } catch {
-      return false;
-    }
-  }, []);
+  const canShareImage = useMemo(canShareImageFiles, []);
 
   /** ملف JPEG من المعاينة، باسم الطلب وتخطيطه ومقاسه. */
   const posterFile = (): Promise<File | null> =>
-    new Promise((resolve) => {
-      const canvas = previewRef.current;
-      if (!canvas || !request || rendering) return resolve(null);
-      canvas.toBlob(
-        (blob) => resolve(blob ? new File([blob], posterFileName(request.requestNumber, layout, posterSize), { type: EXPORT_IMAGE.type }) : null),
-        EXPORT_IMAGE.type,
-        EXPORT_IMAGE.quality,
-      );
-    });
+    !request || rendering ? Promise.resolve(null) : canvasToPosterFile(previewRef.current, posterFileName(request.requestNumber, layout, posterSize));
 
   const shareImage = async () => {
     const file = await posterFile();
@@ -163,12 +111,7 @@ export default function AdminLabPosterPage() {
       toast.error("تعذر إنشاء ملف JPEG");
       return;
     }
-    const url = URL.createObjectURL(file);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = file.name;
-    link.click();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+    downloadFile(file);
     toast.success(`تم تنزيل JPEG (${previewSize.width} × ${previewSize.height}، ${Math.round(file.size / 1024)} KB)`);
   };
 
