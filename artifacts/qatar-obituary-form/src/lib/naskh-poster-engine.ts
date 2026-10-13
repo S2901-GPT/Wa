@@ -171,10 +171,28 @@ function drawLine(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind:
   drawRuns(ctx, item, item.xRight, item.y);
 }
 
-function drawRuns(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind: "line" }>, xRight: number, y: number) {
+/**
+ * خط القاعدة الأبجدي الذي يضع السطر حيث يضعه «middle» (منتصف مربع الحرف) بالحجم نفسه. Safari يحسب «middle» لكل
+ * مقطع ثنائي الاتجاه من خط أول حرف فيه، والخط مقسّم إلى ملفين (العربي، واللاتيني للمسافة والشرطة والأرقام)، فكان
+ * وسط سطر مثل «في خيمة مقابل مسجد 1277 - منطقة» ينزل عن طرفيه. على الخط الأبجدي تقف كل المقاطع على خط واحد.
+ */
+function baselineFor(ctx: CanvasRenderingContext2D, px: number, midY: number): number | null {
+  // الفرق بين الخطين يُقاس من المتصفح نفسه على حرف عربي (ملف الخط العربي)، فيبقى السطر في مكانه تماماً
+  ctx.font = fontString(400, px);
   ctx.textBaseline = "middle";
+  const middle = ctx.measureText("ا").actualBoundingBoxAscent;
+  ctx.textBaseline = "alphabetic";
+  const alphabetic = ctx.measureText("ا").actualBoundingBoxAscent;
+  if (!Number.isFinite(middle) || !Number.isFinite(alphabetic)) return null;
+  return midY + (alphabetic - middle);
+}
+
+function drawRuns(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind: "line" }>, xRight: number, y: number) {
   ctx.direction = "rtl";
   const midY = y + item.h / 2;
+  const baseline = baselineFor(ctx, item.px, midY);
+  ctx.textBaseline = baseline === null ? "middle" : "alphabetic";
+  const textY = baseline ?? midY;
   ctx.textAlign = "right";
   let x = xRight;
   item.runs.forEach((run, index) => {
@@ -189,7 +207,7 @@ function drawRuns(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind:
       ctx.font = fontString(run.weight, item.px);
       x -= space;
     }
-    ctx.fillText(shown, x, midY);
+    ctx.fillText(shown, x, textY);
     x -= ctx.measureText(shown).width;
   });
 }
