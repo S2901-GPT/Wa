@@ -21,6 +21,7 @@ import AdminSettingsPage from '@/pages/admin/settings';
 import AdminFromTextPage from '@/pages/admin/from-text';
 import AdminLabHubPage from '@/pages/admin/lab';
 import AdminLabPosterPage from '@/pages/admin/lab/poster';
+import AdminLabLogoPage from '@/pages/admin/lab/logo';
 import AdminLabBehaviourPage from '@/pages/admin/lab/behaviour';
 import { AdminGate } from '@/components/admin-gate';
 import { RequestsScopeProvider, type RequestsScope } from '@/lib/requests-api';
@@ -35,6 +36,7 @@ const guarded = (Page: () => ReactNode) => () => (
 );
 const GuardedAdminLabHubPage = guarded(AdminLabHubPage);
 const GuardedAdminLabPosterPage = guarded(AdminLabPosterPage);
+const GuardedAdminLabLogoPage = guarded(AdminLabLogoPage);
 const GuardedAdminLabBehaviourPage = guarded(AdminLabBehaviourPage);
 
 /**
@@ -82,6 +84,7 @@ function Router() {
           <AdminArea scope="lab" />
         </Route>
         <Route path="/admin/lab/poster" component={GuardedAdminLabPosterPage} />
+        <Route path="/admin/lab/logo" component={GuardedAdminLabLogoPage} />
         <Route path="/admin/lab/behaviour" component={GuardedAdminLabBehaviourPage} />
         <Route path="/admin/lab" component={GuardedAdminLabHubPage} />
         <Route path="/admin" nest>

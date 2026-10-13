@@ -37,7 +37,23 @@ export type PosterBranding = {
   maxHeight?: number;
 };
 
-export type PosterOptions = { layout: NaskhLayoutId; typeScale?: NaskhTypeScaleId; size?: NaskhPosterSizeId; branding?: PosterBranding };
+/**
+ * موضع الشعار: التذييل (الحالي)، أو علامة مائية في وسط الصورة خلف النص، أو الاثنان، أو زاوية صغيرة، أو نقش مكرّر
+ * على الخلفية. `opacity` (0–1) للعلامة المائية والنقش فقط. تجربة في `/admin/lab/logo`؛ الاستوديو يستخدم التذييل.
+ */
+export type LogoPlacement = "footer" | "watermark" | "watermark-footer" | "corner" | "tiled";
+export type LogoOptions = { placement: LogoPlacement; opacity: number };
+export const DEFAULT_LOGO_OPTIONS: LogoOptions = { placement: "footer", opacity: 0.08 };
+export const LOGO_PLACEMENTS: readonly { id: LogoPlacement; name: string; description: string }[] = [
+  { id: "footer", name: "التذييل (الحالي)", description: "الشعار أسفل الصورة فوق خط رفيع" },
+  { id: "watermark", name: "علامة مائية في الوسط", description: "الشعار كبيراً خلف النص بشفافية، بلا تذييل" },
+  { id: "watermark-footer", name: "علامة مائية + تذييل", description: "الاثنان معاً" },
+  { id: "corner", name: "زاوية صغيرة", description: "شعار صغير في الزاوية العليا اليسرى، بلا تذييل" },
+  { id: "tiled", name: "نقش مكرّر", description: "الشعار صغيراً مكرّراً على الخلفية كلها بشفافية خفيفة" },
+];
+const hasFooterLogo = (placement: LogoPlacement) => placement === "footer" || placement === "watermark-footer";
+
+export type PosterOptions = { layout: NaskhLayoutId; typeScale?: NaskhTypeScaleId; size?: NaskhPosterSizeId; branding?: PosterBranding; logo?: LogoOptions };
 
 export type ValidationIssue = { severity: "error" | "warning"; code: string; message: string };
 export type RenderValidationReport = {
@@ -265,10 +281,44 @@ function drawBand(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind:
   drawImageContain(ctx, assets.logo, (NASKH_METRICS.width - boxW) / 2, item.y + NASKH_METRICS.footerPad, boxW, logoH);
 }
 
-export function drawNaskhPlan(ctx: CanvasRenderingContext2D, plan: NaskhPlan, assets: NaskhAssets, qrImages: QrCodeMap) {
+/** طبقة الشعار خلف النص (علامة مائية، زاوية، نقش)؛ التذييل يُرسم مع عناصر المخطط كالمعتاد. */
+function drawLogoLayer(ctx: CanvasRenderingContext2D, assets: NaskhAssets, width: number, height: number, logo: LogoOptions) {
+  if (!assets.logo || logo.placement === "footer") return;
+  const opacity = Math.min(1, Math.max(0, logo.opacity));
+  ctx.save();
+  if (logo.placement === "watermark" || logo.placement === "watermark-footer") {
+    ctx.globalAlpha = opacity;
+    const boxW = Math.round(width * 0.7);
+    const boxH = Math.round(height * 0.5);
+    drawImageContain(ctx, assets.logo, (width - boxW) / 2, (height - boxH) / 2, boxW, boxH);
+  } else if (logo.placement === "corner") {
+    const boxW = 120;
+    drawImageContain(ctx, assets.logo, 40, 40, boxW, boxW);
+  } else if (logo.placement === "tiled") {
+    const tile = document.createElement("canvas");
+    tile.width = 320;
+    tile.height = 320;
+    const tctx = tile.getContext("2d");
+    if (tctx) {
+      // شعاران في البلاطة بإزاحة قطرية فيبدو التكرار متعرّجاً لا شبكة صفوف
+      drawImageContain(tctx, assets.logo, 20, 20, 120, 120);
+      drawImageContain(tctx, assets.logo, 180, 180, 120, 120);
+      const pattern = ctx.createPattern(tile, "repeat");
+      if (pattern) {
+        ctx.globalAlpha = opacity;
+        ctx.fillStyle = pattern;
+        ctx.fillRect(0, 0, width, height);
+      }
+    }
+  }
+  ctx.restore();
+}
+
+export function drawNaskhPlan(ctx: CanvasRenderingContext2D, plan: NaskhPlan, assets: NaskhAssets, qrImages: QrCodeMap, logo: LogoOptions = DEFAULT_LOGO_OPTIONS) {
   ctx.fillStyle = NASKH_COLORS.background;
   ctx.fillRect(0, 0, plan.width, plan.height);
   drawBackground(ctx, assets, plan.width, plan.height);
+  drawLogoLayer(ctx, assets, plan.width, plan.height, logo);
 
   for (const item of plan.items) {
     switch (item.kind) {
@@ -365,10 +415,11 @@ export function renderNaskhPoster(options: PosterOptions, content: NormalizedCon
   const size = naskhPosterSize(options.size);
   const fixedHeight = size.minHeight === size.maxHeight;
   const maxHeight = fixedHeight ? size.maxHeight : Math.max(size.minHeight, branding.maxHeight);
-  const plan = planNaskhLayout(content, measure, { layout: options.layout, typeScale: options.typeScale, openingIsImage, qrAvailable, minHeight: size.minHeight, maxHeight, logo: !!assets.logo });
+  const logo = options.logo ?? DEFAULT_LOGO_OPTIONS;
+  const plan = planNaskhLayout(content, measure, { layout: options.layout, typeScale: options.typeScale, openingIsImage, qrAvailable, minHeight: size.minHeight, maxHeight, logo: hasFooterLogo(logo.placement) && !!assets.logo });
 
   canvas.height = plan.height;
-  drawNaskhPlan(ctx, plan, assets, qrImages);
+  drawNaskhPlan(ctx, plan, assets, qrImages, logo);
 
   const issues: ValidationIssue[] = [];
   // فيض بضعة بكسلات لا يُرى في الصورة، فلا يُعرض كخطأ
