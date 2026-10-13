@@ -42,8 +42,15 @@ export type PosterBranding = {
  * على الخلفية. `opacity` (0–1) للعلامة المائية والنقش فقط. تجربة في `/admin/lab/logo`؛ الاستوديو يستخدم التذييل.
  */
 export type LogoPlacement = "footer" | "watermark" | "watermark-footer" | "corner" | "tiled";
-export type LogoOptions = { placement: LogoPlacement; opacity: number };
-export const DEFAULT_LOGO_OPTIONS: LogoOptions = { placement: "footer", opacity: 0.08 };
+export type LogoOptions = {
+  placement: LogoPlacement;
+  opacity: number;
+  /** الشعار صغيراً في وسط كل رمز QR (الرموز بمستوى تصحيح H فتُقرأ مع تغطية ربعها). */
+  inQr?: boolean;
+};
+export const DEFAULT_LOGO_OPTIONS: LogoOptions = { placement: "footer", opacity: 0.08, inQr: false };
+/** نسبة عرض الشعار داخل رمز QR من عرض الرمز؛ مع إطار أبيض حوله. اختُبرت القراءة حتى 30% بعد التصغير وضغط JPEG. */
+const QR_LOGO_FRACTION = 0.22;
 export const LOGO_PLACEMENTS: readonly { id: LogoPlacement; name: string; description: string }[] = [
   { id: "footer", name: "التذييل (الحالي)", description: "الشعار أسفل الصورة فوق خط رفيع" },
   { id: "watermark", name: "علامة مائية في الوسط", description: "الشعار كبيراً خلف النص بشفافية، بلا تذييل" },
@@ -383,6 +390,15 @@ export function drawNaskhPlan(ctx: CanvasRenderingContext2D, plan: NaskhPlan, as
         ctx.restore();
         const pad = 6;
         ctx.drawImage(qr.image, item.x + pad, item.y + pad, item.size - pad * 2, item.size - pad * 2);
+        if (logo.inQr && assets.logo) {
+          const box = Math.round(item.size * QR_LOGO_FRACTION);
+          const frame = Math.round(box * 0.12);
+          const cx = item.x + item.size / 2;
+          const cy = item.y + item.size / 2;
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(cx - box / 2 - frame, cy - box / 2 - frame, box + frame * 2, box + frame * 2);
+          drawImageContain(ctx, assets.logo, cx - box / 2, cy - box / 2, box, box);
+        }
         break;
       }
       case "band":

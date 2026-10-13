@@ -34,6 +34,7 @@ export default function AdminLabLogoPage() {
   const [posterSize, setPosterSize] = useState<NaskhPosterSizeId>(readStoredPosterSize);
   const [placement, setPlacement] = useState<LogoPlacement>("watermark");
   const [opacity, setOpacity] = useState<OpacityId>("0.08");
+  const [inQr, setInQr] = useState<"no" | "yes">("no");
   const [qrImages, setQrImages] = useState<QrCodeMap>({});
   const [rendering, setRendering] = useState(false);
   const [previewSize, setPreviewSize] = useState({ width: IMAGE_WIDTH, height: IMAGE_HEIGHT });
@@ -74,7 +75,7 @@ export default function AdminLabLogoPage() {
     setRendering(true);
     void (async () => {
       try {
-        const { canvas, report: result } = await renderPoster(layout, content, qrImages, branding, typeScale, posterSize, { placement, opacity: Number(opacity) });
+        const { canvas, report: result } = await renderPoster(layout, content, qrImages, branding, typeScale, posterSize, { placement, opacity: Number(opacity), inQr: inQr === "yes" });
         if (cancelled) return;
         setReport(result);
         setPreviewSize({ width: canvas.width, height: canvas.height });
@@ -94,7 +95,7 @@ export default function AdminLabLogoPage() {
     return () => {
       cancelled = true;
     };
-  }, [content, qrImages, branding, settingsReady, layout, typeScale, posterSize, placement, opacity]);
+  }, [content, qrImages, branding, settingsReady, layout, typeScale, posterSize, placement, opacity, inQr]);
 
   const canShareImage = useMemo(canShareImageFiles, []);
 
@@ -176,6 +177,7 @@ export default function AdminLabLogoPage() {
           <Chips label="موضع الشعار" options={LOGO_PLACEMENTS} value={placement} columns={3} onChange={setPlacement} />
           <Chips label="شفافية العلامة والنقش" options={OPACITIES} value={opacity} columns={4} onChange={setOpacity} />
           <p className="-mt-1 mb-3 text-[11px] text-muted-foreground">{LOGO_PLACEMENTS.find((option) => option.id === placement)?.description}</p>
+          <Chips label="الشعار داخل الباركود" options={[{ id: "no", name: "بدون" }, { id: "yes", name: "شعار في وسط كل رمز" }]} value={inQr} columns={2} onChange={setInQr} />
           <Chips label="المقاس" options={NASKH_POSTER_SIZES} value={posterSize} columns={2} onChange={(id) => { setPosterSize(id); storePosterSize(id); }}
             renderOption={(option) => (
             <>
