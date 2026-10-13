@@ -118,6 +118,17 @@ const cases: Array<[string, () => void | Promise<void>]> = [
     // ما ليس فيه موعد ولا مقبرة يبقى كما هو، والتأجيل لا يُمسّ
     const done = { status: "completed", outsideQatar: false, note: "تم الدفن في مكة المكرمة" };
     assert.deepEqual(splitBurialNote(done), done);
+    // دفن تمّ ووُضعت جملته كلها في الملاحظة: المقبرة واليوم إلى حقليهما، ولا يبقى «تم الدفن يوم» ملاحظةً مكرّرة
+    const doneBlob = splitBurialNote({ status: "completed", outsideQatar: false, note: "تم الدفن يوم الجمعه في مقبرة مسيمير" });
+    assert.equal(doneBlob.cemetery, "مقبرة مسيمير");
+    assert.equal(doneBlob.weekday, "الجمعة");
+    assert.equal(doneBlob.note, undefined);
+    const doneFull = toRequest({ ...AI_OUTPUT, burial: { status: "completed", outsideQatar: false, note: "تم الدفن يوم الجمعه في مقبرة مسيمير" } }).request;
+    assert.equal(doneFull.burial.cemetery, "مقبرة مسيمير");
+    assert.equal(doneFull.burial.note, undefined);
+    // «تم الدفن يوم» وحدها (بقايا بعد أخذ اليوم) لا تُحفظ، و«تم الدفن فجراً» تبقى لأنها تضيف شيئاً
+    assert.equal(toRequest({ ...AI_OUTPUT, burial: { status: "completed", outsideQatar: false, cemetery: "مقبرة مسيمير", note: "تم الدفن يوم" } }).request.burial.note, undefined);
+    assert.equal(toRequest({ ...AI_OUTPUT, burial: { status: "completed", outsideQatar: false, cemetery: "مقبرة مسيمير", note: "تم الدفن فجراً" } }).request.burial.note, "تم الدفن فجراً");
     const postponed = { status: "postponed", outsideQatar: false, note: "لحين وصول الجثمان غداً" };
     assert.deepEqual(splitBurialNote(postponed), postponed);
     const intact = { status: "upcoming", outsideQatar: false, day: "اليوم", time: "بعد صلاة العصر", cemetery: "مقبرة مسيمير" };

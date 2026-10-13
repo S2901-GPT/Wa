@@ -360,19 +360,9 @@ function makeRequestsStore(options: { collection: string; seed?: ObituaryRequest
 
       if (firestoreDb) {
         try {
-          await setDoc(
-            doc(firestoreDb, collectionName, requestNumber),
-            {
-              id: updatedRow.id,
-              requestNumber: updatedRow.requestNumber,
-              deceasedName: updatedRow.deceasedName,
-              status: updatedRow.status,
-              payload: updatedRow.payload,
-              updatedAt: updatedRow.updatedAt.toISOString(),
-              ...(data.history ? { history: data.history } : {}),
-            },
-            { merge: true }
-          );
+          // استبدال كامل لا دمج: مع { merge: true } تبقى مفاتيح payload التي حذفها التعديل (ملاحظة الدفن مثلاً)
+          // مخزّنة وتعود في كل قراءة. الصف مقروء للتو فيحمل السجل والمصدر وتاريخ الإنشاء كاملة.
+          await setDoc(doc(firestoreDb, collectionName, requestNumber), toDoc(updatedRow));
           console.info(`[AI Studio] Obituary request updated in Firestore (${collectionName}): ${requestNumber}`);
         } catch (err) {
           if (options.strict) throw err;

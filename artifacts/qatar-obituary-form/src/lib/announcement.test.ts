@@ -413,6 +413,15 @@ const cases: Array<[string, () => void]> = [
     assert.doesNotMatch(announced, /الجثمان/u);
     // ووصف دفن تمّ يبقى
     assert.match(text({ burial: { status: "completed", outsideQatar: false, note: "تم الدفن في مكة المكرمة" } }), /تم الدفن في مكة المكرمة/u);
+    // ملاحظة محفوظة تكرر جملة الدفن أو جزءاً منها («تم الدفن يوم») لا تُكتب سطراً ثانياً
+    const repeated = text({ burial: { status: "completed", outsideQatar: false, weekday: "الجمعة", cemetery: "مقبرة مسيمير", note: "تم الدفن يوم" } }, new Date(2026, 9, 12));
+    assert.match(repeated, /^تم الدفن يوم الجمعة في مقبرة مسيمير$/mu);
+    assert.equal(repeated.match(/تم الدفن/gu)?.length, 1);
+    assert.doesNotMatch(text({ burial: { status: "completed", outsideQatar: false, cemetery: "مقبرة مسيمير", note: "تم الدفن في مقبرة مسيمير" } }), /مسيمير[\s\S]*مسيمير/u);
+    // وملاحظة تضيف شيئاً تبقى
+    assert.match(text({ burial: { status: "completed", outsideQatar: false, cemetery: "مقبرة مسيمير", note: "تم الدفن فجراً" } }), /تم الدفن في مقبرة مسيمير\nتم الدفن فجراً/u);
+    // التاريخ يوماً فشهراً فسنة يُقرأ كتاريخ لا نصاً خاماً
+    assert.match(text({ burial: { status: "completed", outsideQatar: false, day: "09-10-2026", cemetery: "مقبرة مسيمير" } }, new Date(2026, 9, 12)), /^تم الدفن يوم الجمعة في مقبرة مسيمير$/mu);
   }],
   ["مكان الوفاة «في لندن» لا يُكتب «في في لندن»", () => {
     const result = text({ deceasedPeople: [{ fullName: "محمد ناصر العطية", gender: "man", deathPlace: "في لندن" }] });

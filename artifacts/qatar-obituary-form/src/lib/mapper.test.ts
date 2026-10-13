@@ -118,6 +118,23 @@ const cases: Array<[string, () => void]> = [
     assert.equal(mapFormToPayload(withNote("scheduled")).burial.note, undefined);
     assert.equal(mapFormToPayload(withNote("pending")).burial.note, "لحين وصول الجثمان");
     assert.equal(mapFormToPayload(withNote("done")).burial.note, "لحين وصول الجثمان");
+    // مسح الملاحظة مع «تم الدفن» يُرسل الدفن بلا ملاحظة (فتُحذف فعلاً من الطلب)
+    assert.ok(!("note" in mapFormToPayload(form((draft) => { draft.burial = { ...draft.burial!, status: "done", notes: "" }; })).burial));
+  }],
+  ["ما لا يعرضه النموذج (اسم اليوم ورابط الخريطة) يعود كما جاء، واسم اليوم يسقط إن تغيّر اليوم", () => {
+    const stored = asRequest(form((draft) => { draft.prayer = { ...draft.prayer!, enabled: true, locationName: "جامع الإمام" }; }));
+    stored.burial = { ...stored.burial, day: "يوم الجمعه الماضي", weekday: "الجمعة", mapLink: "https://maps.app.goo.gl/burial" };
+    stored.prayer = { ...stored.prayer, weekday: "الجمعة", mapLink: "https://maps.app.goo.gl/prayer" };
+    const back = mapFormToPayload(mapPayloadToForm(stored));
+    assert.equal(back.burial.weekday, "الجمعة");
+    assert.equal(back.burial.mapLink, "https://maps.app.goo.gl/burial");
+    assert.equal(back.prayer.weekday, "الجمعة");
+    assert.equal(back.prayer.mapLink, "https://maps.app.goo.gl/prayer");
+    serverAccepts(mapPayloadToForm(stored));
+    const edited = mapPayloadToForm(stored);
+    edited.burial!.dateDescription = "2026-10-10";
+    assert.equal(mapFormToPayload(edited).burial.weekday, undefined);
+    assert.equal(mapFormToPayload(edited).burial.mapLink, "https://maps.app.goo.gl/burial");
   }],
   ["أنواع العزاء: المقبرة فقط، الهاتف، سيُحدَّد لاحقاً، ومواقع إضافية", () => {
     const cemetery = form((draft) => { draft.condolences = { ...draft.condolences!, type: "cemetery_only", cancellationOrRestrictionReason: "اتباعاً للسنة" }; });

@@ -241,6 +241,19 @@ function cardToApi(details: FormDetails | undefined, audience: "men" | "women", 
 
 const BURIAL_STATUS_TO_API = { scheduled: "upcoming", done: "completed", pending: "postponed", cancelled: "postponed" } as const;
 
+type EventForm = ObituaryFormValues["burial"];
+
+/**
+ * ما لا يعرضه النموذج من الصلاة والدفن (رابط الخريطة واسم اليوم) يعود كما جاء، وإلا ضاع عند كل حفظ من لوحة
+ * المسؤول. اسم اليوم يعود فقط إن بقي «اليوم» كما قُرئ معه؛ تغييره يُسقط الاسم القديم حتى لا يطغى على الجديد.
+ */
+function hiddenEventFields(event: EventForm, day: string) {
+  return {
+    ...(optional(event?.mapLink) ? { mapLink: clean(event?.mapLink) } : {}),
+    ...(optional(event?.weekday) && clean(event?.weekdayFor) === day ? { weekday: clean(event?.weekday) } : {}),
+  };
+}
+
 /**
  * mapFormToPayload: يحوّل قيم النموذج إلى عقد الـ API (ObituaryRequestInput) الذي يقبله الخادم.
  */
@@ -299,13 +312,14 @@ export function mapFormToPayload(data: ObituaryFormValues): ObituaryRequestInput
     ...(data.noRelatives && !relativesToApi(data.relatives, count).length ? { noRelatives: true } : {}),
     prayer: {
       enabled: prayerEnabled,
-      ...(prayerEnabled ? { day: prayerDay, time: prayerTime, place: clean(prayer?.locationName) } : {}),
+      ...(prayerEnabled ? { day: prayerDay, time: prayerTime, place: clean(prayer?.locationName), ...hiddenEventFields(prayer, prayerDay) } : {}),
     },
     burial: {
       status: burialStatus,
       outsideQatar: outside,
       day: clean(burial?.dateDescription),
       time: clean(burial?.timeDescription),
+      ...hiddenEventFields(burial, clean(burial?.dateDescription)),
       ...(outside ? { outsideLocation: clean(burial?.locationName) } : { cemetery: optional(burial?.locationName) }),
       // الملاحظة لسبب التأجيل أو لوصف دفن تمّ فقط؛ الدفن القادم موعده ومقبرته في حقولهما
       ...(optional(burial?.notes) && burialStatus !== "upcoming" ? { note: clean(burial?.notes) } : {}),
@@ -463,6 +477,9 @@ export function mapPayloadToForm(request: ObituaryRequest): ObituaryFormValues {
       dateDescription: burial?.day ?? "",
       timeDescription: burial?.time ?? "",
       notes: burial?.note ?? "",
+      weekday: burial?.weekday ?? "",
+      weekdayFor: clean(burial?.day),
+      mapLink: burial?.mapLink ?? "",
     },
     prayer: {
       ...base.prayer!,
@@ -470,6 +487,9 @@ export function mapPayloadToForm(request: ObituaryRequest): ObituaryFormValues {
       locationName: request.prayer?.place ?? "",
       dateDescription: request.prayer?.day ?? "",
       timeDescription: request.prayer?.time ?? "",
+      weekday: request.prayer?.weekday ?? "",
+      weekdayFor: clean(request.prayer?.day),
+      mapLink: request.prayer?.mapLink ?? "",
     },
     condolences: {
       ...base.condolences!,
