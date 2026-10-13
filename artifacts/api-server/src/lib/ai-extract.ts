@@ -363,13 +363,15 @@ export function splitBurialNote(burial: Loose): Loose {
   const { cemetery, time, weekday, day } = burialParts(take);
   if (!cemetery && !time && !weekday && !day) return burial;
   const leftover = rest.replace(/(?:^|\s)(?:في|و|بـ|ب)(?=\s|$)/gu, " ").replace(/[،,.]+/gu, " ").replace(/\s+/gu, " ").trim();
+  // ما بقي من «تم الدفن يوم الجمعة في مقبرة مسيمير» بعد أخذ اليوم والمقبرة هو «تم الدفن يوم»: لا يقول شيئاً فلا يُحفظ
+  const meaningful = /\p{L}{3,}/u.test(leftover) && !BARE_DONE_RE.test(leftover);
   return {
     ...burial,
     day: day || have.day || undefined,
     weekday: weekday || have.weekday || undefined,
     time: time || undefined,
     cemetery: cemetery || have.cemetery || undefined,
-    note: /\p{L}{3,}/u.test(leftover) ? leftover : undefined,
+    note: meaningful ? leftover : undefined,
   };
 }
 
@@ -389,8 +391,11 @@ function burialParts(take: (re: RegExp) => string) {
   return { cemetery, time, weekday, day };
 }
 
-/** ملاحظة لا تقول شيئاً سوى أن الدفن تم («تم الدفن»، «وتمت الصلاة والدفن»)؛ الحالة completed تكفي لكتابتها. */
-const BARE_DONE_RE = /^و?(?:تم(?:ت)?\s+(?:الصلاة\s+و)?(?:الدفن|دفنه|دفنها)|دُفن|دُفنت)\s*[.،]*$/u;
+/**
+ * ملاحظة لا تقول شيئاً سوى أن الدفن تم («تم الدفن»، «وتمت الصلاة والدفن»، «تم الدفن يوم» بعد أخذ اليوم منها)؛
+ * الحالة completed تكفي لكتابتها. كلمات الحشو بعدها (يوم، في، الساعة، بتاريخ…) لا تجعلها ذات معنى.
+ */
+const BARE_DONE_RE = /^و?(?:تم(?:ت)?\s+(?:الصلاة\s+و)?(?:الدفن|دفنه|دفنها)|دُفن|دُفنت)(?:\s+(?:يوم|في|ب|بـ|الساعة|بتاريخ|يوم\s+أمس|أمس))*\s*[.،]*$/u;
 
 /** بداية جملة الدفن في الرسالة («الدفن»، «والدفن»، «يُدفن»، «سيوارى الثرى»…)، لا «تم الدفن» ولا «تأجيل الدفن». */
 const BURIAL_START_RE = /(?<=^|\s)(?<!(?:تم|وتم|تأجيل|تاجيل)\s)(?:و?الدفن|و?سيتم\s+(?:الدفن|دفن\S*)|و?(?:سي|ست|ي|ت)ُ?(?:دفن|وارى(?:\s+الثرى)?))(?=\s|$)/u;

@@ -132,10 +132,23 @@ export function noRelativesPhrase(people: Array<Pick<DeceasedPerson, "gender">>)
 
 const WEEKDAYS_BY_INDEX = ["الأحد", "الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})(?:\s+(.*))?$/u;
+/** التاريخ مكتوباً يوماً فشهراً فسنة («09-10-2026»، «9/10/2026») كما يكتبه المسؤول أحياناً بدل منتقي التاريخ. */
+const DMY_DATE = /^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:\s+(.*))?$/u;
 /** كتابات أخرى لأسماء الأيام كما تصل في الرسائل. */
 const WEEKDAY_ALIASES: Record<string, string> = { "الإثنين": "الاثنين", "الاحد": "الأحد", "الاربعاء": "الأربعاء", "الثلاثا": "الثلاثاء" };
 /** كلمات اليوم النسبية وبُعدها عن يوم كتابتها. */
 const RELATIVE_OFFSETS: Record<string, number> = { "اليوم": 0, "الليلة": 0, "غداً": 1, "غدا": 1, "بكرة": 1, "بكره": 1, "بعد غد": 2, "أمس": -1, "امس": -1 };
+
+/** هل الملاحظة لا تزيد على ما في السطر: تساويه أو جزء منه بعد توحيد الهمزات والتاء المربوطة وحذف «و» و«تم»؟ */
+function repeatsLine(note: string, line: string): boolean {
+  const fold = (value: string) => value
+    .replace(/[أإآ]/gu, "ا").replace(/ة/gu, "ه").replace(/ى/gu, "ي")
+    .replace(/(?:^|\s)(?:و|تم|تمت|وتم|في|يوم)(?=\s|$)/gu, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/gu, " ").trim();
+  const a = fold(note);
+  const b = fold(line);
+  return !a || b === a || b.includes(a) || a.split(" ").every((word) => b.split(" ").includes(word));
+}
 
 function weekdayName(value: string): string {
   const name = WEEKDAY_ALIASES[value] ?? value;
@@ -167,9 +180,10 @@ function weekdayDiff(weekday: string, relative: string | undefined, now: Date): 
  * «اليوم الجمعة»، «غداً السبت»، «أمس الخميس»، أو «يوم الأحد 12 أكتوبر». أي نص بعد التاريخ يُلحق كما هو.
  */
 export function formatIsoDay(value: string | undefined, now: Date = new Date()): string | null {
-  const match = ISO_DATE.exec(clean(value));
-  if (!match) return null;
-  const [, year, month, day, rest] = match;
+  const iso = ISO_DATE.exec(clean(value));
+  const dmy = iso ? null : DMY_DATE.exec(clean(value));
+  if (!iso && !dmy) return null;
+  const [year, month, day, rest] = iso ? [iso[1], iso[2], iso[3], iso[4]] : [dmy![3], dmy![2], dmy![1], dmy![4]];
   const date = new Date(Number(year), Number(month) - 1, Number(day));
   if (Number.isNaN(date.getTime())) return null;
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -912,8 +926,10 @@ function prayerAndBurial(
       : (prayerEnabled ? "والدفن" : "الدفن");
     // الدفن يلي الصلاة مباشرة؛ لا نكرر الموعد إن كان هو نفسه.
     const when = prayerEnabled && burialWhen === prayerWhen ? "" : burialWhen;
-    burialLines.push(sentence([verb, when, place ? `في ${place}` : ""]));
-    if (note) burialLines.push(note);
+    const line = sentence([verb, when, place ? `في ${place}` : ""]);
+    burialLines.push(line);
+    // ملاحظة قديمة تكرر جملة الدفن أو جزءاً منها («تم الدفن يوم» تحت «تم الدفن يوم الجمعة في مقبرة مسيمير») لا تُكتب
+    if (note && !repeatsLine(note, line)) burialLines.push(note);
     if (status === "upcoming" && !burial.outsideQatar) {
       if (!clean(burial.day) && !clean(burial.weekday) && !(prayerEnabled && clean(prayer.day))) warnings.push("يوم الدفن غير محدد.");
       if (!clean(burial.time) && !(prayerEnabled && clean(prayer.time))) warnings.push("وقت الدفن غير محدد.");

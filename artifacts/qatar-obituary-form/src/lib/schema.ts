@@ -99,6 +99,11 @@ export const EventLocationSchema = z.object({
   timeDescription: z.string().nullish().or(z.literal("")),
   dateDescription: z.string().nullish().or(z.literal("")),
   notes: z.string().nullish().or(z.literal("")),
+  // حقول لا يعرضها النموذج لكنها تأتي مع الطلب (من الاستخراج أو الاستوديو) وتُعاد كما هي حتى لا تضيع عند الحفظ
+  weekday: z.string().optional(),
+  /** قيمة «اليوم» التي قُرئ معها اسم اليوم؛ إن تغيّر اليوم سقط اسم اليوم القديم. */
+  weekdayFor: z.string().optional(),
+  mapLink: z.string().optional(),
 });
 
 // 6. هندسة العزاء
