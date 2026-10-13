@@ -2,7 +2,7 @@
 import type { NormalizedContent } from "./presentation-normalizer";
 import type { QrCodeMap } from "./qr-images";
 import type { NaskhLayoutId, NaskhPosterSizeId, NaskhTypeScaleId } from "./naskh-poster-plan";
-import { loadCondolenceFonts, loadNaskhAssets, renderNaskhPoster, type PosterBranding, type RenderValidationReport } from "./naskh-poster-engine";
+import { loadCondolenceFonts, loadNaskhAssets, renderNaskhPoster, type LogoOptions, type PosterBranding, type RenderValidationReport } from "./naskh-poster-engine";
 
 export type PosterRenderResult = { canvas: HTMLCanvasElement; report: RenderValidationReport };
 
@@ -13,9 +13,10 @@ export async function renderPoster(
   branding?: PosterBranding,
   typeScale?: NaskhTypeScaleId,
   size?: NaskhPosterSizeId,
+  logo?: LogoOptions,
 ): Promise<PosterRenderResult> {
   await loadCondolenceFonts();
   const assets = await loadNaskhAssets(branding);
-  const { canvas, report } = renderNaskhPoster({ layout, typeScale, size, branding }, content, qrImages, assets);
+  const { canvas, report } = renderNaskhPoster({ layout, typeScale, size, branding, logo }, content, qrImages, assets);
   return { canvas, report };
 }

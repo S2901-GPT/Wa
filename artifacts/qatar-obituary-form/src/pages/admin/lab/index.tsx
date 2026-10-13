@@ -12,7 +12,7 @@ import {
   useGetLabStatus,
   type LabStoreState,
 } from "@workspace/api-client-react";
-import { Activity, AlertTriangle, CheckCircle2, ChevronRight, Copy, FlaskConical, ImageIcon, LayoutDashboard, Loader2, Trash2 } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, ChevronRight, Copy, FlaskConical, ImageIcon, LayoutDashboard, Loader2, Stamp, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -125,8 +125,9 @@ export default function AdminLabHubPage() {
         )}
       </div>
 
-      <div className="mb-8 grid gap-3 sm:grid-cols-3">
+      <div className="mb-8 grid gap-3 sm:grid-cols-2">
         <Tile href="/admin/lab/poster" icon={<ImageIcon className="h-5 w-5" />} title="تجربة الصورة" text="مقاس المنصات والتصدير JPEG" />
+        <Tile href="/admin/lab/logo" icon={<Stamp className="h-5 w-5" />} title="موضع الشعار" text="علامة مائية، زاوية، نقش مكرّر، وشفافية" />
         <Tile href="/admin/lab/admin" icon={<LayoutDashboard className="h-5 w-5" />} title="لوحة التجارب" text="لوحة المسؤول كاملة على طلبات التجارب" />
         <Tile href="/admin/lab/behaviour" icon={<Activity className="h-5 w-5" />} title="السلوك" text="مصدر كل طلب وتعديلاته وما تغيّر فيها" />
       </div>

@@ -37,7 +37,30 @@ export type PosterBranding = {
   maxHeight?: number;
 };
 
-export type PosterOptions = { layout: NaskhLayoutId; typeScale?: NaskhTypeScaleId; size?: NaskhPosterSizeId; branding?: PosterBranding };
+/**
+ * موضع الشعار: التذييل (الحالي)، أو علامة مائية في وسط الصورة خلف النص، أو الاثنان، أو زاوية صغيرة، أو نقش مكرّر
+ * على الخلفية. `opacity` (0–1) للعلامة المائية والنقش فقط. تجربة في `/admin/lab/logo`؛ الاستوديو يستخدم التذييل.
+ */
+export type LogoPlacement = "footer" | "watermark" | "watermark-footer" | "corner" | "tiled";
+export type LogoOptions = {
+  placement: LogoPlacement;
+  opacity: number;
+  /** الشعار صغيراً في وسط كل رمز QR (الرموز بمستوى تصحيح H فتُقرأ مع تغطية ربعها). */
+  inQr?: boolean;
+};
+export const DEFAULT_LOGO_OPTIONS: LogoOptions = { placement: "footer", opacity: 0.08, inQr: false };
+/** نسبة عرض الشعار داخل رمز QR من عرض الرمز؛ مع إطار أبيض حوله. اختُبرت القراءة حتى 30% بعد التصغير وضغط JPEG. */
+const QR_LOGO_FRACTION = 0.22;
+export const LOGO_PLACEMENTS: readonly { id: LogoPlacement; name: string; description: string }[] = [
+  { id: "footer", name: "التذييل (الحالي)", description: "الشعار أسفل الصورة فوق خط رفيع" },
+  { id: "watermark", name: "علامة مائية في الوسط", description: "الشعار كبيراً خلف النص بشفافية، بلا تذييل" },
+  { id: "watermark-footer", name: "علامة مائية + تذييل", description: "الاثنان معاً" },
+  { id: "corner", name: "زاوية صغيرة", description: "شعار صغير في الزاوية العليا اليسرى، بلا تذييل" },
+  { id: "tiled", name: "نقش مكرّر", description: "الشعار صغيراً مكرّراً على الخلفية كلها بشفافية خفيفة" },
+];
+const hasFooterLogo = (placement: LogoPlacement) => placement === "footer" || placement === "watermark-footer";
+
+export type PosterOptions = { layout: NaskhLayoutId; typeScale?: NaskhTypeScaleId; size?: NaskhPosterSizeId; branding?: PosterBranding; logo?: LogoOptions };
 
 export type ValidationIssue = { severity: "error" | "warning"; code: string; message: string };
 export type RenderValidationReport = {
@@ -171,10 +194,28 @@ function drawLine(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind:
   drawRuns(ctx, item, item.xRight, item.y);
 }
 
-function drawRuns(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind: "line" }>, xRight: number, y: number) {
+/**
+ * خط القاعدة الأبجدي الذي يضع السطر حيث يضعه «middle» (منتصف مربع الحرف) بالحجم نفسه. Safari يحسب «middle» لكل
+ * مقطع ثنائي الاتجاه من خط أول حرف فيه، والخط مقسّم إلى ملفين (العربي، واللاتيني للمسافة والشرطة والأرقام)، فكان
+ * وسط سطر مثل «في خيمة مقابل مسجد 1277 - منطقة» ينزل عن طرفيه. على الخط الأبجدي تقف كل المقاطع على خط واحد.
+ */
+function baselineFor(ctx: CanvasRenderingContext2D, px: number, midY: number): number | null {
+  // الفرق بين الخطين يُقاس من المتصفح نفسه على حرف عربي (ملف الخط العربي)، فيبقى السطر في مكانه تماماً
+  ctx.font = fontString(400, px);
   ctx.textBaseline = "middle";
+  const middle = ctx.measureText("ا").actualBoundingBoxAscent;
+  ctx.textBaseline = "alphabetic";
+  const alphabetic = ctx.measureText("ا").actualBoundingBoxAscent;
+  if (!Number.isFinite(middle) || !Number.isFinite(alphabetic)) return null;
+  return midY + (alphabetic - middle);
+}
+
+function drawRuns(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind: "line" }>, xRight: number, y: number) {
   ctx.direction = "rtl";
   const midY = y + item.h / 2;
+  const baseline = baselineFor(ctx, item.px, midY);
+  ctx.textBaseline = baseline === null ? "middle" : "alphabetic";
+  const textY = baseline ?? midY;
   ctx.textAlign = "right";
   let x = xRight;
   item.runs.forEach((run, index) => {
@@ -189,7 +230,7 @@ function drawRuns(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind:
       ctx.font = fontString(run.weight, item.px);
       x -= space;
     }
-    ctx.fillText(shown, x, midY);
+    ctx.fillText(shown, x, textY);
     x -= ctx.measureText(shown).width;
   });
 }
@@ -247,10 +288,44 @@ function drawBand(ctx: CanvasRenderingContext2D, item: Extract<PlanItem, { kind:
   drawImageContain(ctx, assets.logo, (NASKH_METRICS.width - boxW) / 2, item.y + NASKH_METRICS.footerPad, boxW, logoH);
 }
 
-export function drawNaskhPlan(ctx: CanvasRenderingContext2D, plan: NaskhPlan, assets: NaskhAssets, qrImages: QrCodeMap) {
+/** طبقة الشعار خلف النص (علامة مائية، زاوية، نقش)؛ التذييل يُرسم مع عناصر المخطط كالمعتاد. */
+function drawLogoLayer(ctx: CanvasRenderingContext2D, assets: NaskhAssets, width: number, height: number, logo: LogoOptions) {
+  if (!assets.logo || logo.placement === "footer") return;
+  const opacity = Math.min(1, Math.max(0, logo.opacity));
+  ctx.save();
+  if (logo.placement === "watermark" || logo.placement === "watermark-footer") {
+    ctx.globalAlpha = opacity;
+    const boxW = Math.round(width * 0.7);
+    const boxH = Math.round(height * 0.5);
+    drawImageContain(ctx, assets.logo, (width - boxW) / 2, (height - boxH) / 2, boxW, boxH);
+  } else if (logo.placement === "corner") {
+    const boxW = 120;
+    drawImageContain(ctx, assets.logo, 40, 40, boxW, boxW);
+  } else if (logo.placement === "tiled") {
+    const tile = document.createElement("canvas");
+    tile.width = 320;
+    tile.height = 320;
+    const tctx = tile.getContext("2d");
+    if (tctx) {
+      // شعاران في البلاطة بإزاحة قطرية فيبدو التكرار متعرّجاً لا شبكة صفوف
+      drawImageContain(tctx, assets.logo, 20, 20, 120, 120);
+      drawImageContain(tctx, assets.logo, 180, 180, 120, 120);
+      const pattern = ctx.createPattern(tile, "repeat");
+      if (pattern) {
+        ctx.globalAlpha = opacity;
+        ctx.fillStyle = pattern;
+        ctx.fillRect(0, 0, width, height);
+      }
+    }
+  }
+  ctx.restore();
+}
+
+export function drawNaskhPlan(ctx: CanvasRenderingContext2D, plan: NaskhPlan, assets: NaskhAssets, qrImages: QrCodeMap, logo: LogoOptions = DEFAULT_LOGO_OPTIONS) {
   ctx.fillStyle = NASKH_COLORS.background;
   ctx.fillRect(0, 0, plan.width, plan.height);
   drawBackground(ctx, assets, plan.width, plan.height);
+  drawLogoLayer(ctx, assets, plan.width, plan.height, logo);
 
   for (const item of plan.items) {
     switch (item.kind) {
@@ -315,6 +390,15 @@ export function drawNaskhPlan(ctx: CanvasRenderingContext2D, plan: NaskhPlan, as
         ctx.restore();
         const pad = 6;
         ctx.drawImage(qr.image, item.x + pad, item.y + pad, item.size - pad * 2, item.size - pad * 2);
+        if (logo.inQr && assets.logo) {
+          const box = Math.round(item.size * QR_LOGO_FRACTION);
+          const frame = Math.round(box * 0.12);
+          const cx = item.x + item.size / 2;
+          const cy = item.y + item.size / 2;
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect(cx - box / 2 - frame, cy - box / 2 - frame, box + frame * 2, box + frame * 2);
+          drawImageContain(ctx, assets.logo, cx - box / 2, cy - box / 2, box, box);
+        }
         break;
       }
       case "band":
@@ -347,10 +431,11 @@ export function renderNaskhPoster(options: PosterOptions, content: NormalizedCon
   const size = naskhPosterSize(options.size);
   const fixedHeight = size.minHeight === size.maxHeight;
   const maxHeight = fixedHeight ? size.maxHeight : Math.max(size.minHeight, branding.maxHeight);
-  const plan = planNaskhLayout(content, measure, { layout: options.layout, typeScale: options.typeScale, openingIsImage, qrAvailable, minHeight: size.minHeight, maxHeight, logo: !!assets.logo });
+  const logo = options.logo ?? DEFAULT_LOGO_OPTIONS;
+  const plan = planNaskhLayout(content, measure, { layout: options.layout, typeScale: options.typeScale, openingIsImage, qrAvailable, minHeight: size.minHeight, maxHeight, logo: hasFooterLogo(logo.placement) && !!assets.logo });
 
   canvas.height = plan.height;
-  drawNaskhPlan(ctx, plan, assets, qrImages);
+  drawNaskhPlan(ctx, plan, assets, qrImages, logo);
 
   const issues: ValidationIssue[] = [];
   // فيض بضعة بكسلات لا يُرى في الصورة، فلا يُعرض كخطأ
